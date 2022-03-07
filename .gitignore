@@ -1,0 +1,7 @@
+venv
+
+.mypy_cache
+
+.idea
+
+.env

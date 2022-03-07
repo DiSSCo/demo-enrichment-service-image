@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-enrichtment-service-image
+  labels:
+    app: demo-enrichtment-service-image
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-enrichtment-service-image
+  template:
+    metadata:
+      labels:
+        app: demo-enrichtment-service-image
+    spec:
+      containers:
+        - name: demo-enrichtment-service-image
+          image: leeflangjs/demo-enrichtment-service-image:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: KAFKA_CONSUMER_HOST
+              value:
+            - name: KAFKA_PRODUCER_HOST
+              value:
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: demo-enrichtment-service-image-scaled-object
+spec:
+  scaleTargetRef:
+    name: demo-enrichtment-service-image
+  minReplicaCount: 0
+  maxReplicaCount:  4
+  triggers:
+  - type: kafka
+    metadata:
+      bootstrapServers:
+      consumerGroup:
+      topic:
+      lagThreshold: '5'
