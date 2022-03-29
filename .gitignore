@@ -5,3 +5,5 @@ venv
 .idea
 
 .env
+
+herbarium-sheet-plant-organ-detection/data/model_final.pth

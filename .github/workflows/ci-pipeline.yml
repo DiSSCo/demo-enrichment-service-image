@@ -17,6 +17,6 @@ jobs:
       - name: Docker push
         uses: docker/build-push-action@v2
         with:
-          context: .
+          context: ./image-metadata-addition/
           push: true
           tags: ${{ secrets.DOCKER_HUB_USERNAME }}/demo-enrichtment-service-image:latest

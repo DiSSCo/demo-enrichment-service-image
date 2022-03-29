@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: enrichment-service-plant-organ-detection
+  labels:
+    app: enrichment-service-plant-organ-detection
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: enrichment-service-plant-organ-detection
+  template:
+    metadata:
+      labels:
+        app: enrichment-service-plant-organ-detection
+    spec:
+      containers:
+        - name: enrichment-service-plant-organ-detection
+          image: griebj/enrichment-service-plant-organ-detection:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: KAFKA_CONSUMER_HOST
+              value:
+            - name: KAFKA_PRODUCER_HOST
+              value:
+            - name: KAFKA_CONSUMER_TOPIC
+              value:
+            - name: KAFKA_PRODUCER_TOPIC
+              value: 
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: enrichment-service-plant-organ-detection-scaled-object
+spec:
+  scaleTargetRef:
+    name:  enrichment-service-plant-organ-detection
+  minReplicaCount: 0
+  maxReplicaCount:  4
+  triggers:
+  - type: kafka
+    metadata:
+      bootstrapServers:
+      consumerGroup:
+      topic:
+      lagThreshold: '5'
