@@ -1,12 +1,16 @@
+import datetime
 import json
 import logging
 import os
+import uuid
+from typing import Dict
 
 import requests as requests
 from PIL.TiffImagePlugin import IFDRational
 from kafka import KafkaConsumer, KafkaProducer
 from PIL import Image, UnidentifiedImageError
 from requests.exceptions import MissingSchema
+from cloudevents.http import CloudEvent, to_structured
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
@@ -23,8 +27,7 @@ def start_kafka(name: str) -> None:
                              enable_auto_commit=True,
                              max_poll_interval_ms=50000,
                              max_poll_records=10)
-    producer = KafkaProducer(bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
-                             value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    producer = KafkaProducer(bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')])
 
     logging.info("Starting consumer for topic: %s", name)
     for msg in consumer:
@@ -36,9 +39,25 @@ def start_kafka(name: str) -> None:
                 image_uri = image.get("ods:imageURI")
                 image['additional_info'] = get_image_info(image_uri)
             logging.info(f'Publishing the result: {object_id}')
-            producer.send('topic-multi', json_value)
+            send_updated_opends(json_value, producer)
         except:
             logging.exception(f'Failed to process message: {msg}')
+
+
+def send_updated_opends(opends: dict, producer: KafkaProducer) -> None:
+    attributes = {
+        "id": str(uuid.uuid4()),
+        "type": "eu.dissco.enrichment.response.event",
+        "source": "https://dissco.eu",
+        "subject": "image-metadata-addition",
+        "time": str(datetime.datetime.now(tz=datetime.timezone.utc).isoformat()),
+        "datacontenttype": "application/json"
+    }
+    data: Dict[str, dict] = {"openDS": opends}
+    event = CloudEvent(attributes=attributes, data=data)
+    headers, body = to_structured(event)
+    headers_list = [(k, str.encode(v)) for k, v in headers.items()]
+    producer.send('topic', body, headers=headers_list)
 
 
 def get_image_info(image_uri: str) -> list:
@@ -103,4 +122,4 @@ def add_jpeg_info(additional_info: dict, img: Image.Image) -> None:
 
 
 if __name__ == '__main__':
-    start_kafka('images')
+    start_kafka('image_metadata')
