@@ -1,10 +1,10 @@
-name: Build Herbrarium Sheet Plat Organ Detection
+name: Build Dariah Demo
 on:
   push:
     branches:
       - main
     paths:
-      - 'herbarium-sheet-plant-organ-detection/**'
+      - 'dariah-demo-annotation/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
@@ -25,14 +25,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: public.ecr.aws/m8w1i6p4/herbarium-sheet-plant-organ-detection
+          images: public.ecr.aws/m8w1i6p4/dariah-demo-annotation
           tags: |
             type=sha
             type=raw,value=latest
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
-          context: ./herbarium-sheet-plant-organ-detection
+          context: ./dariah-demo-annotation
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
