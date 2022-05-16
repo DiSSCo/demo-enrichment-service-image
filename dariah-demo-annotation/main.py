@@ -11,9 +11,13 @@ from kafka import KafkaConsumer, KafkaProducer
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
+ODS_AUTHORITATIVE = 'ods:authoritative'
+ODS_UNMAPPED = 'ods:unmapped'
+ODS_ANNOTATIONS = 'ods:annotations'
+
 
 def add_annotation(opends: Dict) -> Dict:
-    rec_id = opends.get('ods:authoritative').get('ods:physicalSpecimenId')
+    rec_id = opends.get(ODS_AUTHORITATIVE).get('ods:physicalSpecimenId')
     if rec_id != 'RMNH.RENA.7935':
         logging.warning('Service only usable with specimen id: RMNH.RENA.7935')
         return opends
@@ -34,7 +38,7 @@ def add_iiif_information(opends: Dict) -> Dict:
     iiifannoreq = requests.get(iiifanno)
     iiifannoreqres = json.loads(iiifannoreq.content)
     resoures_iif = iiifannoreqres['resources'][1]
-    opends.get('ods:unmapped').get('ods:annotations').append(create_iiif_annotation(resoures_iif))
+    opends.get(ODS_UNMAPPED).get(ODS_ANNOTATIONS).append(create_iiif_annotation(resoures_iif))
     return opends
 
 
@@ -69,7 +73,7 @@ def create_publication_annotation() -> dict:
 
 
 def add_publication_info(opends: Dict) -> Dict:
-    opends.get('ods:unmapped').get('ods:annotations').append(create_publication_annotation())
+    opends.get(ODS_UNMAPPED).get(ODS_ANNOTATIONS).append(create_publication_annotation())
     logging.info('Added publication information to object')
     return opends
 
@@ -79,9 +83,9 @@ def add_record_by_info(opends: Dict) -> Dict:
     annoreq = requests.get(myanno)
     annojsonres = json.loads(annoreq.content)
     annotations = annojsonres['rows'][2]['text']
-    if opends.get('ods:unmapped').get('ods:annotations') is None:
-        opends['ods:unmapped']['ods:annotations'] = []
-    opends.get('ods:unmapped').get('ods:annotations').append(create_annotation_recorded_by(annotations))
+    if opends.get(ODS_UNMAPPED).get(ODS_ANNOTATIONS) is None:
+        opends[ODS_UNMAPPED][ODS_ANNOTATIONS] = []
+    opends.get(ODS_UNMAPPED).get(ODS_ANNOTATIONS).append(create_annotation_recorded_by(annotations))
     logging.info('Added recorded by information to object')
     return opends
 
@@ -112,8 +116,9 @@ def start_kafka():
             opends = add_annotation(opends)
             logging.info(f'Publishing the result: {object_id}')
             send_updated_opends(opends, producer)
-        except:
+        except BaseException as e:
             logging.exception(f'Failed to process message: {msg}')
+            raise e
 
 
 def send_updated_opends(opends: dict, producer: KafkaProducer) -> None:
