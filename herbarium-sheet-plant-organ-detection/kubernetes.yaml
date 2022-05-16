@@ -16,18 +16,21 @@ spec:
     spec:
       containers:
         - name: enrichment-service-plant-organ-detection
-          image: griebj/enrichment-service-plant-organ-detection:latest
+          image: leeflangjs/enrichment-service-plant-organ-detection:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
           env:
             - name: KAFKA_CONSUMER_HOST
-              value:
+              value: kafka.kafka.svc.cluster.local:9092
             - name: KAFKA_PRODUCER_HOST
-              value:
+              value: kafka.kafka.svc.cluster.local:9092
             - name: KAFKA_CONSUMER_TOPIC
-              value:
+              value: plant-organ-detection
             - name: KAFKA_PRODUCER_TOPIC
-              value: 
+              value: topic-multi
+            - name: KAFKA_CONSUMER_GROUP
+              value: group
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
@@ -40,11 +43,11 @@ spec:
   scaleTargetRef:
     name:  enrichment-service-plant-organ-detection
   minReplicaCount: 0
-  maxReplicaCount:  4
+  maxReplicaCount:  1
   triggers:
   - type: kafka
     metadata:
-      bootstrapServers:
-      consumerGroup:
-      topic:
+      bootstrapServers: kafka.kafka.svc.cluster.local:9092
+      consumerGroup: group
+      topic: plant-organ-detection
       lagThreshold: '5'
