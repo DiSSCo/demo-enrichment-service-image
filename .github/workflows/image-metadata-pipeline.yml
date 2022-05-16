@@ -7,6 +7,8 @@ on:
       - 'image-metadata-addition/**'
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+      - 'herbarium-sheet-plant-organ-detection/**'
 jobs:
   build:
     runs-on: ubuntu-latest

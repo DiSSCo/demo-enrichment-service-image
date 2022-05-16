@@ -7,6 +7,8 @@ on:
       - 'dariah-demo-annotation/**'
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+      - 'herbarium-sheet-plant-organ-detection/**'
 jobs:
   build:
     runs-on: ubuntu-latest
