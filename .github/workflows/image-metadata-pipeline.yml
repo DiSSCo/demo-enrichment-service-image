@@ -4,7 +4,7 @@ on:
     branches:
       - main
     paths:
-      - 'image-metadata-addition'
+      - 'image-metadata-addition/**'
   pull_request:
     types: [opened, synchronize, reopened]
 jobs:
