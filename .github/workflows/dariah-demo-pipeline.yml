@@ -8,7 +8,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - 'herbarium-sheet-plant-organ-detection/**'
+      - 'dariah-demo-annotation/**'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -44,5 +44,5 @@ jobs:
         uses: anothrNick/github-tag-action@1.36.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CUSTOM_TAG: sha-${{ steps.vars.outputs.sha_short }}
+          CUSTOM_TAG: dariah-sha-${{ steps.vars.outputs.sha_short }}
 
