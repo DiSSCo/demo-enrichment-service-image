@@ -18,17 +18,17 @@ from detectron2.data.detection_utils import convert_PIL_to_numpy
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
 
-def start_kafka(name: str, predictor: DefaultPredictor) -> None:
+def start_kafka(predictor: DefaultPredictor) -> None:
     """
     Start a kafka listener and process the messages by unpacking the image.
     When done it will republish the object, so it can be validated and storage by the processing service
     :param name: The topic name the Kafka listener needs to listen to
     """
-    consumer = KafkaConsumer(name, group_id='group-2', bootstrap_servers=['localhost:9092'],
-                             value_deserializer=lambda m: json.loads(m.decode('utf-8')))
-    producer = KafkaProducer(bootstrap_servers=['localhost:9092'])
-    producer_topic = os.environ.get('topic')
-    logging.info("Starting consumer for topic: %s", name)
+    consumer = KafkaConsumer(os.environ.get('KAFKA_CONSUMER_TOPIC'), group_id=os.environ.get('KAFKA_CONSUMER_GROUP'),
+                             bootstrap_servers=[os.environ.get('KAFKA_CONSUMER_HOST')],
+                             value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+                             enable_auto_commit=True)
+    producer = KafkaProducer(bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')])
     for msg in consumer:
         logging.info(msg.value)
         json_value = msg.value
@@ -57,7 +57,7 @@ def send_updated_opends(opends: dict, producer: KafkaProducer) -> None:
     event = CloudEvent(attributes=attributes, data=data)
     headers, body = to_structured(event)
     headers_list = [(k, str.encode(v)) for k, v in headers.items()]
-    producer.send('topic', body, headers=headers_list)
+    producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), body, headers=headers_list)
 
 
 def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> dict:
@@ -107,5 +107,5 @@ if __name__ == '__main__':
     predictor = DefaultPredictor(cfg)
 
     # consumer_topic = os.environ.get('KAFKA_CONSUMER_TOPIC')
-    start_kafka('plant-organ-detection', predictor)
+    start_kafka(predictor)
     # run_object_detection('https://www.unimus.no/felles/bilder/web_hent_bilde.php?id=14894911&type=jpeg', predictor)

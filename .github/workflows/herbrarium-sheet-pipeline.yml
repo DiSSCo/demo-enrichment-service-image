@@ -1,0 +1,46 @@
+name: Build Herbrarium Sheet Plat Organ Detection
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'herbarium-sheet-plant-organ-detection/**'
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Login to Public ECR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v1
+        with:
+          registry: public.ecr.aws
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: public.ecr.aws/m8w1i6p4/herbarium-sheet-plant-organ-detection
+          tags: |
+            type=sha
+            type=raw,value=latest
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: ./herbarium-sheet-plant-organ-detection
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: Set outputs
+        id: vars
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      - name: Push tag
+        if: github.event_name != 'pull_request'
+        uses: anothrNick/github-tag-action@1.36.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CUSTOM_TAG: sha-${{ steps.vars.outputs.sha_short }}
+
