@@ -30,7 +30,7 @@ spec:
             - name: KAFKA_CONSUMER_GROUP
               value: group
             - name: KAFKA_CONSUMER_TOPIC
-              value: dariah-demo
+              value: dariah_demo
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
@@ -49,5 +49,5 @@ spec:
     metadata:
       bootstrapServers: kafka.kafka.svc.cluster.local:9092
       consumerGroup: group
-      topic: dariah-demo
+      topic: dariah_demo
       lagThreshold: '5'

@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import uuid
 
 import requests as requests
 from kafka import KafkaConsumer, KafkaProducer
@@ -28,39 +27,57 @@ def start_kafka(predictor: DefaultPredictor) -> None:
                              bootstrap_servers=[os.environ.get('KAFKA_CONSUMER_HOST')],
                              value_deserializer=lambda m: json.loads(m.decode('utf-8')),
                              enable_auto_commit=True)
-    producer = KafkaProducer(bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')])
+    producer = KafkaProducer(bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
+                             value_serializer=lambda m: json.dumps(m).encode('utf-8'))
     for msg in consumer:
         logging.info(msg.value)
         json_value = msg.value
-        for image in json_value['ods:images']:
-            image_uri = image['ods:imageURI']
-            additional_info_annotations = run_object_detection(image_uri,
-                                                               predictor)
-            if 'additional_info' in image and type(image['additional_info']) == list:
-                image['additional_info'].append(additional_info_annotations)
-            else:
-                image['additional_info'] = [additional_info_annotations]
-        logging.info("Publishing the result: %s", json_value)
-        send_updated_opends(json_value, producer)
+        image_uri = json_value['digitalMediaObject']['mediaUrl']
+        additional_info_annotations = run_object_detection(image_uri, predictor)
+        logging.info('Publishing the result: %s', json_value)
+        annotation = map_to_annotation(json_value, additional_info_annotations)
+        send_updated_opends(annotation, producer)
 
 
-def send_updated_opends(opends: dict, producer: KafkaProducer) -> None:
-    attributes = {
-        "id": str(uuid.uuid4()),
-        "type": "eu.dissco.enrichment.response.event",
-        "source": "https://dissco.eu",
-        "subject": "plant-organ-detection",
-        "time": str(datetime.now(tz=timezone.utc).isoformat()),
-        "datacontenttype": "application/json"
+def map_to_annotation(json_value, additional_info_annotations) -> dict:
+    values = []
+    for value in additional_info_annotations:
+        values.append(
+            {
+                'class': value['class'],
+                'score': value['score'],
+                'selector': {
+                    'type': 'FragmentSelector',
+                    'conformsTo': 'http://www.w3.org/TR/media-frags/',
+                    'value': "xywh=" + str(value['boundingBox'][0]) + ',' + str(value['boundingBox'][1]) + ',' + str(
+                        value['boundingBox'][2]) + ',' + str(value['boundingBox'][3])
+                }
+            }
+        )
+    annotation = {
+        'type': 'Annotation',
+        'motivation': 'https://hdl.handle.net/pid-machine-enrichment',
+        'creator': 'https://hdl.handle.net/enrichment-service-pid',
+        'created': str(datetime.now(tz=timezone.utc).isoformat()),
+        'target': {
+            'id': 'https://hdl.handle.net/' + json_value['id'],
+            'type': 'https://hdl.handle.net/21...'
+        },
+        'body': {
+            'source': json_value['digitalMediaObject']['mediaUrl'],
+            'purpose': 'describing',
+            'values': values
+        }
     }
-    data = {"openDS": opends}
-    event = CloudEvent(attributes=attributes, data=data)
-    headers, body = to_structured(event)
-    headers_list = [(k, str.encode(v)) for k, v in headers.items()]
-    producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), body, headers=headers_list)
+    logging.info(annotation)
+    return annotation
 
 
-def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> dict:
+def send_updated_opends(annotation: dict, producer: KafkaProducer) -> None:
+    producer.send('annotation', annotation)
+
+
+def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> list:
     """
     Checks if the Image url works and gathers metadata information from the image
     :param image_uri: The image url from which we will gather metadata
@@ -89,14 +106,11 @@ def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> dict:
                 'boundingBox': [int(x) for x in boxes[i]]
             })
 
-        additional_info_annotations = {
-            'source': 'enrichment-service-plant-organ-detection',
-            'calculatedOn': datetime.now().timestamp(),
-            'annotations': annotations_result}
+        return annotations_result
     except FileNotFoundError:
         additional_info_annotations = {'active_url': False}
         logging.exception('Failed to retrieve picture')
-    return additional_info_annotations
+        return []
 
 
 if __name__ == '__main__':
