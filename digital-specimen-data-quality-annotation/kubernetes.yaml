@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: enrichment-service-plant-organ-detection
+  name: digital-specimen-data-quality-annotation
   labels:
-    app: enrichment-service-plant-organ-detection
+    app: digital-specimen-data-quality-annotation
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: enrichment-service-plant-organ-detection
+      app: digital-specimen-data-quality-annotation
   template:
     metadata:
       labels:
-        app: enrichment-service-plant-organ-detection
+        app: digital-specimen-data-quality-annotation
     spec:
       containers:
-        - name: enrichment-service-plant-organ-detection
-          image: public.ecr.aws/dissco/herbarium-sheet-plant-organ-detection
+        - name: digital-specimen-data-quality-annotation
+          image: public.ecr.aws/dissco/digital-specimen-data-quality-annotation
           imagePullPolicy: Always
           ports:
             - containerPort: 80
@@ -26,9 +26,9 @@ spec:
             - name: KAFKA_PRODUCER_HOST
               value: kafka.kafka.svc.cluster.local:9092
             - name: KAFKA_CONSUMER_TOPIC
-              value: plant-organ-detection
+              value: digital-specimen-data-quality-annotation
             - name: KAFKA_PRODUCER_TOPIC
-              value: annotations
+              value: annotation
             - name: KAFKA_CONSUMER_GROUP
               value: group
           securityContext:
@@ -38,10 +38,10 @@ spec:
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: enrichment-service-plant-organ-detection-scaled-object
+  name: digital-specimen-data-quality-annotation-scaled-object
 spec:
   scaleTargetRef:
-    name:  enrichment-service-plant-organ-detection
+    name:  digital-specimen-data-quality-annotation
   minReplicaCount: 1
   maxReplicaCount:  1
   triggers:
@@ -49,5 +49,5 @@ spec:
     metadata:
       bootstrapServers: kafka.kafka.svc.cluster.local:9092
       consumerGroup: group
-      topic: plant-organ-detection
+      topic: digital-specimen-data-quality-annotation
       lagThreshold: '5'
