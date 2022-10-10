@@ -141,7 +141,7 @@ def check_space_information(digital_specimen_record, producer):
 def map_to_annotation(pid, target_field, annotation_body) -> dict:
     annotation = {
         'type': 'Annotation',
-        'motivation': 'https://hdl.handle.net/quality-flagging',
+        'motivation': 'quality_flagging',
         'creator': 'https://hdl.handle.net/enrichment-service-pid',
         'created': str(datetime.now(tz=timezone.utc).isoformat()),
         'target': {
