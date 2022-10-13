@@ -57,6 +57,7 @@ def check_licence(digital_specimen_record, producer) -> None:
                          'http://creativecommons.org/licenses/by/4.0/'
                          'http://creativecommons.org/licenses/by/4.0/legalcode',
                          'CC0',
+                         "CC0 1.0",
                          'https://creativecommons.org/publicdomain/zero/1.0/',
                          'http://creativecommons.org/publicdomain/zero/1.0/legalcode',
                          'https://creativecommons.org/publicdomain/zero/1.0/legalcode'
@@ -98,12 +99,12 @@ def check_licence(digital_specimen_record, producer) -> None:
 
 
 def check_space_information(digital_specimen_record, producer):
-    dwc_location_fields = ['dwc: locationID', 'dwc: higherGeographyID', 'dwc: higherGeography', 'dwc: continent',
-                           'dwc: country', 'dwc: countryCode', 'dwc: stateProvince',
-                           'dwc: county', 'dwc: municipality', 'dwc: waterBody', 'dwc: island', 'dwc: islandGroup',
-                           'dwc: locality', 'dwc: verbatimLocality', 'dwc: decimalLatitude', 'dwc: decimalLongitude',
-                           'dwc: verbatimCoordinates', 'dwc: verbatimLatitude', 'dwc: verbatimLongitude',
-                           'dwc: footprintWKT']
+    dwc_location_fields = ['dwc:locationID', 'dwc:higherGeographyID', 'dwc:higherGeography', 'dwc:continent',
+                           'dwc:country', 'dwc:countryCode', 'dwc:stateProvince',
+                           'dwc:county', 'dwc:municipality', 'dwc:waterBody', 'dwc:island', 'dwc:islandGroup',
+                           'dwc:locality', 'dwc:verbatimLocality', 'dwc:decimalLatitude', 'dwc:decimalLongitude',
+                           'dwc:verbatimCoordinates', 'dwc:verbatimLatitude', 'dwc:verbatimLongitude',
+                           'dwc:footprintWKT']
     has_location = False
     data = digital_specimen_record.get('digitalSpecimen').get('data')
     for field in dwc_location_fields:
