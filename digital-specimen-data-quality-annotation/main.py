@@ -129,7 +129,7 @@ def check_space_information(digital_specimen_record, producer):
     else:
         decimal_latitude = data.get('dwc:decimalLatitude')
         if isinstance(decimal_latitude, str):
-            decimal_latitude = int(decimal_latitude)
+            decimal_latitude = float(decimal_latitude)
         if decimal_latitude > 90 or decimal_latitude < -90:
             annotation_body = {
                 'value': 'Record decimal Latitude is out of range, accepted values are between -90 and 90. '
