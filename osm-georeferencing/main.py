@@ -43,9 +43,9 @@ def map_to_annotation(json_value, result):
         'creator': 'https://hdl.handle.net/enrichment-service-pid',
         'created': timestamp_now(),
         'target': {
-            'id': 'https://hdl.handle.net/' + json_value['id'],
+            'id': json_value['id'],
             'type': 'https://hdl.handle.net/21...',
-            'invdProp': 'dwc:decimalLatitude'
+            'indvProp': 'dwc:decimalLatitude'
         },
         'body': {
             'source': result['display_name'],
@@ -61,9 +61,9 @@ def map_to_annotation(json_value, result):
         'creator': 'https://hdl.handle.net/enrichment-service-pid',
         'created': timestamp_now(),
         'target': {
-            'id': 'https://hdl.handle.net/' + json_value['id'],
+            'id': json_value['id'],
             'type': 'https://hdl.handle.net/21...',
-            'invdProp': 'dwc:decimalLongitude'
+            'indvProp': 'dwc:decimalLongitude'
         },
         'body': {
             'source': result['display_name'],
