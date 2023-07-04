@@ -45,7 +45,7 @@ def map_to_annotation(json_value, result):
         'target': {
             'id': json_value['id'],
             'type': 'https://hdl.handle.net/21...',
-            'invdProp': 'dwc:decimalLatitude'
+            'indvProp': 'dwc:decimalLatitude'
         },
         'body': {
             'source': result['display_name'],
@@ -63,7 +63,7 @@ def map_to_annotation(json_value, result):
         'target': {
             'id': json_value['id'],
             'type': 'https://hdl.handle.net/21...',
-            'invdProp': 'dwc:decimalLongitude'
+            'indvProp': 'dwc:decimalLongitude'
         },
         'body': {
             'source': result['display_name'],
