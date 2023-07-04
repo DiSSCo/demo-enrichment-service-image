@@ -41,7 +41,7 @@ def map_to_annotation(json_value, result):
         'type': 'Annotation',
         'motivation': 'https://hdl.handle.net/adding',
         'creator': 'https://hdl.handle.net/enrichment-service-pid',
-        'created': str(datetime.now(tz=timezone.utc).isoformat()),
+        'created': timestamp_now(),
         'target': {
             'id': 'https://hdl.handle.net/' + json_value['id'],
             'type': 'https://hdl.handle.net/21...',
@@ -59,7 +59,7 @@ def map_to_annotation(json_value, result):
         'type': 'Annotation',
         'motivation': 'https://hdl.handle.net/adding',
         'creator': 'https://hdl.handle.net/enrichment-service-pid',
-        'created': str(datetime.now(tz=timezone.utc).isoformat()),
+        'created': timestamp_now(),
         'target': {
             'id': 'https://hdl.handle.net/' + json_value['id'],
             'type': 'https://hdl.handle.net/21...',
@@ -73,6 +73,13 @@ def map_to_annotation(json_value, result):
         }
     }
     return [annotation_lat, annotation_long]
+
+
+def timestamp_now():
+    timestamp = str(datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
+    timestamp_cleaned = timestamp[:-3]
+    timestamp_timezone = timestamp_cleaned + 'Z'
+    return timestamp_timezone
 
 
 def send_updated_opends(annotations: list, producer: KafkaProducer) -> None:
