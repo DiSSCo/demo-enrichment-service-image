@@ -1,4 +1,4 @@
-name: Build Image Metadata
+name: Build OSM Georeferencing
 on:
   push:
     branches:
