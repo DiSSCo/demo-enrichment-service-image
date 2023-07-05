@@ -17,7 +17,7 @@ RUN apt-get -y update && apt-get -y install git ffmpeg libsm6 libxext6 sudo
 COPY requirements.txt .
 
 # install dependencies
-RUN pip sudo install --no-cache-dir --upgrade -r requirements.txt
+RUN sudo pip install --no-cache-dir --upgrade -r requirements.txt
 
 RUN wget https://github.com/2younis/plant-organ-detection/releases/download/v1.0/model_final.pth -P data/
 
