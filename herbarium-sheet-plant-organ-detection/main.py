@@ -63,7 +63,7 @@ def map_to_annotation(json_value, additional_info_annotations) -> dict:
             'type': 'https://hdl.handle.net/21...'
         },
         'body': {
-            'source': json_value['digitalMediaObject']['mediaUrl'],
+            'source': json_value['data']['ac:accessURI'],
             'purpose': 'describing',
             'values': values
         }
