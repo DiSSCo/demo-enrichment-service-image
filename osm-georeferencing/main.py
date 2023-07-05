@@ -30,8 +30,9 @@ def start_kafka() -> None:
                 logging.warning('No locality information available, skipping message')
             else:
                 result = run_georeference(specimen_data)
-                annotations = map_to_annotation(json_value, result)
-                send_updated_opends(annotations, producer)
+                if result is not None:
+                    annotations = map_to_annotation(json_value, result)
+                    send_updated_opends(annotations, producer)
         except:
             logging.exception('Failed to process message')
 
@@ -92,8 +93,11 @@ def run_georeference(json_data):
     querystring = json_data['dwc:locality'] + ', ' + json_data['dwc:country']
     response = requests.get('https://nominatim.openstreetmap.org/search.php?q=' + querystring + '&format=jsonv2')
     response_json = json.loads(response.content)
-    logging.info('Highest hit is: ' + json.dumps(response_json[0], indent=2))
-    return response_json[0]
+    if len(response_json) > 0:
+        logging.info("No results for this locality where found: " + querystring)
+    else:
+        logging.info('Highest hit is: ' + json.dumps(response_json[0], indent=2))
+        return response_json[0]
 
 
 def run_local(example: str):
