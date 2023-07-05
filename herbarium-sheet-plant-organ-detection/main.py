@@ -59,7 +59,7 @@ def map_to_annotation(json_value, additional_info_annotations) -> dict:
         'creator': 'https://hdl.handle.net/enrichment-service-pid',
         'created': timestamp_now(),
         'target': {
-            'id': 'https://hdl.handle.net/' + json_value['id'],
+            'id': json_value['id'],
             'type': 'https://hdl.handle.net/21...'
         },
         'body': {
