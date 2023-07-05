@@ -7,7 +7,6 @@ from kafka import KafkaConsumer, KafkaProducer
 from PIL import Image
 import numpy as np
 from datetime import datetime, timezone
-from cloudevents.http import CloudEvent, to_structured
 
 from detectron2.config import get_cfg
 from detectron2.engine.defaults import DefaultPredictor
@@ -32,7 +31,7 @@ def start_kafka(predictor: DefaultPredictor) -> None:
     for msg in consumer:
         logging.info(msg.value)
         json_value = msg.value
-        image_uri = json_value['digitalMediaObject']['mediaUrl']
+        image_uri = json_value['data']['ac:accessURI']
         additional_info_annotations = run_object_detection(image_uri, predictor)
         logging.info('Publishing the result: %s', json_value)
         annotation = map_to_annotation(json_value, additional_info_annotations)
@@ -58,7 +57,7 @@ def map_to_annotation(json_value, additional_info_annotations) -> dict:
         'type': 'Annotation',
         'motivation': 'https://hdl.handle.net/pid-machine-enrichment',
         'creator': 'https://hdl.handle.net/enrichment-service-pid',
-        'created': str(datetime.now(tz=timezone.utc).isoformat()),
+        'created': timestamp_now(),
         'target': {
             'id': 'https://hdl.handle.net/' + json_value['id'],
             'type': 'https://hdl.handle.net/21...'
@@ -72,6 +71,12 @@ def map_to_annotation(json_value, additional_info_annotations) -> dict:
     logging.info(annotation)
     return annotation
 
+
+def timestamp_now():
+    timestamp = str(datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
+    timestamp_cleaned = timestamp[:-3]
+    timestamp_timezone = timestamp_cleaned + 'Z'
+    return timestamp_timezone
 
 def send_updated_opends(annotation: dict, producer: KafkaProducer) -> None:
     producer.send('annotation', annotation)
@@ -108,7 +113,6 @@ def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> list:
 
         return annotations_result
     except FileNotFoundError:
-        additional_info_annotations = {'active_url': False}
         logging.exception('Failed to retrieve picture')
         return []
 
@@ -120,6 +124,5 @@ if __name__ == '__main__':
     cfg.freeze()
     predictor = DefaultPredictor(cfg)
 
-    # consumer_topic = os.environ.get('KAFKA_CONSUMER_TOPIC')
     start_kafka(predictor)
     # run_object_detection('https://www.unimus.no/felles/bilder/web_hent_bilde.php?id=14894911&type=jpeg', predictor)
