@@ -90,7 +90,7 @@ def get_image_info(image_uri: str) -> dict:
         additional_info = {'exif:PixelXDimension': img.width,
                            'exif:PixelYDimension': img.height,
                            'dcterms:format': img.format.lower(),
-                           'dcterms:extent': img_file.tell() / (1000.0 * 1000.0),
+                           'dcterms:extent': str(round(img_file.tell() / 1000000, 2)) + 'MB',
                            'ac:variant': 'acvariant:v008'}
     except (FileNotFoundError, UnidentifiedImageError, MissingSchema):
         additional_info = {'ac:variant': 'acvariant:v007'}
