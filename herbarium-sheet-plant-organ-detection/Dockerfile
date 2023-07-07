@@ -8,8 +8,6 @@ WORKDIR /code
 # Create new user with UID
 RUN adduser --disabled-password --gecos '' --system --uid 1001 python && chown -R python /code
 
-#RUN apt-get -y update && apt-get -y install git ffmpeg libsm6 libxext6 sudo
-
 # copy the dependencies file to the working directory
 COPY requirements.txt .
 
