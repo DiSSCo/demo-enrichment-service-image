@@ -49,10 +49,10 @@ def map_to_annotation(json_value, result):
             'indvProp': 'dwc:decimalLatitude'
         },
         'body': {
-            'source': result['display_name'],
+            'source': result['txt'],
             'purpose': 'georeferencing',
-            'values': str(result['lat']),
-            'score': str(result['importance'])
+            'values': str(result['latitude']),
+            'id': str(result['id'])
         }
     }
 
@@ -67,10 +67,10 @@ def map_to_annotation(json_value, result):
             'indvProp': 'dwc:decimalLongitude'
         },
         'body': {
-            'source': result['display_name'],
+            'source': result['longitude'],
             'purpose': 'georeferencing',
-            'values': str(result['lon']),
-            'score': str(result['importance'])
+            'values': str(result['longitude']),
+            'id': str(result['id'])
         }
     }
     return [annotation_lat, annotation_long]
@@ -90,14 +90,15 @@ def send_updated_opends(annotations: list, producer: KafkaProducer) -> None:
 
 
 def run_georeference(json_data):
-    querystring = json_data['dwc:locality'] + ', ' + json_data['dwc:country']
-    response = requests.get('https://nominatim.openstreetmap.org/search.php?q=' + querystring + '&format=jsonv2')
+    querystring = json_data['dwc:locality']
+    response = requests.get('https://api.mindat.org/localities/?txt=' + querystring,
+                          headers={'Authorization': 'Token ' + os.environ.get('API_KEY')})
     response_json = json.loads(response.content)
     if len(response_json) == 0:
         logging.info("No results for this locality where found: " + querystring)
     else:
-        logging.info('Highest hit is: ' + json.dumps(response_json[0], indent=2))
-        return response_json[0]
+        logging.info('Highest hit is: ' + json.dumps(response_json.get('results')[0], indent=2))
+        return response_json.get('results')[0]
 
 
 def run_local(example: str):
@@ -110,5 +111,5 @@ def run_local(example: str):
 
 
 if __name__ == '__main__':
-    # run_local('https://sandbox.dissco.tech/api/v1/specimens/20.5000.1025/E1R-NH0-J3J')
+    # run_local('https://sandbox.dissco.tech/api/v1/specimens/20.5000.1025/QU7-7B5-R9K')
     start_kafka()
