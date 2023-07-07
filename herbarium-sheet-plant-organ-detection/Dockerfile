@@ -14,7 +14,7 @@ RUN adduser --disabled-password --gecos '' --system --uid 1001 python && chown -
 COPY requirements.txt .
 
 # install dependencies
-RUN sudo pip install --no-cache-dir --upgrade -r requirements.txt
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
 RUN wget https://github.com/2younis/plant-organ-detection/releases/download/v1.0/model_final.pth -P data/
 
