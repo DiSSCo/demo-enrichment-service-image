@@ -10,6 +10,9 @@ from kafka import KafkaConsumer, KafkaProducer
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
+ODS_TYPE = "ods:type"
+ODS_ID = "ods:id"
+
 
 def start_kafka() -> None:
     """
@@ -26,9 +29,9 @@ def start_kafka() -> None:
     for msg in consumer:
         logging.info('Received message: ' + str(msg.value))
         json_value = msg.value
-        specimen_data = json_value['digitalSpecimen']['data']
+        specimen_data = json_value['object']['digitalSpecimen']
         result = run_api_call(specimen_data)
-        if result is not None:
+        if result.get('gbif_id') is not None:
             annotations = map_to_annotation(json_value, result, json_value["jobId"])
             send_updated_opends(annotations, producer)
 
@@ -46,21 +49,21 @@ def map_to_annotation(json_value: Dict, result: Dict[str, str], job_id: str) -> 
         'rdf:type': 'Annotation',
         'oa:motivation': 'ods:adding',
         'oa:creator': {
-            'ods:type': 'machine',
+            ODS_TYPE: 'machine',
             'foaf:name': os.environ.get('MAS_NAME'),
-            'ods:id': os.environ.get('MAS_ID')
+            ODS_ID: os.environ.get('MAS_ID')
         },
         'dcterms:created': timestamp,
         'oa:target': {
-            'ods:id': json_value['digitalSpecimen']['ods:id'],
-            'ods:type': json_value['digitalSpecimen']['ods:type'],
+            ODS_ID: json_value['digitalSpecimen'][ODS_ID],
+            ODS_TYPE: json_value['digitalSpecimen'][ODS_TYPE],
             'oa:selector': {
-                'ods:type': 'ClassValueSelector',
+                ODS_TYPE: 'ClassSelector',
                 'oa:class': 'entityRelationship'
             },
         },
         'oa:body': {
-            'ods:type': 'TextualBody/Other',
+            ODS_TYPE: 'TextualBody/Other',
             'oa:value': [{
                 'entityRelationship': {
                     'entityRelationshipType': 'hasGbifID',
@@ -129,15 +132,15 @@ def get_identifiers_from_object(json_data: Dict) -> Dict[str, str]:
     """
     Retrieve the correct identifiers from the Digital Specimen
     :param json_data: Json data of the Digital Specimen
-    :return: The mapped identifiers (occurrenceId and catalogNumber)
+    :return: The mapped relevant_identifiers (occurrenceId and catalogNumber)
     """
-    identifiers = {}
+    relevant_identifiers = {}
     for identifier in json_data['identifiers']:
         if identifier.get('???:identifierType') in ['dwc:occurrenceID', 'abcd:unitGUID']:
-            identifiers['occurrenceId'] = identifier.get('???:identifierValue')
+            relevant_identifiers['occurrenceId'] = identifier.get('???:identifierValue')
         if identifier.get('???:identifierType') in ['dwc:catalogNumber', 'abcd:unitID']:
-            identifiers['catalogNumber'] = identifier.get('???:identifierValue')
-    return identifiers
+            relevant_identifiers['catalogNumber'] = identifier.get('???:identifierValue')
+    return relevant_identifiers
 
 
 def run_local(example: str) -> None:
