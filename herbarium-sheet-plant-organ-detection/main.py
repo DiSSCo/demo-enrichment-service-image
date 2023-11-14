@@ -57,7 +57,7 @@ def map_to_annotation(json_value, additional_info_annotations, width, height) ->
         selector = {
             'oa:selector': {
                 'ods:type': 'FragmentSelector',
-                'dcterms:conformsTo': 'http://www.w3.org/TR/media-frags/',
+                'dcterms:conformsTo': 'https://www.w3.org/TR/media-frags/',
                 'ac:hasRoi': {
                     "ac:xFrac": value['boundingBox'][0] / width,
                     "ac:yFrac": value['boundingBox'][1] / height,
@@ -71,7 +71,7 @@ def map_to_annotation(json_value, additional_info_annotations, width, height) ->
             'oa:motivation': 'ods:adding',
             'oa:target': {
                 'ods:id': json_value['object']['digitalEntity']['ods:id'],
-                'ods:type': 'http://hdl.handle.net/21.T11148/bbad8c4e101e8af01115', # handle for digitalMedia Type
+                'ods:type': 'https://hdl.handle.net/21.T11148/bbad8c4e101e8af01115', # handle for digitalMedia Type
                 'oa:selector': selector
             },
             'oa:body': {
