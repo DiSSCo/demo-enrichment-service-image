@@ -14,11 +14,9 @@ from detectron2 import model_zoo
 from typing import Tuple
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
-os.environ["KAFKA_CONSUMER_TOPIC"] = 'digital-specimen'
-os.environ["KAFKA_CONSUMER_GROUP"] = 'group-1'
-os.environ["KAFKA_CONSUMER_HOST"] = 'localhost:9092'
-os.environ["KAFKA_PRODUCER_HOST"] = 'localhost:9092'
 
+ODS_TYPE = 'ods:type'
+ODS_ID = 'ods:id'
 
 def start_kafka(predictor: DefaultPredictor) -> None:
     """
@@ -49,6 +47,7 @@ def start_kafka(predictor: DefaultPredictor) -> None:
 
 def map_to_annotation(json_value, additional_info_annotations, width, height) -> dict:
     annotations = []
+    timestamp = timestamp_now()
     for value in additional_info_annotations:
         body_values = [{
             'class': value['class'],
@@ -56,27 +55,38 @@ def map_to_annotation(json_value, additional_info_annotations, width, height) ->
         }]
         selector = {
             'oa:selector': {
-                'ods:type': 'FragmentSelector',
+                ODS_TYPE: 'FragmentSelector',
                 'dcterms:conformsTo': 'https://www.w3.org/TR/media-frags/',
                 'ac:hasRoi': {
                     "ac:xFrac": value['boundingBox'][0] / width,
                     "ac:yFrac": value['boundingBox'][1] / height,
-                    "ac:widthFrac": (value['boundingBox'][2] - value['boundingBox'][0])/width,
-                    "ac:heightFrac": (value['boundingBox'][3] - value['boundingBox'][1]) / height
+                    "ac:widthFrac": (value['boundingBox'][2] -
+                                     value['boundingBox'][0]) / width,
+                    "ac:heightFrac": (value['boundingBox'][3]
+                                      - value['boundingBox'][1]) / height
                 }
             }
         }
         annotation = {
             'rdf:type': 'Annotation',
             'oa:motivation': 'ods:adding',
+            'oa:creator': {
+                ODS_TYPE: 'machine',
+                'foaf:name': os.environ.get('MAS_NAME'),
+                ODS_ID: os.environ.get('MAS_ID')
+            },
+            'dcterms:created': timestamp,
             'oa:target': {
-                'ods:id': json_value['object']['digitalEntity']['ods:id'],
-                'ods:type': 'https://hdl.handle.net/21.T11148/bbad8c4e101e8af01115', # handle for digitalMedia Type
+                ODS_ID: json_value['object']['digitalEntity'][ODS_ID],
+                ODS_TYPE: 'https://hdl.handle.net/21.T11148'
+                          '/bbad8c4e101e8af01115',  # handle for digitalMedia
+                # Type
                 'oa:selector': selector
             },
             'oa:body': {
-                'ods:type': 'TextualBody',
-                'dcterms:reference': 'https://github.com/2younis/plant-organ-detection/blob/master/train_net.py',
+                ODS_TYPE: 'TextualBody',
+                'dcterms:reference': 'https://github.com/2younis/plant-organ'
+                                     '-detection/blob/master/train_net.py',
                 'oa:value': body_values
             }
         }
@@ -89,8 +99,8 @@ def map_to_annotation(json_value, additional_info_annotations, width, height) ->
 
 
 def timestamp_now():
-    timestamp = str(
-        datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
+    timestamp = str(datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"
+                                                           ".%f"))
     timestamp_cleaned = timestamp[:-3]
     timestamp_timezone = timestamp_cleaned + 'Z'
     return timestamp_timezone
