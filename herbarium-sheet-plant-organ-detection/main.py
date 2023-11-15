@@ -78,9 +78,7 @@ def map_to_annotation(json_value, additional_info_annotations, width, height) ->
             'dcterms:created': timestamp,
             'oa:target': {
                 ODS_ID: json_value['object']['digitalEntity'][ODS_ID],
-                ODS_TYPE: 'https://hdl.handle.net/21.T11148'
-                          '/bbad8c4e101e8af01115',  # handle for digitalMedia
-                # Type
+                ODS_TYPE: json_value['object']['digitalEntity'][ODS_TYPE],
                 'oa:selector': selector
             },
             'oa:body': {
