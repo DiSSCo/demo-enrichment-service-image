@@ -177,5 +177,4 @@ def run_local(example: str) -> None:
 
 
 if __name__ == '__main__':
-    # start_kafka()
-    run_local('https://dev.dissco.tech/api/v1/specimens/TEST/XGD-90K-94P')
+    start_kafka()
