@@ -32,14 +32,14 @@ def start_kafka() -> None:
         specimen_data = json_value['object']['digitalSpecimen']
         result = run_api_call(specimen_data)
         if result.get('gbif_id') is not None:
-            annotations = map_to_annotation(json_value, result, json_value["jobId"])
+            annotations = map_to_annotation(specimen_data, result, json_value["jobId"])
             send_updated_opends(annotations, producer)
 
 
-def map_to_annotation(json_value: Dict, result: Dict[str, str], job_id: str) -> dict:
+def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) -> dict:
     """
     Map the result of the API call to an annotation
-    :param json_value: The JSON value of the Digital Specimen
+    :param specimen_data: The JSON value of the Digital Specimen
     :param result: The result which contains either the GBIF ID or an error message
     :param job_id: The job ID of the MAS
     :return: Returns a formatted annotation Record which includes the Job ID
@@ -55,8 +55,8 @@ def map_to_annotation(json_value: Dict, result: Dict[str, str], job_id: str) -> 
         },
         'dcterms:created': timestamp,
         'oa:target': {
-            ODS_ID: json_value['digitalSpecimen'][ODS_ID],
-            ODS_TYPE: json_value['digitalSpecimen'][ODS_TYPE],
+            ODS_ID: specimen_data[ODS_ID],
+            ODS_TYPE: specimen_data[ODS_TYPE],
             'oa:selector': {
                 ODS_TYPE: 'ClassSelector',
                 'oa:class': 'entityRelationship'
@@ -105,16 +105,16 @@ def send_updated_opends(annotation: Dict, producer: KafkaProducer) -> None:
     producer.send('annotation', annotation)
 
 
-def run_api_call(json_data: Dict) -> Dict[str, str]:
+def run_api_call(specimen_data: Dict) -> Dict[str, str]:
     """
     Calls GBIF API based on the occurrenceID, catalogNumber and basisOfRecord
-    :param json_data: The JSON data of the Digital Specimen
+    :param specimen_data: The JSON data of the Digital Specimen
     :return: The result from the API, which contains either the GBIF ID or an error message
     """
-    identifiers = get_identifiers_from_object(json_data)
+    identifiers = get_identifiers_from_object(specimen_data)
     query_string = (f'https://api.gbif.org/v1/occurrence/search?occurrenceID='
                     f'{identifiers.get("occurrenceId")}&catalogNumber={identifiers.get("catalogNumber")}'
-                    f'&basisOfRecord={json_data["dwc:basisOfRecord"]}')
+                    f'&basisOfRecord={specimen_data["dwc:basisOfRecord"]}')
     response = requests.get(query_string)
     response_json = json.loads(response.content)
     if response_json['count'] == 1:
@@ -128,14 +128,14 @@ def run_api_call(json_data: Dict) -> Dict[str, str]:
         return {'queryString': query_string, 'error_message': 'Failed to make the match, too many candidates'}
 
 
-def get_identifiers_from_object(json_data: Dict) -> Dict[str, str]:
+def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:
     """
     Retrieve the correct identifiers from the Digital Specimen
-    :param json_data: Json data of the Digital Specimen
+    :param specimen_data: Json data of the Digital Specimen
     :return: The mapped relevant_identifiers (occurrenceId and catalogNumber)
     """
     relevant_identifiers = {}
-    for identifier in json_data['identifiers']:
+    for identifier in specimen_data['identifiers']:
         if identifier.get('???:identifierType') in ['dwc:occurrenceID', 'abcd:unitGUID']:
             relevant_identifiers['occurrenceId'] = identifier.get('???:identifierValue')
         if identifier.get('???:identifierType') in ['dwc:catalogNumber', 'abcd:unitID']:
@@ -154,9 +154,9 @@ def run_local(example: str) -> None:
     """
     response = requests.get(example)
     attributes = json.loads(response.content)['data']['attributes']
-    data = attributes['digitalSpecimen']
-    result = run_api_call(data)
-    annotations = map_to_annotation(attributes, result, str(uuid.uuid4()))
+    specimen_data = attributes['digitalSpecimen']
+    result = run_api_call(specimen_data)
+    annotations = map_to_annotation(specimen_data, result, str(uuid.uuid4()))
     logging.info('Created annotations: ' + str(annotations))
 
 

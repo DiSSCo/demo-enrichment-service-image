@@ -32,20 +32,20 @@ def start_kafka() -> None:
         specimen_data = json_value['object']['digitalSpecimen']
         result = run_api_call(specimen_data)
         if result is not None and len(result) > 0:
-            mas_job_record = map_to_mas_job_record(json_value, result, json_value["jobId"])
+            mas_job_record = map_to_mas_job_record(specimen_data, result, json_value["jobId"])
             send_updated_opends(mas_job_record, producer)
 
 
-def map_to_mas_job_record(json_value: Dict, results: List[Dict[str, str]], job_id: str) -> dict:
+def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> dict:
     """
     Map the result of the API call to an annotation
-    :param json_value: The JSON value of the Digital Specimen
+    :param specimen_data: The JSON value of the Digital Specimen
     :param results: A list of results that contain the queryString and the geoCASe identifier
     :param job_id: The job ID of the MAS
     :return: Returns a formatted annotation Record which includes the Job ID
     """
     timestamp = timestamp_now()
-    annotations = list(map(lambda result: map_to_annotation(json_value, result, timestamp), results))
+    annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp), results))
     mas_job_record = {
         "jobId": job_id,
         "annotations": [annotations]
@@ -53,7 +53,7 @@ def map_to_mas_job_record(json_value: Dict, results: List[Dict[str, str]], job_i
     return mas_job_record
 
 
-def map_to_annotation(json_value, result, timestamp):
+def map_to_annotation(specimen_data, result, timestamp):
     annotation = {
         'rdf:type': 'Annotation',
         'oa:motivation': 'ods:adding',
@@ -64,8 +64,8 @@ def map_to_annotation(json_value, result, timestamp):
         },
         'dcterms:created': timestamp,
         'oa:target': {
-            ODS_ID: json_value['digitalSpecimen'][ODS_ID],
-            ODS_TYPE: json_value['digitalSpecimen'][ODS_TYPE],
+            ODS_ID: specimen_data[ODS_ID],
+            ODS_TYPE: specimen_data[ODS_TYPE],
             'oa:selector': {
                 ODS_TYPE: 'ClassSelector',
                 'oa:class': 'entityRelationship'
@@ -110,15 +110,15 @@ def send_updated_opends(annotation: Dict, producer: KafkaProducer) -> None:
     producer.send('annotation', annotation)
 
 
-def run_api_call(json_data: Dict) -> List[Dict[str, str]]:
+def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     """
     Calls GeoCASe API based on the available identifiers, unitId and/or recordURI.
     It is possible that one Digital Specimen has multiple GeoCASe records.
     If we get more than 5 GeoCASe hits we assume that something went wrong and we will not return any results.
-    :param json_data: The JSON data of the Digital Specimen
+    :param specimen_data: The JSON data of the Digital Specimen
     :return:  A list of results that contain the queryString and the geoCASe identifier
     """
-    identifiers = get_identifiers_from_object(json_data)
+    identifiers = get_identifiers_from_object(specimen_data)
     if identifiers and len(identifiers) > 0:
         query_string = build_query_string(identifiers)
         response = requests.get(query_string)
@@ -129,28 +129,28 @@ def run_api_call(json_data: Dict) -> List[Dict[str, str]]:
                 lambda result: {'queryString': query_string, 'geocaseId': result['geocase_id']},
                 response_json.get('response').get('docs')))
         else:
-            logging.info(f'Too many hits ({hits}) were found for specimen: {json_data["ods:id"]}')
+            logging.info(f'Too many hits ({hits}) were found for specimen: {specimen_data["ods:id"]}')
     else:
-        logging.info(f'No relevant identifiers found for specimen: {json_data["ods:id"]}')
+        logging.info(f'No relevant identifiers found for specimen: {specimen_data["ods:id"]}')
 
 
 def build_query_string(identifiers):
     query_string = 'https://api.geocase.eu/v1/solr?q='
     for key, value in identifiers.items():
         if not query_string.endswith('q='):
-            query_string = query_string + f' AND '
+            query_string = query_string + ' AND '
         query_string = query_string + f'{key}:"{value}"'
     return query_string
 
 
-def get_identifiers_from_object(json_data: Dict) -> Dict[str, str]:
+def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:
     """
     Retrieve the correct identifiers from the Digital Specimen
-    :param json_data: Json data of the Digital Specimen
+    :param specimen_data: Json data of the Digital Specimen
     :return: The mapped relevant_identifiers (unitId and recordURI)
     """
     relevant_identifiers = {}
-    for identifier in json_data['identifiers']:
+    for identifier in specimen_data['identifiers']:
         if identifier.get('???:identifierType') in ['abcd:unitID']:
             relevant_identifiers['unitid'] = identifier.get('???:identifierValue')
         if identifier.get('???:identifierType') in ['abcd:recordURI']:
@@ -169,10 +169,10 @@ def run_local(example: str) -> None:
     """
     response = requests.get(example)
     attributes = json.loads(response.content)['data']['attributes']
-    data = attributes['digitalSpecimen']
-    result = run_api_call(data)
+    specimen_data = attributes['digitalSpecimen']
+    result = run_api_call(specimen_data)
     if result is not None and len(result) > 0:
-        mas_job_record = map_to_mas_job_record(attributes, result, str(uuid.uuid4()))
+        mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
         logging.info('Created annotations: ' + str(mas_job_record))
 
 
