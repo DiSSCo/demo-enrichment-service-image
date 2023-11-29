@@ -47,6 +47,15 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) 
     :return: Returns a formatted annotation Record which includes the Job ID
     """
     timestamp = timestamp_now()
+    oa_value = {
+                'entityRelationship': {
+                    'entityRelationshipType': 'hasGbifID',
+                    'objectEntityIri': f'https://www.gbif.org/occurrence/{result["gbifId"]}',
+                    'entityRelationshipDate': timestamp,
+                    'entityRelationshipCreatorName': 'GBIF occurrence linker',
+                    'entityRelationshipCreatorId': 'https://hdl.handle.net/enrichment-service-pid'
+                }
+            }
     annotation = {
         'rdf:type': 'Annotation',
         'oa:motivation': 'ods:adding',
@@ -66,15 +75,7 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) 
         },
         'oa:body': {
             ODS_TYPE: 'TextualBody/Other',
-            'oa:value': [{
-                'entityRelationship': {
-                    'entityRelationshipType': 'hasGbifID',
-                    'objectEntityIri': f'https://www.gbif.org/occurrence/{result["gbifId"]}',
-                    'entityRelationshipDate': timestamp,
-                    'entityRelationshipCreatorName': 'GBIF occurrence linker',
-                    'entityRelationshipCreatorId': 'https://hdl.handle.net/enrichment-service-pid'
-                }
-            }],
+            'oa:value': [json.dumps(oa_value)],
             'dcterms:reference': result['queryString']
         }
     }
