@@ -48,7 +48,7 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) 
     """
     timestamp = timestamp_now()
     oa_value = {
-                'entityRelationship': {
+                'entityRelationships': {
                     'entityRelationshipType': 'hasGbifID',
                     'objectEntityIri': f'https://www.gbif.org/occurrence/{result["gbifId"]}',
                     'entityRelationshipDate': timestamp,
@@ -60,9 +60,9 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) 
         'rdf:type': 'Annotation',
         'oa:motivation': 'ods:adding',
         'oa:creator': {
-            ODS_TYPE: 'machine',
+            ODS_TYPE: 'oa:SoftwareAgent',
             'foaf:name': os.environ.get('MAS_NAME'),
-            ODS_ID: os.environ.get('MAS_ID')
+            ODS_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
         },
         'dcterms:created': timestamp,
         'oa:target': {
@@ -70,11 +70,11 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) 
             ODS_TYPE: specimen_data[ODS_TYPE],
             'oa:selector': {
                 ODS_TYPE: 'ClassSelector',
-                'oa:class': 'entityRelationship'
+                'oa:class': '$./entityRelationships[*]'
             },
         },
         'oa:body': {
-            ODS_TYPE: 'TextualBody/Other',
+            ODS_TYPE: 'TextualBody',
             'oa:value': [json.dumps(oa_value)],
             'dcterms:reference': result['queryString']
         }
