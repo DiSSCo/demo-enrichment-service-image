@@ -34,6 +34,8 @@ def start_kafka() -> None:
         if result is not None and len(result) > 0:
             mas_job_record = map_to_mas_job_record(specimen_data, result, json_value["jobId"])
             send_updated_opends(mas_job_record, producer)
+        else:
+            logging.info('No GeoCASe results were found, unable to create a relationship')
 
 
 def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> dict:
@@ -54,13 +56,22 @@ def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], jo
 
 
 def map_to_annotation(specimen_data, result, timestamp):
+    oa_value = {
+        'entityRelationships': {
+            'entityRelationshipType': 'hasGeoCASeID',
+            'objectEntityIri': f'https://geocase.eu/specimen/{result["geocaseId"]}',
+            'entityRelationshipDate': timestamp,
+            'entityRelationshipCreatorName': os.environ.get('MAS_NAME'),
+            'entityRelationshipCreatorId': f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
+        }
+    }
     annotation = {
         'rdf:type': 'Annotation',
         'oa:motivation': 'ods:adding',
         'oa:creator': {
-            ODS_TYPE: 'machine',
+            ODS_TYPE: 'oa:SoftwareAgent',
             'foaf:name': os.environ.get('MAS_NAME'),
-            ODS_ID: os.environ.get('MAS_ID')
+            ODS_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
         },
         'dcterms:created': timestamp,
         'oa:target': {
@@ -68,20 +79,12 @@ def map_to_annotation(specimen_data, result, timestamp):
             ODS_TYPE: specimen_data[ODS_TYPE],
             'oa:selector': {
                 ODS_TYPE: 'ClassSelector',
-                'oa:class': 'entityRelationship'
+                'oa:class': '$./entityRelationships'
             },
         },
         'oa:body': {
-            ODS_TYPE: 'TextualBody/Other',
-            'oa:value': [{
-                'entityRelationship': {
-                    'entityRelationshipType': 'hasGeoCASeID',
-                    'objectEntityIri': f'https://geocase.eu/specimen/{result["geocaseId"]}',
-                    'entityRelationshipDate': timestamp,
-                    'entityRelationshipCreatorName': os.environ.get('MAS_NAME'),
-                    'entityRelationshipCreatorId': os.environ.get('MAS_ID')
-                }
-            }],
+            ODS_TYPE: 'TextualBody',
+            'oa:value': [json.dumps(oa_value)],
             'dcterms:reference': result['queryString']
         }
     }
@@ -107,7 +110,7 @@ def send_updated_opends(annotation: Dict, producer: KafkaProducer) -> None:
     :return: Will not return anything
     """
     logging.info('Publishing annotation: ' + str(annotation))
-    producer.send('annotation', annotation)
+    producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), annotation)
 
 
 def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
@@ -134,7 +137,12 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
         logging.info(f'No relevant identifiers found for specimen: {specimen_data["ods:id"]}')
 
 
-def build_query_string(identifiers):
+def build_query_string(identifiers: Dict[str, str]):
+    """
+    Build query string from all identifiers in the Digital Specimen
+    :param identifiers: All identifiers in the digital specimen
+    :return: A formatted query string
+    """
     query_string = 'https://api.geocase.eu/v1/solr?q='
     for key, value in identifiers.items():
         if not query_string.endswith('q='):
