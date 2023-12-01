@@ -50,7 +50,7 @@ def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], jo
     annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp), results))
     mas_job_record = {
         "jobId": job_id,
-        "annotations": [annotations]
+        "annotations": annotations
     }
     return mas_job_record
 
