@@ -48,14 +48,14 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) 
     """
     timestamp = timestamp_now()
     oa_value = {
-                'entityRelationships': {
-                    'entityRelationshipType': 'hasGbifID',
-                    'objectEntityIri': f'https://www.gbif.org/occurrence/{result["gbifId"]}',
-                    'entityRelationshipDate': timestamp,
-                    'entityRelationshipCreatorName': 'GBIF occurrence linker',
-                    'entityRelationshipCreatorId': 'https://hdl.handle.net/enrichment-service-pid'
-                }
-            }
+        'entityRelationships': {
+            'entityRelationshipType': 'hasGbifID',
+            'objectEntityIri': f'https://www.gbif.org/occurrence/{result["gbifId"]}',
+            'entityRelationshipDate': timestamp,
+            'entityRelationshipCreatorName': os.environ.get('MAS_NAME'),
+            'entityRelationshipCreatorId': f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
+        }
+    }
     annotation = {
         'rdf:type': 'Annotation',
         'oa:motivation': 'ods:adding',
@@ -70,7 +70,7 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) 
             ODS_TYPE: specimen_data[ODS_TYPE],
             'oa:selector': {
                 ODS_TYPE: 'ClassSelector',
-                'oa:class': '$./entityRelationships[*]'
+                'oa:class': '$./entityRelationships'
             },
         },
         'oa:body': {
@@ -105,7 +105,7 @@ def send_updated_opends(annotation: Dict, producer: KafkaProducer) -> None:
     :return: Will not return anything
     """
     logging.info('Publishing annotation: ' + str(annotation))
-    producer.send('annotation', annotation)
+    producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), annotation)
 
 
 def run_api_call(specimen_data: Dict) -> Dict[str, str]:
@@ -127,7 +127,7 @@ def run_api_call(specimen_data: Dict) -> Dict[str, str]:
         logging.info('No results were returned, unable to create a relationship')
         return {'queryString': query_string, 'error_message': 'Failed to make the match, no match could be created'}
     else:
-        logging.info('More than one results returned, unable to create a relationship')
+        logging.info('More than one result returned, unable to create a relationship')
         return {'queryString': query_string, 'error_message': 'Failed to make the match, too many candidates'}
 
 
