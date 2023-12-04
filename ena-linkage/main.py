@@ -31,11 +31,8 @@ def start_kafka() -> None:
         json_value = msg.value
         specimen_data = json_value['object']['digitalSpecimen']
         result = run_api_call(specimen_data)
-        if result is not None and len(result) > 0:
-            mas_job_record = map_to_mas_job_record(specimen_data, result, json_value["jobId"])
-            send_updated_opends(mas_job_record, producer)
-        else:
-            logging.info('No ENA results were found, unable to create a relationship')
+        mas_job_record = map_to_mas_job_record(specimen_data, result, json_value["jobId"])
+        send_updated_opends(mas_job_record, producer)
 
 
 def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> Dict:
@@ -221,9 +218,8 @@ def run_local(example: str) -> None:
     specimen = json.loads(response.content)['data']
     specimen_data = specimen['attributes']['digitalSpecimen']
     result = run_api_call(specimen_data)
-    if result is not None and len(result) > 0:
-        mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
-        logging.info('Created annotations: ' + str(mas_job_record))
+    mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
+    logging.info('Created annotations: ' + str(mas_job_record))
 
 
 if __name__ == '__main__':

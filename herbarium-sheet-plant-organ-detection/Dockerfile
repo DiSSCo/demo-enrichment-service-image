@@ -1,5 +1,5 @@
 # set base image (host OS)
-FROM python:3.9
+FROM python:3.11
 # cannot use the slim image because of missing dependencies for pycocotools
 
 # set the working directory in the container

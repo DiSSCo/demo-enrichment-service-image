@@ -1,19 +1,23 @@
 import json
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
+from typing import Dict, Any, List, Union
 
 import requests
 from kafka import KafkaConsumer, KafkaProducer
+from shapely import from_geojson
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
+ODS_TYPE = "ods:type"
+ODS_ID = "ods:id"
 
 
 def start_kafka() -> None:
     """
     Start a kafka listener and process the messages by unpacking the image.
     When done it will republish the object, so it can be validated and storage by the processing service
-    :param name: The topic name the Kafka listener needs to listen to
     """
     consumer = KafkaConsumer(os.environ.get('KAFKA_CONSUMER_TOPIC'), group_id=os.environ.get('KAFKA_CONSUMER_GROUP'),
                              bootstrap_servers=[os.environ.get('KAFKA_CONSUMER_HOST')],
@@ -22,93 +26,209 @@ def start_kafka() -> None:
     producer = KafkaProducer(bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
                              value_serializer=lambda m: json.dumps(m).encode('utf-8'))
     for msg in consumer:
-        try:
-            logging.info('Received message: ' + str(msg.value))
-            json_value = msg.value
-            specimen_data = json_value['data']
-            if specimen_data.get('dwc:locality') is None:
-                logging.warning('No locality information available, skipping message')
-            else:
-                result = run_georeference(specimen_data)
-                if result is not None:
-                    annotations = map_to_annotation(json_value, result)
-                    send_updated_opends(annotations, producer)
-        except:
-            logging.exception('Failed to process message')
+        logging.info('Received message: ' + str(msg.value))
+        json_value = msg.value
+        specimen_data = json_value['object']['digitalSpecimen']
+        result = run_georeference(specimen_data)
+        mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
+        send_updated_opends(mas_job_record, producer)
 
 
-def map_to_annotation(json_value, result):
-    annotation_lat = {
-        'type': 'Annotation',
-        'motivation': 'https://hdl.handle.net/adding',
-        'creator': 'https://hdl.handle.net/enrichment-service-pid',
-        'created': timestamp_now(),
-        'target': {
-            'id': json_value['id'],
-            'type': 'https://hdl.handle.net/21...',
-            'indvProp': 'dwc:decimalLatitude'
-        },
-        'body': {
-            'source': result['display_name'],
-            'purpose': 'georeferencing',
-            'values': str(result['lat']),
-            'score': str(result['importance'])
+def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> Dict:
+    """
+    Map the result of the API call to a mas job record
+    :param specimen_data: The JSON value of the Digital Specimen
+    :param results: A list of results that contain the queryString and the geoCASe identifier
+    :param job_id: The job ID of the MAS
+    :return: Returns a formatted annotation Record which includes the Job ID
+    """
+    timestamp = timestamp_now()
+    annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp), results))
+    mas_job_record = {
+        "jobId": job_id,
+        "annotations": annotations
+    }
+    return mas_job_record
+
+
+def map_to_annotation(specimen_data: Dict, result: Dict[str, Any], timestamp: str):
+    """
+    Map the result of the Locality API call, to a georeference annotation
+    :param specimen_data: The JSON value of the Digital Specimen
+    :param result: The result of the Locality API call
+    :param timestamp: The current timestamp
+    :return: A single annotation with the georeference information from the locality
+    """
+    point_coordinate = result['osm_result']['geometry'] if result['is_point'] else json.loads(
+        result['geopick_result']['centroid'][0])
+    oa_value = {
+        "georeference": {
+            "dwc:decimalLatitude": point_coordinate['coordinates'][1],
+            "dwc:decimalLongitude": point_coordinate['coordinates'][0],
+            "dwc:geodeticDatum": 'epsg:4326',
+            "dwc:coordinateUncertaintyInMeters": None if result['is_point'] else
+            result['geopick_result']['uncertainty'][0][0],
+            "dwc:pointRadiusSpatialFit": None if result['is_point'] else result['geopick_result']['spatial_fit'][0][0],
+            "dwc:coordinatePrecision": 0.0000001,
+            "dwc:footprintSRS": 'epsg:4326',
+            "dwc:footprintWKT": from_geojson(json.dumps(result.get('osm_result').get('geometry'))).wkt,
+            "dwc:footprintSpatialFit": None if result['is_point'] else 1,
+            "dwc:georeferencedBy": f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
+            "dwc:georeferencedDate": timestamp,
+            "dwc:georeferenceSources": 'GeoPick v.1.0.4',
+            "dwc:georeferenceProtocol": 'Georeferencing Quick Reference Guide (Zermoglio et al. 2020, '
+                                        'https://doi.org/10.35035/e09p-h128)',
+            "dwc:georeferenceRemarks": f"This georeference was created by the GeoPick API. Based on OpenStreetMap API "
+                                       f"query of {result['queryString']}"
         }
     }
 
-    annotation_long = {
-        'type': 'Annotation',
-        'motivation': 'https://hdl.handle.net/adding',
-        'creator': 'https://hdl.handle.net/enrichment-service-pid',
-        'created': timestamp_now(),
-        'target': {
-            'id': json_value['id'],
-            'type': 'https://hdl.handle.net/21...',
-            'indvProp': 'dwc:decimalLongitude'
+    return wrap_oa_value(oa_value, result, specimen_data, timestamp,
+                         f"$./occurrences[{result['occurrence_index']}].location.georeference")
+
+
+def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, timestamp: str, oa_class: str) -> Dict:
+    """
+    Generic method to wrap the oa_value into an annotation object
+    :param oa_value: The value that contains the result of the MAS
+    :param result: The result of the Locality API call
+    :param specimen_data: The JSON value of the Digital Specimen
+    :param timestamp: The current timestamp
+    :param oa_class: The name of the class to which the class annotation points
+    :return: Returns an annotation with all the relevant metadata
+    """
+    annotation = {
+        'rdf:type': 'Annotation',
+        'oa:motivation': 'ods:adding',
+        'oa:creator': {
+            ODS_TYPE: 'oa:SoftwareAgent',
+            'foaf:name': os.environ.get('MAS_NAME'),
+            ODS_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
         },
-        'body': {
-            'source': result['display_name'],
-            'purpose': 'georeferencing',
-            'values': str(result['lon']),
-            'score': str(result['importance'])
+        'dcterms:created': timestamp,
+        'oa:target': {
+            ODS_ID: specimen_data[ODS_ID],
+            ODS_TYPE: specimen_data[ODS_TYPE],
+            'oa:selector': {
+                ODS_TYPE: 'ClassSelector',
+                'oa:class': oa_class
+            },
+        },
+        'oa:body': {
+            ODS_TYPE: 'TextualBody',
+            'oa:value': [json.dumps(oa_value)],
+            'dcterms:reference': result['queryString']
         }
     }
-    return [annotation_lat, annotation_long]
+    return annotation
 
 
-def timestamp_now():
+def timestamp_now() -> str:
+    """
+    Create a timestamp in the correct format
+    :return: The timestamp as a string
+    """
     timestamp = str(datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
     timestamp_cleaned = timestamp[:-3]
     timestamp_timezone = timestamp_cleaned + 'Z'
     return timestamp_timezone
 
 
-def send_updated_opends(annotations: list, producer: KafkaProducer) -> None:
-    for annotation in annotations:
-        logging.info('Publishing annotation: ' + str(annotation))
-        producer.send('annotation', annotation)
+def send_updated_opends(annotation: Union[None, Dict], producer: KafkaProducer) -> None:
+    """
+    Send the annotation to the Kafka topic
+    :param annotation: The formatted annotationRecord
+    :param producer: The initiated Kafka producer
+    :return: Will not return anything
+    """
+    logging.info('Publishing annotation: ' + str(annotation))
+    producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), annotation)
 
 
-def run_georeference(json_data):
-    querystring = json_data['dwc:locality'] + ', ' + json_data['dwc:country']
-    response = requests.get('https://nominatim.openstreetmap.org/search.php?q=' + querystring + '&format=jsonv2')
-    response_json = json.loads(response.content)
-    if len(response_json) == 0:
-        logging.info("No results for this locality where found: " + querystring)
+def run_georeference(specimen_data: Dict) -> List[Dict[str, Any]]:
+    """
+    Calls georeference APIs. First of Open Street Map to get the initial georeference of the locality.
+    If response is a point location it is immediately returned.
+    If the response is not a point location we will call the GeoPick API to get the centroid of the polygon.
+    :param specimen_data: The Digital Specimen data
+    :return: Returns a list of all the results. This could be multiple as we can have more than one occurrence
+    per specimen
+    """
+    occurrences = specimen_data.get('occurrences')
+    result_list = list()
+    for index, occurrence in enumerate(occurrences):
+        if occurrence.get('location') is not None:
+            location = occurrence.get('location')
+            query_string = build_query_string(location)
+            response = requests.get(query_string)
+            response_json = json.loads(response.content)
+            if len(response_json.get('features')) == 0:
+                logging.info("No results for this locality where found: " + query_string)
+            else:
+                first_feature = response_json.get('features')[0]
+                logging.info('Highest hit is: ' + json.dumps(first_feature))
+                result = {'queryString': query_string,
+                          'osm_result': first_feature,
+                          'occurrence_index': index}
+
+                if first_feature.get('geometry').get('type') != 'Point':
+                    result['geopick_result'] = run_geopick_api(first_feature)
+                    result['is_point'] = False
+                else:
+                    result['is_point'] = True
+                result_list.append(result)
+    return result_list
+
+
+def build_query_string(location):
+    querystring = f"https://nominatim.openstreetmap.org/search.php?q={location['dwc:locality']}"
+    for field_name in ['dwc:municipality', 'dwc:county', 'dwc:stateProvince', 'dwc:country']:
+        querystring += get_supporting_info(field_name, location)
+    querystring += '&format=geojson&polygon_geojson=1'
+    return querystring
+
+
+def get_supporting_info(field_name: str, location: Dict) -> str:
+    """
+    Get the supporting information from the specimen data
+    :param field_name: The name of the field that needs to be retrieved
+    :param location: The JSON value of the Digital Specimen
+    :return: The value of the field
+    """
+    if location.get(field_name) is None:
+        return ''
     else:
-        logging.info('Highest hit is: ' + json.dumps(response_json[0], indent=2))
-        return response_json[0]
+        return ', ' + location.get(field_name)
+
+
+def run_geopick_api(feature) -> Dict:
+    """
+    Call the GeoPick API to get the centroid of the polygon
+    :param feature: The geojson feature
+    :return: The result of the GeoPick API call
+    """
+    querystring = 'https://geopick.gbif.org/mbc'
+    response = requests.post(querystring, json=feature)
+    response_json = json.loads(json.loads(response.content)[0])
+    return response_json
 
 
 def run_local(example: str):
+    """
+    Run the script locally. Can be called by replacing the kafka call with this  a method call in the main method.
+    Will call the DiSSCo API to retrieve the specimen data.
+    A record ID will be created but can only be used for testing.
+    :param example: The full URL of the Digital Specimen to the API (for example
+    https://sandbox.dissco.tech/api/v1/specimens/20.5000.1025/E1R-NH0-J3J)
+    :return: Return nothing but will log the result
+    """
     response = requests.get(example)
-    attributes = json.loads(response.content)['data']['attributes']
-    data = attributes['data']
-    result = run_georeference(data)
-    annotations = map_to_annotation(attributes, result)
-    logging.info('Created annotations: ' + str(annotations))
+    specimen = json.loads(response.content)['data']
+    specimen_data = specimen['attributes']['digitalSpecimen']
+    result = run_georeference(specimen_data)
+    mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
+    logging.info('Created annotations: ' + json.dumps(mas_job_record))
 
 
 if __name__ == '__main__':
-    # run_local('https://sandbox.dissco.tech/api/v1/specimens/20.5000.1025/E1R-NH0-J3J')
     start_kafka()
