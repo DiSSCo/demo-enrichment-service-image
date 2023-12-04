@@ -49,7 +49,7 @@ def start_kafka(predictor: DefaultPredictor) -> None:
         send_updated_opends(event, producer)
 
 
-def map_to_annotation(digital_entity: Dict, additional_info_annotations: List[Dict[str: Any]], width: int, height: int)\
+def map_to_annotation(digital_entity: Dict, additional_info_annotations: List[Dict[str, Any]], width: int, height: int) \
         -> List[Dict[str, Any]]:
     """
     Builds the annotation records (one per ROI) from the prediction result.
@@ -128,7 +128,7 @@ def send_updated_opends(event: dict, producer: KafkaProducer) -> None:
     producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), event)
 
 
-def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[List[Dict[str: Any]], int, int]:
+def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[List[Dict[str, Any]], int, int]:
     """
     Checks if the Image url works and gathers metadata information from the image.
     :param image_uri: The image url from which we will gather metadata
@@ -179,7 +179,6 @@ def run_local(example: str) -> None:
     json_value = json.loads(response.content)['data']
     digital_entity = json_value['attributes']['digitalEntity']
     additional_info_annotations, width, height = run_object_detection(digital_entity['ac:accessUri'], predictor)
-    additional_info_annotations = []
     annotations = map_to_annotation(digital_entity, additional_info_annotations, width, height)
     event = {
         "jobId": str(uuid.uuid4()),
