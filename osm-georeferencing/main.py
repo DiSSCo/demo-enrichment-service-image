@@ -36,7 +36,7 @@ def start_kafka() -> None:
 
 def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> Dict:
     """
-    Map the result of the API call to an annotation
+    Map the result of the API call to a mas job record
     :param specimen_data: The JSON value of the Digital Specimen
     :param results: A list of results that contain the queryString and the geoCASe identifier
     :param job_id: The job ID of the MAS
