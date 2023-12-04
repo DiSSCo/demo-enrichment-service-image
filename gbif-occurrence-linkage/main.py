@@ -31,11 +31,8 @@ def start_kafka() -> None:
         json_value = msg.value
         specimen_data = json_value['object']['digitalSpecimen']
         result = run_api_call(specimen_data)
-        if result.get('gbifId') is not None:
-            annotations = map_to_annotation(specimen_data, result, json_value["jobId"])
-            send_updated_opends(annotations, producer)
-        else:
-            logging.info('No GBIF ID was found, unable to create a relationship')
+        annotations = map_to_annotation(specimen_data, result, json_value["jobId"])
+        send_updated_opends(annotations, producer)
 
 
 def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) -> dict:
