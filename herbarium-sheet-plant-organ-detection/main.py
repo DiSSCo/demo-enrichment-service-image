@@ -40,9 +40,9 @@ def start_kafka(predictor: DefaultPredictor) -> None:
         try:
             logging.info(msg.value)
             json_value = msg.value
-            image_uri = json_value['object']['digitalEntity']['ac:accessUri']
-            additional_info_annotations, width, height = run_object_detection(image_uri, predictor)
-            annotations = map_to_annotation(json_value, additional_info_annotations, width, height)
+            digital_entity = json_value['object']['digitalEntity']
+            additional_info_annotations, width, height = run_object_detection(digital_entity['ac:accessUri'], predictor)
+            annotations = map_to_annotation(digital_entity, additional_info_annotations, width, height)
             event = {
                 "jobId": json_value['jobId'],
                 'annotations': annotations
