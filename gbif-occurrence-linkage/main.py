@@ -27,12 +27,15 @@ def start_kafka() -> None:
     producer = KafkaProducer(bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
                              value_serializer=lambda m: json.dumps(m).encode('utf-8'))
     for msg in consumer:
-        logging.info('Received message: ' + str(msg.value))
-        json_value = msg.value
-        specimen_data = json_value['object']['digitalSpecimen']
-        result = run_api_call(specimen_data)
-        annotations = map_to_annotation(specimen_data, result, json_value["jobId"])
-        send_updated_opends(annotations, producer)
+        try:
+            logging.info('Received message: ' + str(msg.value))
+            json_value = msg.value
+            specimen_data = json_value['object']['digitalSpecimen']
+            result = run_api_call(specimen_data)
+            annotations = map_to_annotation(specimen_data, result, json_value["jobId"])
+            send_updated_opends(annotations, producer)
+        except Exception as e:
+            logging.exception(e)
 
 
 def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) -> dict:

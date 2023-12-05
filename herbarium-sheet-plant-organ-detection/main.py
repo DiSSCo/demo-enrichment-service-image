@@ -37,16 +37,19 @@ def start_kafka(predictor: DefaultPredictor) -> None:
         bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
         value_serializer=lambda m: json.dumps(m).encode('utf-8'))
     for msg in consumer:
-        logging.info(msg.value)
-        json_value = msg.value
-        image_uri = json_value['object']['digitalEntity']['ac:accessUri']
-        additional_info_annotations, width, height = run_object_detection(image_uri, predictor)
-        annotations = map_to_annotation(json_value, additional_info_annotations, width, height)
-        event = {
-            "jobId": json_value['jobId'],
-            'annotations': annotations
-        }
-        send_updated_opends(event, producer)
+        try:
+            logging.info(msg.value)
+            json_value = msg.value
+            image_uri = json_value['object']['digitalEntity']['ac:accessUri']
+            additional_info_annotations, width, height = run_object_detection(image_uri, predictor)
+            annotations = map_to_annotation(json_value, additional_info_annotations, width, height)
+            event = {
+                "jobId": json_value['jobId'],
+                'annotations': annotations
+            }
+            send_updated_opends(event, producer)
+        except Exception as e:
+            logging.exception(e)
 
 
 def map_to_annotation(digital_entity: Dict, additional_info_annotations: List[Dict[str, Any]], width: int, height: int) \
