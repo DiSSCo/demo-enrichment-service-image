@@ -70,17 +70,15 @@ def map_to_annotation(digital_entity: Dict, additional_info_annotations: List[Di
             'score': value['score'],
         }
         selector = {
-            'oa:selector': {
-                ODS_TYPE: 'FragmentSelector',
-                'dcterms:conformsTo': 'https://www.w3.org/TR/media-frags/',
-                'ac:hasRoi': {
-                    "ac:xFrac": value['boundingBox'][0] / width,
-                    "ac:yFrac": value['boundingBox'][1] / height,
-                    "ac:widthFrac": (value['boundingBox'][2] -
-                                     value['boundingBox'][0]) / width,
-                    "ac:heightFrac": (value['boundingBox'][3]
-                                      - value['boundingBox'][1]) / height
-                }
+            ODS_TYPE: 'FragmentSelector',
+            'dcterms:conformsTo': 'https://www.w3.org/TR/media-frags/',
+            'ac:hasRoi': {
+                "ac:xFrac": value['boundingBox'][0] / width,
+                "ac:yFrac": value['boundingBox'][1] / height,
+                "ac:widthFrac": (value['boundingBox'][2] -
+                                 value['boundingBox'][0]) / width,
+                "ac:heightFrac": (value['boundingBox'][3]
+                                  - value['boundingBox'][1]) / height
             }
         }
         annotation = {
@@ -104,7 +102,6 @@ def map_to_annotation(digital_entity: Dict, additional_info_annotations: List[Di
             }
         }
         annotations.append(annotation)
-    logging.info(annotations)
     return annotations
 
 
@@ -127,7 +124,7 @@ def send_updated_opends(event: dict, producer: KafkaProducer) -> None:
     :param producer: The Kafka producer, topic will come from env variable
     :return: Nothing
     """
-    logging.info('Publishing annotation: ' + str(event))
+    logging.info('Publishing annotation: ' + json.dumps(event))
     producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), event)
 
 
