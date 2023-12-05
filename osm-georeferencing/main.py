@@ -26,12 +26,15 @@ def start_kafka() -> None:
     producer = KafkaProducer(bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
                              value_serializer=lambda m: json.dumps(m).encode('utf-8'))
     for msg in consumer:
-        logging.info('Received message: ' + str(msg.value))
-        json_value = msg.value
-        specimen_data = json_value['object']['digitalSpecimen']
-        result = run_georeference(specimen_data)
-        mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
-        send_updated_opends(mas_job_record, producer)
+        try:
+            logging.info('Received message: ' + str(msg.value))
+            json_value = msg.value
+            specimen_data = json_value['object']['digitalSpecimen']
+            result = run_georeference(specimen_data)
+            mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
+            send_updated_opends(mas_job_record, producer)
+        except Exception as e:
+            logging.error(e)
 
 
 def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> Dict:
