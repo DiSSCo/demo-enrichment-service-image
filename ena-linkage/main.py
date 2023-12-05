@@ -47,7 +47,10 @@ def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], jo
     :return: Returns a formatted annotation Record which includes the Job ID
     """
     timestamp = timestamp_now()
-    annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp), results))
+    if results is None:
+        annotations = list()
+    else:
+        annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp), results))
     mas_job_record = {
         "jobId": job_id,
         "annotations": annotations

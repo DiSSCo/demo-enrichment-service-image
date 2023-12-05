@@ -31,7 +31,7 @@ def start_kafka() -> None:
             json_value = msg.value
             specimen_data = json_value['object']['digitalSpecimen']
             result = run_georeference(specimen_data)
-            mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
+            mas_job_record = map_to_mas_job_record(specimen_data, result, json_value["jobId"])
             send_updated_opends(mas_job_record, producer)
         except Exception as e:
             logging.error(e)
@@ -46,7 +46,10 @@ def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], jo
     :return: Returns a formatted annotation Record which includes the Job ID
     """
     timestamp = timestamp_now()
-    annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp), results))
+    if results is None:
+        annotations = list()
+    else:
+        annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp), results))
     mas_job_record = {
         "jobId": job_id,
         "annotations": annotations
