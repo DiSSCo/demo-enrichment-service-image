@@ -69,8 +69,8 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, Any], timestamp: st
         result['geopick_result']['centroid'][0])
     oa_value = {
         "georeference": {
-            "dwc:decimalLatitude": point_coordinate['coordinates'][1],
-            "dwc:decimalLongitude": point_coordinate['coordinates'][0],
+            "dwc:decimalLatitude": round(point_coordinate['coordinates'][1], 7),
+            "dwc:decimalLongitude": round(point_coordinate['coordinates'][0], 7),
             "dwc:geodeticDatum": 'epsg:4326',
             "dwc:coordinateUncertaintyInMeters": None if result['is_point'] else
             result['geopick_result']['uncertainty'][0][0],
@@ -90,7 +90,7 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, Any], timestamp: st
     }
 
     return wrap_oa_value(oa_value, result, specimen_data, timestamp,
-                         f"$./occurrences[{result['occurrence_index']}].location.georeference")
+                         f"$.occurrences[{result['occurrence_index']}].location.georeference")
 
 
 def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, timestamp: str, oa_class: str) -> Dict:
@@ -225,7 +225,7 @@ def run_local(example: str):
     Will call the DiSSCo API to retrieve the specimen data.
     A record ID will be created but can only be used for testing.
     :param example: The full URL of the Digital Specimen to the API (for example
-    https://sandbox.dissco.tech/api/v1/specimens/20.5000.1025/E1R-NH0-J3J)
+    https://dev.dissco.tech/api/v1/specimens/TEST/65V-T1W-1PD)
     :return: Return nothing but will log the result
     """
     response = requests.get(example)

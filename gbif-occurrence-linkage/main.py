@@ -70,7 +70,7 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) 
             ODS_TYPE: specimen_data[ODS_TYPE],
             'oa:selector': {
                 ODS_TYPE: 'ClassSelector',
-                'oa:class': '$./entityRelationships'
+                'oa:class': '$.entityRelationships'
             },
         },
         'oa:body': {

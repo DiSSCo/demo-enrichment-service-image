@@ -75,7 +75,7 @@ def map_to_entity_relationship_annotation(specimen_data: Dict, result: Dict[str,
             'entityRelationshipCreatorId': f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
         }
     }
-    return wrap_oa_value(oa_value, result, specimen_data, timestamp, '$./entityRelationships')
+    return wrap_oa_value(oa_value, result, specimen_data, timestamp, '$.entityRelationships')
 
 
 def map_to_georeference_annotation(specimen_data: Dict, result: Dict[str, Any], timestamp: str):
@@ -88,8 +88,8 @@ def map_to_georeference_annotation(specimen_data: Dict, result: Dict[str, Any], 
     """
     oa_value = {
         "georeference": {
-            "dwc:decimalLatitude": result['geo_reference_result']['latitude'],
-            "dwc:decimalLongitude": result['geo_reference_result']['longitude'],
+            "dwc:decimalLatitude": round(result['geo_reference_result']['latitude'], 7),
+            "dwc:decimalLongitude": round(result['geo_reference_result']['longitude'], 7),
             "dwc:geodeticDatum": 'WGS84',
             "dwc:georeferencedBy": f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
             "dwc:georeferencedDate": timestamp,
@@ -100,7 +100,7 @@ def map_to_georeference_annotation(specimen_data: Dict, result: Dict[str, Any], 
     }
 
     return wrap_oa_value(oa_value, result, specimen_data, timestamp,
-                         f"$./occurrences[{result['occurrence_index']}].location.georeference")
+                         f"$.occurrences[{result['occurrence_index']}].location.georeference")
 
 
 def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, timestamp: str, oa_class: str) -> Dict:
