@@ -74,7 +74,7 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, str], timestamp: st
             'entityRelationshipCreatorName': os.environ.get('MAS_NAME'),
             'entityRelationshipCreatorId': f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
         }
-    },
+    }
     annotation = {
         'rdf:type': 'Annotation',
         'oa:motivation': 'ods:adding',
