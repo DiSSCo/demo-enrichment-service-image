@@ -28,6 +28,7 @@ def start_kafka() -> None:
         try:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
+            set_job_to_running(json_value['jobId'])
             specimen_data = json_value['object']['digitalSpecimen']
             result = run_georeference(specimen_data)
             mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
@@ -57,6 +58,15 @@ def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], jo
     }
     return mas_job_record
 
+
+def set_job_to_running(job_id: str):
+    url = os.environ.get('RUNNING_ENDPOINT') + os.environ.get('MAS_ID') + '/' + job_id + '/running'
+    response = requests.get(url)
+    code = response.status_code
+    if code == 200:
+        logging.info("Successfully marked MAS job " + job_id + " as running")
+    else:
+        logging.warning("Unable to mark MAS job " + job_id + " as running. Response: " + response.json())
 
 def map_to_entity_relationship_annotation(specimen_data: Dict, result: Dict[str, Any], timestamp: str):
     """

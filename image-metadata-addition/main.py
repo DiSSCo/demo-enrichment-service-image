@@ -30,6 +30,7 @@ def start_kafka() -> None:
     for msg in consumer:
         try:
             json_value = msg.value
+            set_job_to_running(json_value["jobId"])
             object_id = json_value.get('id')
             logging.info(f'Received message for id: {object_id}')
             image_uri = json_value['data']['ac:accessURI']
@@ -39,6 +40,16 @@ def start_kafka() -> None:
             send_updated_opends(annotations, producer)
         except:
             logging.exception(f'Failed to process message: {msg}')
+
+
+def set_job_to_running(job_id: str):
+    url = os.environ.get('RUNNING_ENDPOINT') + os.environ.get('MAS_ID') + '/' + job_id + '/running'
+    response = requests.get(url)
+    code = response.status_code
+    if code == 200:
+        logging.info("Successfully marked MAS job " + job_id + " as running")
+    else:
+        logging.warning("Unable to mark MAS job " + job_id + " as running. Response: " + response.json())
 
 
 def create_annotation(data_elements: dict, json_value: dict):

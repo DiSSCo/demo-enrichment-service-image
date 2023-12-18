@@ -40,6 +40,7 @@ def start_kafka(predictor: DefaultPredictor) -> None:
         try:
             logging.info(msg.value)
             json_value = msg.value
+            set_job_to_running(json_value["jobId"])
             digital_entity = json_value['object']['digitalEntity']
             additional_info_annotations, width, height = run_object_detection(digital_entity['ac:accessUri'], predictor)
             annotations = map_to_annotation(digital_entity, additional_info_annotations, width, height)
@@ -51,6 +52,15 @@ def start_kafka(predictor: DefaultPredictor) -> None:
         except Exception as e:
             logging.exception(e)
 
+
+def set_job_to_running(job_id: str):
+    url = os.environ.get('RUNNING_ENDPOINT') + os.environ.get('MAS_ID') + '/' + job_id + '/running'
+    response = requests.get(url)
+    code = response.status_code
+    if code == 200:
+        logging.info("Successfully marked MAS job " + job_id + " as running")
+    else:
+        logging.warning("Unable to mark MAS job " + job_id + " as running. Response: " + response.json())
 
 def map_to_annotation(digital_entity: Dict, additional_info_annotations: List[Dict[str, Any]], width: int, height: int) \
         -> List[Dict[str, Any]]:
