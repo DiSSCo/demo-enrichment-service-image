@@ -12,6 +12,7 @@ logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 ODS_TYPE = "ods:type"
 ODS_ID = "ods:id"
 
+
 def start_kafka() -> None:
   """
   Start a kafka listener and process the messages by unpacking the image.
@@ -35,7 +36,8 @@ def start_kafka() -> None:
       batching_requested = json_value['batchingRequested']
       result, batch_metadata = run_georeference(specimen_data,
                                                 batching_requested)
-      mas_job_record = map_to_annotation_event(specimen_data, result, json_value["jobId"],
+      mas_job_record = map_to_annotation_event(specimen_data, result,
+                                               json_value["jobId"],
                                                batch_metadata)
       send_updated_opends(mas_job_record, producer)
     except Exception as e:
@@ -58,9 +60,15 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
     annotations = list()
   else:
     annotations = list(map(
-      lambda result: map_to_georeference_annotation(specimen_data, result, timestamp, batching_requested), results))
+      lambda result: map_to_georeference_annotation(specimen_data, result,
+                                                    timestamp,
+                                                    batching_requested),
+      results))
     annotations.extend(list(map(
-        lambda result: map_to_entity_relationship_annotation(specimen_data, result, timestamp, batching_requested), results)))
+      lambda result: map_to_entity_relationship_annotation(specimen_data,
+                                                           result, timestamp,
+                                                           batching_requested),
+      results)))
   annotation_event = {
     "jobId": job_id,
     "annotations": annotations
@@ -211,7 +219,8 @@ def run_georeference(specimen_data: Dict, batching_requested: bool) -> Tuple[
   for index, occurrence in enumerate(occurrences):
     if occurrence.get('location') is not None:
       querystring = f"https://api.mindat.org/localities/?txt={occurrence['location']['dwc:locality']}"
-      response = requests.get(querystring, headers={'Authorization': 'Token ' + os.environ.get('API_KEY')})
+      response = requests.get(querystring, headers={
+        'Authorization': 'Token ' + os.environ.get('API_KEY')})
       response_json = json.loads(response.content)
       if not response_json:
         logging.info("No results for this locality where found: " + querystring)
