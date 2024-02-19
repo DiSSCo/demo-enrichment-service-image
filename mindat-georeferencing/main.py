@@ -221,6 +221,8 @@ def run_georeference(specimen_data: Dict, batching_requested: bool) -> Tuple[
       querystring = f"https://api.mindat.org/localities/?txt={occurrence['location']['dwc:locality']}"
       response = requests.get(querystring, headers={
         'Authorization': 'Token ' + os.environ.get('API_KEY')})
+      logging.info("Response from mindat status code: " + str(response.status_code))
+      logging.info("Response from mindat" + str(response.content))
       response_json = json.loads(response.content)
       if not response_json:
         logging.info("No results for this locality where found: " + querystring)
