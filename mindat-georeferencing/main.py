@@ -216,7 +216,7 @@ def run_georeference(specimen_data: Dict, batching_requested: bool) -> Tuple[
   occurrences = specimen_data.get('occurrences')
   result_list = list()
   batch_metadata = list()
-  print("Name of service:" + os.environ.get("MAS_NAME"))
+  logging.info("Name of service:" + os.environ.get("MAS_NAME"))
   for index, occurrence in enumerate(occurrences):
     if occurrence.get('location') is not None:
       querystring = f"https://api.mindat.org/localities/?txt={occurrence['location']['dwc:locality']}"
@@ -237,7 +237,7 @@ def run_georeference(specimen_data: Dict, batching_requested: bool) -> Tuple[
            'occurrence_index': index})
         if batching_requested:
           batch_metadata.append(
-            build_batch_metadata(occurrence['location']['dwc:locality'], index))
+            build_batch_metadata(occurrence['locRation']['dwc:locality'], index))
   return result_list, batch_metadata
 
 
