@@ -237,7 +237,7 @@ def run_georeference(specimen_data: Dict, batching_requested: bool) -> Tuple[
            'occurrence_index': index})
         if batching_requested:
           batch_metadata.append(
-            build_batch_metadata(occurrence['locRation']['dwc:locality'], index))
+            build_batch_metadata(occurrence['location']['dwc:locality'], index))
   return result_list, batch_metadata
 
 
