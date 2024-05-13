@@ -48,7 +48,7 @@ def send_to_kafka(annotation_event: Dict, producer: KafkaProducer) -> None:
   producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), annotation_event)
 
 
-def run_local() -> Dict:
+def run_local() -> None:
   specimen = requests.get(
     "https://dev.dissco.tech/api/v1/specimens/TEST/VEB-VF3-09K").json()['data'][
     'attributes']['digitalSpecimen']
