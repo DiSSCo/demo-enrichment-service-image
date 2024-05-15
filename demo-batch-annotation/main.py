@@ -3,7 +3,7 @@ import logging
 import os
 import string
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Dict, Tuple, List
 import requests
 
 from kafka import KafkaConsumer, KafkaProducer
@@ -16,7 +16,6 @@ def start_kafka() -> None:
   """
   Start a kafka listener and process the messages by unpacking the image.
   When done it will republish the object, so it can be validated and storage by the processing service
-  :param name: The topic name the Kafka listener needs to listen to
   """
   consumer = KafkaConsumer(os.environ.get('KAFKA_CONSUMER_TOPIC'),
                            group_id=os.environ.get('KAFKA_CONSUMER_GROUP'),
@@ -31,10 +30,26 @@ def start_kafka() -> None:
   for msg in consumer:
     json_value = msg.value
     logging.info(json_value)
-    annotation_event = run_date_check(json_value['object']['digitalSpecimen'],
-                                      json_value['batchingRequested'],
-                                      json_value["jobId"])
+    annotation_event = run_annotations(json_value)
     send_to_kafka(annotation_event, producer)
+
+def run_annotations(json_value: Dict) -> Dict :
+  job_id = json_value['jobId']
+  specimen_data = json_value['object']['digitalSpecimen']
+  batching_requested = json_value['batchingRequested']
+  date_annotation, date_batch, place_in_batch = run_date_check(
+    specimen_data,
+    batching_requested)
+  lin_annotation, lin_batch = run_linnaeus_check(specimen_data, batching_requested, place_in_batch)
+  annotations = date_annotation + lin_annotation
+  batch_metadata = date_batch + lin_batch
+  event = {
+    'jobId': job_id,
+    'annotations': annotations,
+    'batchMetadata': batch_metadata
+  }
+  return event
+
 
 
 def send_to_kafka(annotation_event: Dict, producer: KafkaProducer) -> None:
@@ -52,44 +67,66 @@ def run_local() -> None:
   specimen = requests.get(
     "https://dev.dissco.tech/api/v1/specimens/TEST/VEB-VF3-09K").json()['data'][
     'attributes']['digitalSpecimen']
-  event = run_date_check(specimen, True, "TEST/1234")
+  message = {
+    'object': {
+      'digitalSpecimen' : specimen
+    },
+    'jobId':'111',
+    'batchingRequested': True
+  }
+  event = run_annotations(message)
   logging.info(event)
 
 
-def run_date_check(specimen_data: Dict, batching_requested: bool,
-    job_id: str) -> Dict:
+def run_date_check(specimen_data: Dict, batching_requested: bool) -> Tuple[
+  List[Dict], List[Dict], int]:
   occurrences = specimen_data['occurrences']
   place_in_batch = 0
-  annotation_event = {
-    'jobId': job_id,
-    'annotations': []
-  }
-  if batching_requested:
-    annotation_event['batchMetadata'] = []
+  batch_metadata = []
+  annotations = []
   for i in range(0, len(occurrences)):
     date = occurrences[i]['dwc:eventDate']
     if date is not None and correct_format(date):
-      target_field = "['digitalSpecimen']['occurrences'][" + str(
-        i) + "]['dwc:eventDate']"
-      annotation = map_to_annotation(specimen_data[ODS_ID], target_field)
-      annotation_event['annotations'].append(annotation)
+      target_field = "digitalSpecimenWrapper.ods:attributes.occurrences[" + str(
+        i) + "].dwc:eventDate"
+      annotation = map_to_annotation(specimen_data[ODS_ID], target_field, 'EventDate is in YYYY-MM-DD')
       if batching_requested:
-        batch_metadata = build_batch_metadata(date, place_in_batch)
-        annotation_event['batchMetadata'].append(batch_metadata)
+        annotation['placeInBatch'] = place_in_batch
+        batch_metadata.append(build_batch_metadata(target_field, date, place_in_batch))
         place_in_batch = place_in_batch + 1
-  return annotation_event
+      annotations.append(annotation)
+  return annotations, batch_metadata, place_in_batch
 
+def run_linnaeus_check(specimen_data: Dict, batching_requested: bool,
+    place_in_batch: int) -> Tuple[List[Dict], List[Dict]]:
+  identifications = specimen_data['dwc:identification']
+  annotations = []
+  batch_metadata = []
+  for i in range(0, len(identifications)):
+    taxon_ids = identifications[i]['taxonIdentifications']
+    for j in range(0, len(taxon_ids)):
+      if " (L.) " in taxon_ids[j]['dwc:scientificName']:
+        text = "This taxonomic authority for this identification is Linnaeus"
+        target_field = "digitalSpecimenWrapper.ods:attributes.dwc:identification[" + str(
+          i) + "].taxonIdentifications[" + str(j) + "].dwc:scientificName"
+        annotation = map_to_annotation(specimen_data[ODS_ID], target_field, text)
+        if batching_requested:
+          annotation['placeInBatch'] = place_in_batch
+          batch_metadata.append(build_batch_metadata(target_field, taxon_ids[j]['dwc:scientificName'], place_in_batch))
+          place_in_batch = place_in_batch + 1
+        annotations.append(annotation)
+  return annotations, batch_metadata
 
-def build_batch_metadata(date_value, place_in_batch: int) -> Dict[str, Any]:
+def build_batch_metadata(input_field, input_value, place_in_batch: int) -> Dict:
   batch_metadata = {
     "placeInBatch": place_in_batch,
-    "inputField": "digitalSpecimenWrapper.ods:attributes.occurrences[*].ods:eventDate",
-    "inputValue": date_value
+    "inputField": input_field,
+    "inputValue": input_value
   }
   return batch_metadata
 
 
-def map_to_annotation(pid: str, target_field: str) -> dict:
+def map_to_annotation(pid: str, target_field: str, value: str) -> dict:
   annotation = {
     'rdf:type': 'Annotation',
     'oa:motivation': 'oa:assessing',
@@ -110,7 +147,7 @@ def map_to_annotation(pid: str, target_field: str) -> dict:
     'oa:body': {
       ODS_TYPE: 'oa:TextualBody',
       'oa:value': [
-        'EventDate is in YYYY-MM-DD'
+        value
       ]
     }
   }
