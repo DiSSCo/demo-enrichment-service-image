@@ -25,7 +25,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: public.ecr.aws/dissco/demo-batch-annotation
+          images: public.ecr.aws/dissco/demo-batch-mas
           tags: |
             type=sha
             type=raw,value=latest
