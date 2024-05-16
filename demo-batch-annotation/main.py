@@ -137,7 +137,7 @@ def map_to_annotation(pid: str, target_field: str, value: str) -> dict:
     },
     'dcterms:created': timestamp_now(),
     'oa:target': {
-      ODS_ID: 'https://hdl.handle.net/' + pid,
+      ODS_ID: pid,
       ODS_TYPE: 'https://doi.org/21.T11148/894b1e6cad57e921764e',
       'oa:selector': {
         ODS_TYPE: 'FieldSelector',
