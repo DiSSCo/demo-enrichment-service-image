@@ -3,7 +3,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List, Union, Tuple
 
 import requests
 from kafka import KafkaConsumer, KafkaProducer
@@ -12,6 +12,7 @@ from shapely import from_geojson
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 ODS_TYPE = "ods:type"
 ODS_ID = "ods:id"
+LOCATION_PATH = "digitalSpecimenWrapper.ods:attributes.occurrences[*].location."
 
 
 def start_kafka() -> None:
@@ -30,14 +31,14 @@ def start_kafka() -> None:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
             specimen_data = json_value['object']['digitalSpecimen']
-            result = run_georeference(specimen_data)
-            mas_job_record = map_to_mas_job_record(specimen_data, result, json_value["jobId"])
-            send_updated_opends(mas_job_record, producer)
+            result, batch_metadata = run_georeference(specimen_data)
+            annotation_event = map_to_annotation_event(specimen_data, result, json_value["jobId"], json_value['batchingRequested'], batch_metadata)
+            send_updated_opends(annotation_event, producer)
         except Exception as e:
             logging.error(e)
 
 
-def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> Dict:
+def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], job_id: str, batching: bool, batch_metadata: Dict) -> Dict:
     """
     Map the result of the API call to a mas job record
     :param specimen_data: The JSON value of the Digital Specimen
@@ -49,20 +50,23 @@ def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], jo
     if results is None:
         annotations = list()
     else:
-        annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp), results))
-    mas_job_record = {
+        annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp, batching), results))
+    annotation_event = {
         "jobId": job_id,
         "annotations": annotations
     }
-    return mas_job_record
+    if batching:
+        annotation_event["batchMetadata"] = batch_metadata
+    return annotation_event
 
 
-def map_to_annotation(specimen_data: Dict, result: Dict[str, Any], timestamp: str):
+def map_to_annotation(specimen_data: Dict, result: Dict[str, Any], timestamp: str, batching: bool):
     """
     Map the result of the Locality API call, to a georeference annotation
     :param specimen_data: The JSON value of the Digital Specimen
     :param result: The result of the Locality API call
     :param timestamp: The current timestamp
+    :param batching: batch functionality was requested
     :return: A single annotation with the georeference information from the locality
     """
     point_coordinate = result['osm_result']['geometry'] if result['is_point'] else json.loads(
@@ -90,10 +94,10 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, Any], timestamp: st
     }
 
     return wrap_oa_value(oa_value, result, specimen_data, timestamp,
-                         f"$.occurrences[{result['occurrence_index']}].location.georeference")
+                         f"$.occurrences[{result['occurrence_index']}].location.georeference", batching)
 
 
-def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, timestamp: str, oa_class: str) -> Dict:
+def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, timestamp: str, oa_class: str, batching: bool) -> Dict:
     """
     Generic method to wrap the oa_value into an annotation object
     :param oa_value: The value that contains the result of the MAS
@@ -101,6 +105,7 @@ def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, t
     :param specimen_data: The JSON value of the Digital Specimen
     :param timestamp: The current timestamp
     :param oa_class: The name of the class to which the class annotation points
+    :param batching: batch functionality was requested
     :return: Returns an annotation with all the relevant metadata
     """
     annotation = {
@@ -126,6 +131,8 @@ def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, t
             'dcterms:reference': result['queryString']
         }
     }
+    if batching:
+        annotation['placeInBatch'] = result['occurrence_index']
     return annotation
 
 
@@ -151,7 +158,7 @@ def send_updated_opends(annotation: Union[None, Dict], producer: KafkaProducer) 
     producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), annotation)
 
 
-def run_georeference(specimen_data: Dict) -> List[Dict[str, Any]]:
+def run_georeference(specimen_data: Dict) -> Tuple[List[Dict[str, Any]], Dict]:
     """
     Calls georeference APIs. First of Open Street Map to get the initial georeference of the locality.
     If response is a point location it is immediately returned.
@@ -162,10 +169,11 @@ def run_georeference(specimen_data: Dict) -> List[Dict[str, Any]]:
     """
     occurrences = specimen_data.get('occurrences')
     result_list = list()
+    batch_metadata = {}
     for index, occurrence in enumerate(occurrences):
         if occurrence.get('location') is not None:
             location = occurrence.get('location')
-            query_string = build_query_string(location)
+            query_string, batch_metadata = build_query_string(location, index)
             response = requests.get(query_string)
             response_json = json.loads(response.content)
             if len(response_json.get('features')) == 0:
@@ -178,23 +186,35 @@ def run_georeference(specimen_data: Dict) -> List[Dict[str, Any]]:
                           'occurrence_index': index}
 
                 if first_feature.get('geometry').get('type') != 'Point':
-                    result['geopick_result'] = run_geopick_api(first_feature)
+                    # result['geopick_result'] = run_geopick_api(first_feature)
                     result['is_point'] = False
                 else:
                     result['is_point'] = True
                 result_list.append(result)
-    return result_list
+    return result_list, batch_metadata
 
 
-def build_query_string(location):
+def build_query_string(location, index: int) -> Tuple[str, Dict]:
+    batch_metadata = {
+        'placeInBatch': index,
+        'searchParams': [
+            {
+                'inputField': LOCATION_PATH + 'dwc:locality',
+                'inputValue': location['dwc:locality']
+            }
+        ]
+    }
+
     querystring = f"https://nominatim.openstreetmap.org/search.php?q={location['dwc:locality']}"
     for field_name in ['dwc:municipality', 'dwc:county', 'dwc:stateProvince', 'dwc:country']:
-        querystring += get_supporting_info(field_name, location)
-    querystring += '&format=geojson&polygon_geojson=1'
-    return querystring
+        next_field, search_param = get_supporting_info(field_name, location)
+        querystring += next_field
+        batch_metadata['searchParams'].append(search_param)
+        querystring += '&format=geojson&polygon_geojson=1'
+    return querystring, batch_metadata
 
 
-def get_supporting_info(field_name: str, location: Dict) -> str:
+def get_supporting_info(field_name: str, location: Dict) -> Tuple[str, Dict]:
     """
     Get the supporting information from the specimen data
     :param field_name: The name of the field that needs to be retrieved
@@ -202,9 +222,15 @@ def get_supporting_info(field_name: str, location: Dict) -> str:
     :return: The value of the field
     """
     if location.get(field_name) is None:
-        return ''
+        return '', build_batch_metadata(field_name, '')
     else:
-        return ', ' + location.get(field_name)
+        return ', ' + location.get(field_name), build_batch_metadata(field_name, location.get(field_name))
+
+def build_batch_metadata(field_name: str, field_val: str) -> Dict :
+    return {
+        'inputField': LOCATION_PATH + field_name,
+        'inputValue': field_val
+    }
 
 
 def run_geopick_api(feature) -> Dict:
@@ -213,11 +239,25 @@ def run_geopick_api(feature) -> Dict:
     :param feature: The geojson feature
     :return: The result of the GeoPick API call
     """
-    querystring = 'https://geopick.gbif.org/mbc'
+    querystring = ('https://geopick.gbif.org/v1/georeference-dwc')
     response = requests.post(querystring, json=feature)
     response_json = json.loads(json.loads(response.content)[0])
     return response_json
 
+
+def get_geopick_token():
+    auth_info = {
+        'username':  os.environ.get('GEOPICK_USER'),
+        'password': os.environ.get('GEOPICK_PWD')
+    }
+    headers = {
+        'accept': 'application/json',
+        'Content-Type': 'application/json'
+    }
+    response = requests.post('https://geopick.gbif.org/v1/authenticate',
+                             data=auth_info,
+                             headers=headers)
+    logging.info(response.content)
 
 def run_local(example: str):
     """
@@ -231,10 +271,11 @@ def run_local(example: str):
     response = requests.get(example)
     specimen = json.loads(response.content)['data']
     specimen_data = specimen['attributes']['digitalSpecimen']
-    result = run_georeference(specimen_data)
-    mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
+    result, batch_metadata = run_georeference(specimen_data)
+    mas_job_record = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()), True, batch_metadata)
     logging.info('Created annotations: ' + json.dumps(mas_job_record))
 
 
 if __name__ == '__main__':
-    start_kafka()
+    get_geopick_token()
+    #run_local('https://dev.dissco.tech/api/v1/specimens/TEST/65V-T1W-1PD')

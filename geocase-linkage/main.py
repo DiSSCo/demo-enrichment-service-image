@@ -3,7 +3,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Union, Tuple
 
 import requests
 from kafka import KafkaConsumer, KafkaProducer
@@ -31,14 +31,15 @@ def start_kafka() -> None:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
             specimen_data = json_value['object']['digitalSpecimen']
-            result = run_api_call(specimen_data)
-            mas_job_record = map_to_mas_job_record(specimen_data, result, json_value["jobId"])
-            send_updated_opends(mas_job_record, producer)
+            batching = json_value['batchingRequested']
+            result, batch_metadata = run_api_call(specimen_data)
+            annotation_event = map_to_annotation_event(specimen_data, result, json_value["jobId"], batching, batch_metadata)
+            send_updated_opends(annotation_event, producer)
         except Exception as e:
             logging.exception(e)
 
 
-def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> dict:
+def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], job_id: str, batching: bool, batch_metadata: Dict) -> Dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -50,15 +51,17 @@ def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], jo
     if results is None:
         annotations = list()
     else:
-        annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp), results))
-    mas_job_record = {
+        annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp, batching), results))
+    annotation_event = {
         "jobId": job_id,
         "annotations": annotations
     }
-    return mas_job_record
+    if batching:
+        annotation_event["batchMetadata"] = [batch_metadata]
+    return annotation_event
 
 
-def map_to_annotation(specimen_data, result, timestamp):
+def map_to_annotation(specimen_data: Dict, result: Dict, timestamp: str, batching: bool):
     oa_value = {
         'entityRelationships': {
             'entityRelationshipType': 'hasGeoCASeID',
@@ -91,6 +94,8 @@ def map_to_annotation(specimen_data, result, timestamp):
             'dcterms:reference': result['queryString']
         }
     }
+    if batching:
+        annotation["placeInBatch"] = 1
     return annotation
 
 
@@ -116,7 +121,7 @@ def send_updated_opends(annotation: Dict, producer: KafkaProducer) -> None:
     producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), annotation)
 
 
-def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
+def run_api_call(specimen_data: Dict) -> Tuple[List[Dict[str, str]], Dict]:
     """
     Calls GeoCASe API based on the available identifiers, unitId and/or recordURI.
     It is possible that one Digital Specimen has multiple GeoCASe records.
@@ -126,14 +131,14 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     """
     identifiers = get_identifiers_from_object(specimen_data)
     if identifiers and len(identifiers) > 0:
-        query_string = build_query_string(identifiers)
+        query_string, batch_metadata = build_query_string(identifiers)
         response = requests.get(query_string)
         response_json = json.loads(response.content)
         hits = response_json.get('response').get('numFound')
         if hits <= 5:
             return list(map(
                 lambda result: {'queryString': query_string, 'geocaseId': result['geocase_id']},
-                response_json.get('response').get('docs')))
+                response_json.get('response').get('docs'))), batch_metadata
         else:
             logging.info(f'Too many hits ({hits}) were found for specimen: {specimen_data["ods:id"]}')
     else:
@@ -144,14 +149,18 @@ def build_query_string(identifiers: Dict[str, str]):
     """
     Build query string from all identifiers in the Digital Specimen
     :param identifiers: All identifiers in the digital specimen
-    :return: A formatted query string
+    :return: A formatted query string and formatted search params for batch metadata
     """
     query_string = 'https://api.geocase.eu/v1/solr?q='
+    batch_metadata = {
+        "placeInBatch": 1,
+        "searchParams": []
+    }
     for key, value in identifiers.items():
         if not query_string.endswith('q='):
             query_string = query_string + ' AND '
         query_string = query_string + f'{key}:"{value}"'
-    return query_string
+    return query_string, batch_metadata
 
 
 def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:
@@ -161,12 +170,32 @@ def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:
     :return: The mapped relevant_identifiers (unitId and recordURI)
     """
     relevant_identifiers = {}
+    batch_metadata = {
+        'placeInBatch': 1,
+        'searchParams': []
+    }
+
     for identifier in specimen_data['identifiers']:
         if identifier.get('???:identifierType') in ['abcd:unitID']:
             relevant_identifiers['unitid'] = identifier.get('???:identifierValue')
+            batch_metadata['searchParams'].extend(build_batch_metadata('abcd:unitID', '???:identifierValue'))
         if identifier.get('???:identifierType') in ['abcd:recordURI']:
             relevant_identifiers['recordURI'] = identifier.get('???:identifierValue')
     return relevant_identifiers
+
+def build_batch_metadata(id_type: str, id_value: str) -> List[Dict]:
+    input_field_id_type = 'digitalSpecimenWrapper.ods:attributes.identifiers[*].???:identifierType'
+    input_field_id_value = 'digitalSpecimenWrapper.ods:attributes.identifiers[*].???:identifierValue'
+    return [
+        {
+            "inputField": input_field_id_type,
+            "inputValue": id_type
+        },
+        {
+            "inputField": input_field_id_type,
+            "inputValue": id_type
+        }
+    ]
 
 
 def run_local(example: str) -> None:
@@ -181,10 +210,11 @@ def run_local(example: str) -> None:
     response = requests.get(example)
     attributes = json.loads(response.content)['data']['attributes']
     specimen_data = attributes['digitalSpecimen']
-    result = run_api_call(specimen_data)
-    mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
-    logging.info('Created annotations: ' + str(mas_job_record))
+    result, batch_metadata = run_api_call(specimen_data)
+    annotation_event = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()), True, batch_metadata)
+    logging.info('Created annotations: \n' + json.dumps(annotation_event, indent=2))
 
 
 if __name__ == '__main__':
-    start_kafka()
+    run_local("https://dev.dissco.tech/api/v1/specimens/TEST/ZWL-YMS-4WY")
+
