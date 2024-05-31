@@ -65,8 +65,8 @@ def map_to_mas_job_record(
                 results,
             )
         )
-    mas_job_record = {"jobId": job_id, "annotations": annotations}
-    return mas_job_record
+    annotation_event = {"jobId": job_id, "annotations": annotations}
+    return annotation_event
 
 
 def map_to_annotation(
@@ -216,7 +216,7 @@ def run_local(example: str) -> None:
     specimen_data = specimen["attributes"]["digitalSpecimen"]
     result = run_api_call(specimen_data)
     mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
-    logging.info("Created annotations: " + str(mas_job_record))
+    logging.info("Created annotations: " + json.dumps(mas_job_record, indent=2))
 
 
 if __name__ == "__main__":
