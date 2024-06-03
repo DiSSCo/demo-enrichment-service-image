@@ -311,5 +311,5 @@ def run_local(example: str):
 
 
 if __name__ == '__main__':
-    #start_kafka()
-    run_local('https://dev.dissco.tech/api/v1/specimens/TEST/65V-T1W-1PD')
+    start_kafka()
+    #run_local('https://dev.dissco.tech/api/v1/specimens/TEST/65V-T1W-1PD')
