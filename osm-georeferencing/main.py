@@ -13,6 +13,7 @@ logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 ODS_TYPE = "ods:type"
 ODS_ID = "ods:id"
 LOCATION_PATH = "digitalSpecimenWrapper.ods:attributes.occurrences[*].location."
+USER_AGENT = "Distributed System of Scientific Collections"
 
 
 def start_kafka() -> None:
@@ -183,7 +184,10 @@ def run_georeference(specimen_data: Dict) -> Tuple[List[Dict[str, Any]], List[Di
         if occurrence.get('location') is not None:
             location = occurrence.get('location')
             query_string, batch_metadata_unit = build_query_string(location, index)
-            response = requests.get(query_string)
+            headers = {
+                'User-Agent': USER_AGENT
+            }
+            response = requests.get(query_string, headers=headers)
             response_json = response.json()
             if len(response_json.get('features')) == 0:
                 logging.info("No results for this locality where found: " + query_string)
@@ -277,7 +281,8 @@ def get_geopick_auth():
         'password': os.environ.get('GEOPICK_PWD')
     }
     headers = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'User-Agent': USER_AGENT
     }
     response = requests.post('https://geopick.gbif.org/v1/authenticate',
                              json=auth_info,
@@ -306,5 +311,5 @@ def run_local(example: str):
 
 
 if __name__ == '__main__':
-    start_kafka()
-    # run_local('https://dev.dissco.tech/api/v1/specimens/TEST/65V-T1W-1PD')
+    #start_kafka()
+    run_local('https://dev.dissco.tech/api/v1/specimens/TEST/65V-T1W-1PD')
