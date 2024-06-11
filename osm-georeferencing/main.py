@@ -9,6 +9,8 @@ import requests
 from kafka import KafkaConsumer, KafkaProducer
 from shapely import from_geojson
 
+from urllib.parse import quote
+
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 ODS_TYPE = "ods:type"
 ODS_ID = "ods:id"
@@ -31,9 +33,10 @@ def start_kafka() -> None:
         try:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
+            mark_job_as_running(json_value['jobId'])
             specimen_data = json_value['object']['digitalSpecimen']
             result, batch_metadata = run_georeference(specimen_data)
-            annotation_event = map_to_annotation_event(specimen_data, result, json_value["jobId"], json_value['batchingRequested'], batch_metadata)
+            annotation_event = map_to_annotation_event(specimen_data, result, json_value['jobId'], json_value['batchingRequested'], batch_metadata)
             send_updated_opends(annotation_event, producer)
         except Exception as e:
             logging.error(e)
@@ -145,6 +148,10 @@ def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, t
         annotation['placeInBatch'] = result['occurrence_index']
     return annotation
 
+def mark_job_as_running(job_id: str):
+    query_string = os.environ.get('RUNNING_ENDPOINT') + os.environ.get('MAS_ID') + '/' + job_id + '/running'
+    requests.get(query_string)
+
 
 def timestamp_now() -> str:
     """
@@ -224,15 +231,23 @@ def build_query_string(location: Dict, index: int) -> Tuple[str, Dict]:
             }
         ]
     }
-
-    querystring = f"https://nominatim.openstreetmap.org/search.php?q={location['dwc:locality']}"
+    querystring = f"https://nominatim.openstreetmap.org/search.php?q={split_on_commas(location['dwc:locality'])}"
     for field_name in ['dwc:municipality', 'dwc:county', 'dwc:stateProvince', 'dwc:country']:
         next_field, search_param = get_supporting_info(field_name, location)
         querystring += next_field
         batch_metadata['searchParams'].append(search_param)
-        querystring += '&format=geojson&polygon_geojson=1'
     return querystring, batch_metadata
 
+
+def split_on_commas(location_value: str) -> str:
+    if location_value.__contains__(','):
+        location_values = location_value.split(',')
+        query_string = ''
+        for loc in location_values:
+            query_string += loc + '&format=geojson&polygon_geojson=1'
+        return query_string
+    else:
+        return location_value + '&format=geojson&polygon_geojson=1'
 
 def get_supporting_info(field_name: str, location: Dict) -> Tuple[str, Dict]:
     """
@@ -244,7 +259,7 @@ def get_supporting_info(field_name: str, location: Dict) -> Tuple[str, Dict]:
     if location.get(field_name) is None:
         return '', build_batch_metadata_search_param(field_name, '')
     else:
-        return ', ' + location.get(field_name), build_batch_metadata_search_param(field_name, location.get(field_name))
+        return ', ' + split_on_commas(location.get(field_name)), build_batch_metadata_search_param(field_name, location.get(field_name))
 
 
 def build_batch_metadata_search_param(field_name: str, field_val: str) -> Dict:
@@ -312,4 +327,4 @@ def run_local(example: str):
 
 if __name__ == '__main__':
     start_kafka()
-    #run_local('https://dev.dissco.tech/api/v1/specimens/TEST/65V-T1W-1PD')
+    # run_local('https://dev.dissco.tech/api/v1/specimens/TEST/0EW-ECG-A2J')
