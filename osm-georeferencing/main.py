@@ -9,8 +9,6 @@ import requests
 from kafka import KafkaConsumer, KafkaProducer
 from shapely import from_geojson
 
-from urllib.parse import quote
-
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 ODS_TYPE = "ods:type"
 ODS_ID = "ods:id"
@@ -259,7 +257,7 @@ def get_supporting_info(field_name: str, location: Dict) -> Tuple[str, Dict]:
     if location.get(field_name) is None:
         return '', build_batch_metadata_search_param(field_name, '')
     else:
-        return ', ' + split_on_commas(location.get(field_name)), build_batch_metadata_search_param(field_name, location.get(field_name))
+        return ',' + split_on_commas(location.get(field_name)), build_batch_metadata_search_param(field_name, location.get(field_name))
 
 
 def build_batch_metadata_search_param(field_name: str, field_val: str) -> Dict:
@@ -327,4 +325,4 @@ def run_local(example: str):
 
 if __name__ == '__main__':
     start_kafka()
-    # run_local('https://dev.dissco.tech/api/v1/specimens/TEST/0EW-ECG-A2J')
+    #run_local('https://dev.dissco.tech/api/v1/specimens/TEST/0EW-ECG-A2J')
