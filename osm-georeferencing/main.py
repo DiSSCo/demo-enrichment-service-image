@@ -10,8 +10,11 @@ from kafka import KafkaConsumer, KafkaProducer
 from shapely import from_geojson
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
-ODS_TYPE = "ods:type"
-ODS_ID = "ods:id"
+ODS_TYPE = "@type"
+ODS_ID = "ods:ID"
+OA_BODY = "oa:hasBody"
+DWC_LOCALITY = "dwc:locality"
+OA_VALUE = "oa:value"
 LOCATION_PATH = "digitalSpecimenWrapper.ods:attributes.occurrences[*].location."
 USER_AGENT = "Distributed System of Scientific Collections"
 
@@ -120,15 +123,15 @@ def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, t
     :return: Returns an annotation with all the relevant metadata
     """
     annotation = {
-        'rdf:type': 'Annotation',
+        '@type': 'Annotation',
         'oa:motivation': 'ods:adding',
-        'oa:creator': {
+        'dcterms:creator': {
             ODS_TYPE: 'oa:SoftwareAgent',
             'foaf:name': os.environ.get('MAS_NAME'),
             ODS_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
         },
         'dcterms:created': timestamp,
-        'oa:target': {
+        'oa:hasTarget': {
             ODS_ID: specimen_data[ODS_ID],
             ODS_TYPE: specimen_data[ODS_TYPE],
             'oa:selector': {
@@ -136,9 +139,9 @@ def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, t
                 'oa:class': oa_class
             },
         },
-        'oa:body': {
+        OA_BODY: {
             ODS_TYPE: 'TextualBody',
-            'oa:value': [json.dumps(oa_value)],
+            OA_VALUE: [json.dumps(oa_value)],
             'dcterms:reference': result['queryString']
         }
     }
@@ -182,12 +185,12 @@ def run_georeference(specimen_data: Dict) -> Tuple[List[Dict[str, Any]], List[Di
     :return: Returns a list of all the results. This could be multiple as we can have more than one occurrence
     per specimen. Also returns the batch metadata.
     """
-    occurrences = specimen_data.get('occurrences')
+    events = specimen_data.get('ods:hasEvent')
     result_list = list()
     batch_metadata = []
-    for index, occurrence in enumerate(occurrences):
-        if occurrence.get('location') is not None:
-            location = occurrence.get('location')
+    for index, event in enumerate(events):
+        if event.get('ods:Location') is not None:
+            location = event.get('ods:Location')
             query_string, batch_metadata_unit = build_query_string(location, index)
             headers = {
                 'User-Agent': USER_AGENT
@@ -223,15 +226,31 @@ def build_query_string(location: Dict, index: int) -> Tuple[str, Dict]:
     batch_metadata = {
         'placeInBatch': index,
         'searchParams': [
-            {
-                'inputField': LOCATION_PATH + 'dwc:locality',
-                'inputValue': location['dwc:locality']
-            }
         ]
     }
-    querystring = f"https://nominatim.openstreetmap.org/search.php?q={split_on_commas(location['dwc:locality'])}"
+    if "dwc:locality" in location:
+        querystring = f"https://nominatim.openstreetmap.org/search.php?q={split_on_commas(location[DWC_LOCALITY])}"
+        trim_comma = False
+        batch_metadata['searchParams'].append(
+            {
+                'inputField': LOCATION_PATH + DWC_LOCALITY,
+                'inputValue': location[DWC_LOCALITY]
+            }
+        )
+    else:
+        querystring = "https://nominatim.openstreetmap.org/search.php?q="
+        trim_comma = True
+        batch_metadata['searchParams'].append(
+            {
+                'inputField': LOCATION_PATH + DWC_LOCALITY,
+                'inputValue': ''
+            }
+        )
     for field_name in ['dwc:municipality', 'dwc:county', 'dwc:stateProvince', 'dwc:country']:
         next_field, search_param = get_supporting_info(field_name, location)
+        if trim_comma and next_field:
+            trim_comma = False
+            next_field = next_field[1:]
         querystring += next_field
         batch_metadata['searchParams'].append(search_param)
     return querystring, batch_metadata
@@ -312,17 +331,23 @@ def run_local(example: str):
     Will call the DiSSCo API to retrieve the specimen data.
     A record ID will be created but can only be used for testing.
     :param example: The full URL of the Digital Specimen to the API (for example
-    https://dev.dissco.tech/api/v1/specimens/TEST/65V-T1W-1PD)
+    https://dev.dissco.tech/api/v1/digital-specimen/TEST/65V-T1W-1PD)
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
     specimen = json.loads(response.content)['data']
-    specimen_data = specimen['attributes']['digitalSpecimen']
+    specimen_data = specimen['attributes']
     result, batch_metadata = run_georeference(specimen_data)
     mas_job_record = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()), True, batch_metadata)
-    logging.info('Created annotations: ' + json.dumps(mas_job_record, indent=2))
-
+    printed_annotations = []
+    for annotation in mas_job_record['annotations']:
+        printed_annotation = annotation
+        printed_annotation[OA_BODY][OA_VALUE] = list(map(lambda v : v[:200] + '...' + v[len(v)-200:], annotation[OA_BODY][OA_VALUE]))
+        printed_annotations.append(printed_annotation)
+    printed_event = mas_job_record
+    printed_event['annotations'] = printed_annotations
+    logging.info('Created annotations: ' + json.dumps(printed_event, indent=2))
 
 if __name__ == '__main__':
     start_kafka()
-    #run_local('https://dev.dissco.tech/api/v1/specimens/TEST/0EW-ECG-A2J')
+    #run_local('https://dev.dissco.tech/api/v1/digital-specimen/TEST/RRH-DLL-K87')
