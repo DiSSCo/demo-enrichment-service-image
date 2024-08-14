@@ -339,9 +339,8 @@ def run_local(example: str):
     specimen_data = specimen['attributes']
     result, batch_metadata = run_georeference(specimen_data)
     mas_job_record = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()), True, batch_metadata)
-    printed_annotations = list(map(lambda a: reduce_annotation_size_for_printing(a), mas_job_record['annotations']))
     printed_event = mas_job_record
-    printed_event['annotations'] = printed_annotations
+    printed_event['annotations'] = list(map(lambda a: reduce_annotation_size_for_printing(a), mas_job_record['annotations']))
     logging.info('Created annotations: ' + json.dumps(printed_event, indent=2))
 
 
