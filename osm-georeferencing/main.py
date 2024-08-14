@@ -10,7 +10,9 @@ from kafka import KafkaConsumer, KafkaProducer
 from shapely import from_geojson
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
-ODS_TYPE = "@type"
+AT_TYPE = "@type"
+ODS_TYPE = "ods:type"
+AT_ID = "@id"
 ODS_ID = "ods:ID"
 OA_BODY = "oa:hasBody"
 DWC_LOCALITY = "dwc:locality"
@@ -35,7 +37,7 @@ def start_kafka() -> None:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
             mark_job_as_running(json_value['jobId'])
-            specimen_data = json_value['object']['digitalSpecimen']
+            specimen_data = json_value['object']
             result, batch_metadata = run_georeference(specimen_data)
             annotation_event = map_to_annotation_event(specimen_data, result, json_value['jobId'], json_value['batchingRequested'], batch_metadata)
             send_updated_opends(annotation_event, producer)
@@ -123,26 +125,28 @@ def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, t
     :return: Returns an annotation with all the relevant metadata
     """
     annotation = {
-        '@type': 'Annotation',
+        AT_TYPE: 'ods:Annotation',
         'oa:motivation': 'ods:adding',
         'dcterms:creator': {
-            ODS_TYPE: 'oa:SoftwareAgent',
-            'foaf:name': os.environ.get('MAS_NAME'),
-            ODS_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
+            AT_TYPE: 'prov:SoftwareAgent',
+            'schema:name': os.environ.get('MAS_NAME'),
+            "@id": f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
         },
         'dcterms:created': timestamp,
         'oa:hasTarget': {
+            "@id": specimen_data[ODS_ID],
             ODS_ID: specimen_data[ODS_ID],
-            ODS_TYPE: specimen_data[ODS_TYPE],
-            'oa:selector': {
-                ODS_TYPE: 'ClassSelector',
-                'oa:class': oa_class
+            AT_TYPE: specimen_data[AT_TYPE],
+            ODS_TYPE: "https://doi.org/21.T11148/894b1e6cad57e921764e",
+            'oa:hasSelector': {
+                AT_TYPE: 'ods:ClassSelector',
+                'ods:class': oa_class
             },
         },
         OA_BODY: {
-            ODS_TYPE: 'TextualBody',
+            AT_TYPE: 'TextualBody',
             OA_VALUE: [json.dumps(oa_value)],
-            'dcterms:reference': result['queryString']
+            'dcterms:references': result['queryString']
         }
     }
     if batching:
@@ -165,15 +169,15 @@ def timestamp_now() -> str:
     return timestamp_timezone
 
 
-def send_updated_opends(annotation: Union[None, Dict], producer: KafkaProducer) -> None:
+def send_updated_opends(annotation_event: Union[None, Dict], producer: KafkaProducer) -> None:
     """
     Send the annotation to the Kafka topic
-    :param annotation: The formatted annotationRecord
+    :param annotation_event: The formatted annotationRecord
     :param producer: The initiated Kafka producer
     :return: Will not return anything
     """
-    logging.info('Publishing annotation: ' + str(annotation))
-    producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), annotation)
+    logging.info('Publishing annotation: ' + reduce_event_for_printing(annotation_event))
+    producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), annotation_event)
 
 
 def run_georeference(specimen_data: Dict) -> Tuple[List[Dict[str, Any]], List[Dict]]:
@@ -338,11 +342,14 @@ def run_local(example: str):
     specimen = json.loads(response.content)['data']
     specimen_data = specimen['attributes']
     result, batch_metadata = run_georeference(specimen_data)
-    mas_job_record = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()), True, batch_metadata)
-    printed_event = mas_job_record
-    printed_event['annotations'] = list(map(lambda a: reduce_annotation_size_for_printing(a), mas_job_record['annotations']))
-    logging.info('Created annotations: ' + json.dumps(printed_event, indent=2))
+    annotation_event = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()), True, batch_metadata)
+    logging.info('Created annotations: ' + reduce_event_for_printing(annotation_event))
 
+
+def reduce_event_for_printing(annotation_event: dict) -> str:
+    printed_event = annotation_event
+    printed_event['annotations'] = list(map(lambda a: reduce_annotation_size_for_printing(a), annotation_event['annotations']))
+    return json.dumps(printed_event, indent=2)
 
 def reduce_annotation_size_for_printing(annotation : dict) -> dict:
     printed_annotation = annotation
