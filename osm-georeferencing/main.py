@@ -339,14 +339,17 @@ def run_local(example: str):
     specimen_data = specimen['attributes']
     result, batch_metadata = run_georeference(specimen_data)
     mas_job_record = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()), True, batch_metadata)
-    printed_annotations = []
-    for annotation in mas_job_record['annotations']:
-        printed_annotation = annotation
-        printed_annotation[OA_BODY][OA_VALUE] = list(map(lambda v : v[:200] + '...' + v[len(v)-200:], annotation[OA_BODY][OA_VALUE]))
-        printed_annotations.append(printed_annotation)
+    printed_annotations = list(map(lambda a: reduce_annotation_size_for_printing(a), mas_job_record['annotations']))
     printed_event = mas_job_record
     printed_event['annotations'] = printed_annotations
     logging.info('Created annotations: ' + json.dumps(printed_event, indent=2))
+
+
+def reduce_annotation_size_for_printing(annotation : dict) -> dict:
+    printed_annotation = annotation
+    printed_annotation[OA_BODY][OA_VALUE] = list(map(lambda v : v[:200] + '...' + v[len(v)-200:], annotation[OA_BODY][OA_VALUE]))
+    return printed_annotation
+
 
 if __name__ == '__main__':
     start_kafka()
