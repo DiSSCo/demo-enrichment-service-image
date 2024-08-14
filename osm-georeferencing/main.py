@@ -130,11 +130,11 @@ def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, t
         'dcterms:creator': {
             AT_TYPE: 'prov:SoftwareAgent',
             'schema:name': os.environ.get('MAS_NAME'),
-            "@id": f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
+            AT_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
         },
         'dcterms:created': timestamp,
         'oa:hasTarget': {
-            "@id": specimen_data[ODS_ID],
+            AT_ID: specimen_data[ODS_ID],
             ODS_ID: specimen_data[ODS_ID],
             AT_TYPE: specimen_data[AT_TYPE],
             ODS_TYPE: "https://doi.org/21.T11148/894b1e6cad57e921764e",
