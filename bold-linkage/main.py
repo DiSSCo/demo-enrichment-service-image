@@ -12,7 +12,9 @@ from requests.auth import HTTPBasicAuth
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
 ODS_TYPE = "ods:type"
-ODS_ID = "ods:id"
+AT_TYPE = "@type"
+ODS_ID = "ods:ID"
+AT_ID = "@id"
 
 
 def start_kafka() -> None:
@@ -35,9 +37,10 @@ def start_kafka() -> None:
         try:
             logging.info("Received message: " + str(msg.value))
             json_value = msg.value
-            specimen_data = json_value["object"]["digitalSpecimen"]
+            mark_job_as_running(json_value["jobId"])
+            specimen_data = json_value["object"]
             result = run_api_call(specimen_data)
-            mas_job_record = map_to_mas_job_record(
+            mas_job_record = map_to_annotation_event(
                 specimen_data, result, json_value["jobId"]
             )
             send_updated_opends(mas_job_record, producer)
@@ -45,8 +48,20 @@ def start_kafka() -> None:
             logging.exception(e)
 
 
-def map_to_mas_job_record(
-    specimen_data: Dict, results: List[Dict[str, str]], job_id: str
+def mark_job_as_running(job_id: str):
+    """
+    Calls DiSSCo's RUNNING endpoint to inform the system that the message has
+    been received by the MAS. Doing so will update the status of the job to
+    "RUNNING" for any observing users.
+    :param job_id: the job id from the kafka message
+    """
+    query_string = os.environ.get('RUNNING_ENDPOINT') + os.environ.get(
+        'MAS_ID') + '/' + job_id + '/running'
+    requests.get(query_string)
+
+
+def map_to_annotation_event(
+        specimen_data: Dict, results: List[Dict[str, str]], job_id: str
 ) -> Dict:
     """
     Map the result of the API call to an annotation
@@ -61,7 +76,8 @@ def map_to_mas_job_record(
     else:
         annotations = list(
             map(
-                lambda result: map_to_annotation(specimen_data, result, timestamp),
+                lambda result: map_to_annotation(specimen_data, result,
+                                                 timestamp),
                 results,
             )
         )
@@ -70,7 +86,7 @@ def map_to_mas_job_record(
 
 
 def map_to_annotation(
-    specimen_data: Dict, result: Dict[str, str], timestamp: str
+        specimen_data: Dict, result: Dict[str, str], timestamp: str
 ) -> Dict:
     """
     Map the result of the API call to an annotation
@@ -79,36 +95,45 @@ def map_to_annotation(
     :param timestamp: A formatted timestamp of the current time
     :return: Returns a formatted annotation Record
     """
+    ods_agent = {
+        AT_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
+        AT_TYPE: "as:Application",
+        "schema:name": os.environ.get("MAS_NAME"),
+        "ods:hasIdentifier": [
+            {
+                AT_TYPE: "ods:Identifier",
+                "dcterms:title": "handle",
+                "dcterms:identifier": f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
+            }
+        ]
+    }
     oa_value = {
-        "entityRelationships": {
-            "entityRelationshipType": "hasBOLDEUProcessID",
-            "objectEntityIri": f'https://boldsystems.eu/record/{result["processid"]}',
-            "entityRelationshipDate": timestamp,
-            "entityRelationshipCreatorName": os.environ.get("MAS_NAME"),
-            "entityRelationshipCreatorId": f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
-        }
+        "ods:hasEntityRelationship": [{
+            "dwc:relationshipOfResource": "hasBOLDEUProcessID",
+            "dwc:relatedResourceID": f'https://boldsystems.eu/record/{result["processid"]}',
+            "dwc:relationshipEstablishedDate": timestamp,
+            "ods:relationshipAccordingToAgent": ods_agent
+        }]
     }
     annotation = {
-        "rdf:type": "Annotation",
+        AT_TYPE: "ods:Annotation",
         "oa:motivation": "ods:adding",
-        "oa:creator": {
-            ODS_TYPE: "oa:SoftwareAgent",
-            "foaf:name": os.environ.get("MAS_NAME"),
-            ODS_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
-        },
+        "dcterms:creator": ods_agent,
         "dcterms:created": timestamp,
-        "oa:target": {
+        "oa:hasTarget": {
             ODS_ID: specimen_data[ODS_ID],
+            AT_ID: specimen_data[ODS_ID],
             ODS_TYPE: specimen_data[ODS_TYPE],
-            "oa:selector": {
-                ODS_TYPE: "ClassSelector",
-                "oa:class": "$.entityRelationships",
+            AT_TYPE: specimen_data[ODS_TYPE],
+            "oa:hasSelector": {
+                AT_TYPE: "ClassSelector",
+                "ods:class": "$.ods:hasEntityRelationship",
             },
         },
-        "oa:body": {
-            ODS_TYPE: "TextualBody",
+        "oa:hasBody": {
+            AT_TYPE: "oa:TextualBody",
             "oa:value": [json.dumps(oa_value)],
-            "dcterms:reference": result["queryString"],
+            "dcterms:references": result["queryString"],
         },
     }
     return annotation
@@ -119,7 +144,8 @@ def timestamp_now() -> str:
     Create a timestamp in the correct format
     :return: The timestamp as a string
     """
-    timestamp = str(datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
+    timestamp = str(
+        datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
     timestamp_cleaned = timestamp[:-3]
     timestamp_timezone = timestamp_cleaned + "Z"
     return timestamp_timezone
@@ -150,8 +176,8 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     # be enormous - but perhaps 100 IDs is fine as a batch size.
     identifiers = list(
         map(
-            lambda identifier: identifier.get("???:identifierValue"),
-            specimen_data.get("identifiers"),
+            lambda identifier: identifier.get("dcterms:identifier"),
+            specimen_data.get("ods:hasIdentifier"),
         )
     )
 
@@ -167,7 +193,8 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     response = requests.get(
         query_string,
         headers=headers,
-        auth=HTTPBasicAuth(os.environ.get("API_USER"), os.environ.get("API_PASSWORD")),
+        auth=HTTPBasicAuth(os.environ.get("API_USER"),
+                           os.environ.get("API_PASSWORD")),
     )
     response.raise_for_status()  # Raises an HTTPError if the status is 4xx, 5xx
 
@@ -184,7 +211,8 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     response = requests.get(
         docs_endpoint,
         headers=headers,
-        auth=HTTPBasicAuth(os.environ.get("API_USER"), os.environ.get("API_PASSWORD")),
+        auth=HTTPBasicAuth(os.environ.get("API_USER"),
+                           os.environ.get("API_PASSWORD")),
     )
     response.raise_for_status()  # Ensure the request was successful
 
@@ -213,12 +241,14 @@ def run_local(example: str) -> None:
     """
     response = requests.get(example)
     specimen = json.loads(response.content)["data"]
-    specimen_data = specimen["attributes"]["digitalSpecimen"]
+    specimen_data = specimen["attributes"]
     result = run_api_call(specimen_data)
-    mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
+    mas_job_record = map_to_annotation_event(specimen_data, result,
+                                             str(uuid.uuid4()))
     logging.info("Created annotations: " + json.dumps(mas_job_record, indent=2))
 
 
 if __name__ == "__main__":
     start_kafka()
-    # run_local("https://sandbox.dissco.tech/api/v1/specimens/SANDBOX/NMT-F9R-FWK")
+    #run_local(
+    #    "https://dev.dissco.tech/api/v1/digital-specimen/SANDBOX/NMT-F9R-FWK")
