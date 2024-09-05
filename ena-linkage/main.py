@@ -2,12 +2,11 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
 from typing import Dict, List
 
 import requests
 from kafka import KafkaConsumer, KafkaProducer
-from shared import *
+import shared
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
@@ -31,7 +30,7 @@ def start_kafka() -> None:
         try:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
-            mark_job_as_running(json_value['jobId'])
+            shared.mark_job_as_running(json_value['jobId'])
             specimen_data = json_value['object']['digitalSpecimen']
             result = run_api_call(specimen_data)
             mas_job_record = map_to_annotation_event(specimen_data, result,
@@ -50,7 +49,7 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
     :param job_id: The job ID of the MAS
     :return: Returns a formatted annotation Record which includes the Job ID
     """
-    timestamp = timestamp_now()
+    timestamp = shared.timestamp_now()
     if results is None:
         annotations = list()
     else:
@@ -74,14 +73,14 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, str],
     :return: Returns a formatted annotation Record
     """
 
-    ods_agent = get_agent()
-    oa_value = map_to_entity_relationship('hasEnaAccessionNumber',
+    ods_agent = shared.get_agent()
+    oa_value = shared.map_to_entity_relationship('hasEnaAccessionNumber',
                                           f'https://www.ebi.ac.uk/ena/browser/view/{result["enaAccessionId"]}',
                                           timestamp,
                                           ods_agent)
-    oa_selector = build_class_selector('$.ods:hasEntityRelationship')
-    return map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
-                             specimen_data[ODS_ID], specimen_data[ODS_TYPE],
+    oa_selector = shared.build_class_selector('$.ods:hasEntityRelationship')
+    return shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
+                             specimen_data[shared.ODS_ID], specimen_data[shared.ODS_TYPE],
                              result['queryString'])
 
 

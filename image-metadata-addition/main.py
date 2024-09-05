@@ -1,9 +1,7 @@
-import datetime
 import json
 import logging
 import os
 from io import BytesIO
-from datetime import datetime, timezone
 import uuid
 
 import requests as requests
@@ -12,8 +10,7 @@ from kafka import KafkaConsumer, KafkaProducer
 from PIL import Image, UnidentifiedImageError
 from requests.exceptions import MissingSchema
 
-from shared import *
-
+import shared
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
 
@@ -37,9 +34,9 @@ def start_kafka() -> None:
 
     for msg in consumer:
         json_value = msg.value
-        mark_job_as_running(json_value['jobId'])
+        shared.mark_job_as_running(json_value['jobId'])
         image_uri = json_value['attributes']['ac:accessURI']
-        timestamp = timestamp_now()
+        timestamp = shared.timestamp_now()
         image_assertions = get_image_assertions(image_uri, timestamp)
         annotations = create_annotation(image_assertions, json_value['attributes'], timestamp)
         publish_annotation_event(map_to_annotation_event(annotations, json_value['jobId']), producer)
@@ -54,10 +51,10 @@ def run_local(example: str) -> Dict:
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
-    mark_job_as_running("aaa")
+    shared.mark_job_as_running("aaa")
     media = json.loads(response.content)['data']['attributes']
     image_uri = media['ac:accessURI']
-    timestamp = timestamp_now()
+    timestamp = shared.timestamp_now()
     image_assertions = get_image_assertions(image_uri, timestamp)
     annotations = create_annotation(image_assertions, media, timestamp)
     event = map_to_annotation_event(annotations,  str(uuid.uuid4()))
@@ -80,12 +77,12 @@ def create_annotation(image_assertions: List[Dict], digital_media: dict, timesta
     :return: List of annotations
     """
     annotations = list()
-    ods_agent = get_agent()
-    oa_selector = build_class_selector("$ods:hasAssertion")
+    ods_agent = shared.get_agent()
+    oa_selector = shared.build_class_selector("$ods:hasAssertion")
 
     for assertion in image_assertions:
-        annotation = map_to_annotation(ods_agent, timestamp, assertion, oa_selector, digital_media[ODS_ID],
-                                       digital_media[ODS_TYPE], "https://pypi.org/project/pillow/")
+        annotation = shared.map_to_annotation(ods_agent, timestamp, assertion, oa_selector, digital_media[shared.ODS_ID],
+                                       digital_media[shared.ODS_TYPE], "https://pypi.org/project/pillow/")
         annotations.append(annotation)
     return annotations
 
@@ -108,7 +105,7 @@ def get_image_assertions(image_uri: str, timestamp: str) -> List[Dict]:
     :param image_uri: The image url from which we will gather metadata
     :return: Returns a list of additional info about the image
     """
-    ods_agent = get_agent()
+    ods_agent = shared.get_agent()
     assertions = list()
     assertions.append(
         build_assertion(timestamp, ods_agent, 'ac:variant', 'acvariant:v008',
@@ -136,7 +133,7 @@ def get_image_assertions(image_uri: str, timestamp: str) -> List[Dict]:
 
 def build_assertion(timestamp: str, ods_agent: Dict, msmt_type: str, msmt_value: str, unit) -> Dict:
     assertion = {
-        AT_TYPE: "ods:Assertion",
+        shared.AT_TYPE: "ods:Assertion",
         "dwc:measurementDeterminedDate": timestamp,
         "dwc:measurementType": msmt_type,
         "dwc:measurementValue": msmt_value,

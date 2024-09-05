@@ -8,13 +8,13 @@ from typing import Dict, Any, List, Union, Tuple
 import requests
 from kafka import KafkaConsumer, KafkaProducer
 from shapely import from_geojson
-from shared import *
+import shared
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 OA_BODY = "oa:hasBody"
 DWC_LOCALITY = "dwc:locality"
 OA_VALUE = "oa:value"
-LOCATION_PATH = "digitalSpecimenWrapper.ods:attributes.occurrences[*].location."
+LOCATION_PATH = "$.ods:hasEvent[*].ods:Location."
 USER_AGENT = "Distributed System of Scientific Collections"
 
 
@@ -37,7 +37,7 @@ def start_kafka() -> None:
         try:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
-            mark_job_as_running(json_value['jobId'])
+            shared.mark_job_as_running(json_value['jobId'])
             specimen_data = json_value['object']
             result, batch_metadata = run_georeference(specimen_data)
             annotation_event = map_to_annotation_event(specimen_data, result,
@@ -61,11 +61,11 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
     :param batch_metadata: metadata to facilitate batching downstream
     :return: Returns a formatted annotation Record which includes the Job ID
     """
-    timestamp = timestamp_now()
+    timestamp = shared.timestamp_now()
     if results is None:
         annotations = list()
     else:
-        ods_agent = get_agent()
+        ods_agent = shared.get_agent()
         annotations = list(
             map(lambda result: map_result_to_annotation(specimen_data, result,
                                                         timestamp, batching,
@@ -100,7 +100,7 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, Any],
             ]
         }
     oa_value = {
-        AT_TYPE: "ods:GeoReference",
+        shared.AT_TYPE: "ods:GeoReference",
         "dwc:decimalLatitude": round(point_coordinate['coordinates'][1], 7),
         "dwc:decimalLongitude": round(point_coordinate['coordinates'][0],
                                       7),
@@ -141,10 +141,10 @@ def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict,
     :param batching: batch functionality was requested
     :return: Returns an annotation with all the relevant metadata
     """
-    oa_selector = build_class_selector(oa_class)
-    annotation = map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
-                                   specimen_data[ODS_ID],
-                                   specimen_data[ODS_TYPE],
+    oa_selector = shared.build_class_selector(oa_class)
+    annotation = shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
+                                   specimen_data[shared.ODS_ID],
+                                   specimen_data[shared.ODS_TYPE],
                                    result['queryString'])
     if batching:
         annotation['placeInBatch'] = result['occurrence_index']

@@ -2,12 +2,11 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
 from typing import Dict, List, Any, Tuple
 
 import requests
 from kafka import KafkaConsumer, KafkaProducer
-from shared import *
+import shared
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
@@ -57,7 +56,7 @@ def mark_job_as_running(job_id: str):
 
 
 def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
-        job_id: str, batch_metadata: List[Dict[str, Any]]) -> Dict:
+                            job_id: str, batch_metadata: List[Dict[str, Any]]) -> Dict:
     """
     Map the result of the API call to an annotation
     :param batch_metadata: Information about the computation, if requested
@@ -66,9 +65,9 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
     :param job_id: The job ID of the MAS
     :return: Returns a formatted annotation Record which includes the Job ID
     """
-    timestamp = timestamp_now()
+    timestamp = shared.timestamp_now()
     batching_requested = len(batch_metadata) > 0
-    ods_agent = get_agent()
+    ods_agent = shared.get_agent()
     if results is None:
         annotations = list()
     else:
@@ -108,8 +107,8 @@ def build_batch_metadata(locality: str, place_in_batch: int) -> Dict[str, Any]:
 
 
 def map_to_entity_relationship_annotation(specimen_data: Dict,
-        result: Dict[str, Any], timestamp: str, batching_requested: bool,
-        ods_agent: Dict) -> Dict:
+                                          result: Dict[str, Any], timestamp: str, batching_requested: bool,
+                                          ods_agent: Dict) -> Dict:
     """
     Map the result of the Mindat Locality API call to an entityRelationship annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -118,7 +117,7 @@ def map_to_entity_relationship_annotation(specimen_data: Dict,
     :param batching_requested: Indicates if the scheduling party requested batching
     :return:  A single annotation with the relationship to the Mindat locality
     """
-    oa_value = map_to_entity_relationship(
+    oa_value = shared.map_to_entity_relationship(
         'hasMindatLocation',
         f"https://www.mindat.org/loc-{result['geo_reference_result']['id']}.html",
         timestamp, ods_agent
@@ -129,7 +128,7 @@ def map_to_entity_relationship_annotation(specimen_data: Dict,
 
 
 def map_to_georeference_annotation(specimen_data: Dict, result: Dict[str, Any],
-        timestamp: str, batching_requested: bool, ods_agent: Dict) -> Dict:
+                                   timestamp: str, batching_requested: bool, ods_agent: Dict) -> Dict:
     """
     Map the result of the Mindat Locality API call to a georeference annotation
     :param batching_requested: Indicates if the scheduling party requested batching
@@ -159,8 +158,8 @@ def map_to_georeference_annotation(specimen_data: Dict, result: Dict[str, Any],
 
 
 def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict,
-        timestamp: str, oa_class: str, batching_requested: bool,
-        ods_agent: Dict) -> Dict:
+                  timestamp: str, oa_class: str, batching_requested: bool,
+                  ods_agent: Dict) -> Dict:
     """
     Generic method to wrap the oa_value into an annotation object
     :param batching_requested: Indicates if the scheduling party requested batching
@@ -171,10 +170,10 @@ def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict,
     :param oa_class: The name of the class to which the class annotation points
     :return: Returns an annotation with all the relevant metadata
     """
-    oa_selector = build_class_selector(oa_class)
-    annotation = map_to_annotation(
-        ods_agent, timestamp, oa_value, oa_selector, specimen_data[ODS_ID],
-        specimen_data[ODS_TYPE],
+    oa_selector = shared.build_class_selector(oa_class)
+    annotation = shared.map_to_annotation(
+        ods_agent, timestamp, oa_value, oa_selector, specimen_data[shared.ODS_ID],
+        specimen_data[shared.ODS_TYPE],
         result['queryString']
     )
     # If batching is requested, the annotation must contain a "placeInBatch" value equal to the corresponding batch metadata
@@ -257,6 +256,6 @@ def run_local(example: str):
 
 
 if __name__ == '__main__':
-    # start_kafka()
-    run_local(
-        'https://dev.dissco.tech/api/v1/digital-specimen/TEST/VGJ-1R7-JSJ')
+    start_kafka()
+    # run_local(
+    #  'https://dev.dissco.tech/api/v1/digital-specimen/TEST/VGJ-1R7-JSJ')

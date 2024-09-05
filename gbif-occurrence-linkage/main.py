@@ -2,12 +2,11 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
 from typing import Dict
 
 import requests
 from kafka import KafkaConsumer, KafkaProducer
-from shared import *
+import shared
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
@@ -30,7 +29,7 @@ def start_kafka() -> None:
         try:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
-            mark_job_as_running(json_value["jobId"])
+            shared.mark_job_as_running(json_value["jobId"])
             specimen_data = json_value['object']
             result = run_api_call(specimen_data)
             annotation_event = map_to_annotation_event(specimen_data, result,
@@ -49,15 +48,15 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str],
     :param job_id: The job ID of the MAS
     :return: Returns a formatted annotation Record which includes the Job ID
     """
-    timestamp = timestamp_now()
-    ods_agent = get_agent()
-    oa_value = map_to_entity_relationship('hasGbifID',
+    timestamp = shared.timestamp_now()
+    ods_agent = shared.get_agent()
+    oa_value = shared.map_to_entity_relationship('hasGbifID',
                                           f'https://www.gbif.org/occurrence/{result["gbifId"]}',
                                           timestamp, ods_agent)
-    oa_selector = build_class_selector('$.ods:hasEntityRelationship')
-    annotation = map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
-                                   specimen_data[ODS_ID],
-                                   specimen_data[ODS_TYPE],
+    oa_selector = shared.build_class_selector('$.ods:hasEntityRelationship')
+    annotation = shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
+                                   specimen_data[shared.ODS_ID],
+                                   specimen_data[shared.ODS_TYPE],
                                    result['queryString'])
 
     return {

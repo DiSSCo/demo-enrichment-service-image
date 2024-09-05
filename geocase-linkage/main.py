@@ -2,12 +2,11 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
 from typing import Dict, List
 
 import requests
 from kafka import KafkaConsumer, KafkaProducer
-from shared import *
+import shared
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
@@ -31,7 +30,7 @@ def start_kafka() -> None:
         try:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
-            mark_job_as_running(json_value['jobId'])
+            shared.mark_job_as_running(json_value['jobId'])
             specimen_data = json_value['object']['attributes']
             result = run_api_call(specimen_data)
             mas_job_record = map_to_annotation_event(specimen_data, result,
@@ -50,11 +49,11 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
     :param job_id: The job ID of the MAS
     :return: Returns a formatted annotation Record which includes the Job ID
     """
-    timestamp = timestamp_now()
+    timestamp = shared.timestamp_now()
     if results is None:
         annotations = list()
     else:
-        ods_agent = get_agent()
+        ods_agent = shared.get_agent()
         annotations = list(
             map(lambda result: map_result_to_annotation(specimen_data, result,
                                                         timestamp, ods_agent),
@@ -68,16 +67,24 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
 
 def map_result_to_annotation(specimen_data: Dict, result: Dict, timestamp: str,
         ods_agent: Dict) -> Dict:
-    oa_value = map_to_entity_relationship(
+    """
+    maps result of geocase linkage to an annotation
+    :param specimen_data: specimen data
+    :param result: result of the linkage search
+    :param timestamp: formatted timestamp
+    :param ods_agent: agent of this mas
+    :return:
+    """
+    oa_value = shared.map_to_entity_relationship(
         'hasGeoCASeID',
         f'https://geocase.eu/specimen/{result["geocaseId"]}',
         timestamp,
         ods_agent
     )
-    oa_selector = build_class_selector('ods:hasEntityRelationship')
-    return map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
-                             specimen_data[ODS_ID],
-                             specimen_data[ODS_TYPE], result['queryString'])
+    oa_selector = shared.build_class_selector('ods:hasEntityRelationship')
+    return shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
+                             specimen_data[shared.ODS_ID],
+                             specimen_data[shared.ODS_TYPE], result['queryString'])
 
 
 def publish_annotation_event(annotation: Dict, producer: KafkaProducer) -> None:
@@ -112,10 +119,10 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
                 response_json.get('response').get('docs')))
         else:
             logging.info(
-                f'Too many hits ({hits}) were found for specimen: {specimen_data[ODS_ID]}')
+                f'Too many hits ({hits}) were found for specimen: {specimen_data[shared.ODS_ID]}')
     else:
         logging.info(
-            f'No relevant identifiers found for specimen: {specimen_data[ODS_ID]}')
+            f'No relevant identifiers found for specimen: {specimen_data[shared.ODS_ID]}')
 
 
 def build_query_string(identifiers: Dict[str, str]):

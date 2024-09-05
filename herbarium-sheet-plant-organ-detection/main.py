@@ -7,15 +7,15 @@ import requests
 from kafka import KafkaConsumer, KafkaProducer
 from PIL import Image
 import numpy as np
-from datetime import datetime, timezone
 
 from detectron2.config import get_cfg
 from detectron2.engine.defaults import DefaultPredictor
 from detectron2 import model_zoo
 from typing import Tuple, Any, Dict, List
-from shared import *
+import shared
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
+
 
 def start_kafka(predictor: DefaultPredictor) -> None:
     """
@@ -37,7 +37,7 @@ def start_kafka(predictor: DefaultPredictor) -> None:
         try:
             logging.info(msg.value)
             json_value = msg.value
-            mark_job_as_running(json_value['jobId'])
+            shared.mark_job_as_running(json_value['jobId'])
             digital_media = json_value['object']['attributes']
             additional_info_annotations, width, height = run_object_detection(
                 digital_media['ac:accessUri'], predictor)
@@ -51,15 +51,15 @@ def start_kafka(predictor: DefaultPredictor) -> None:
 
 
 def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
-
     return {
         "annotations": annotations,
         "jobId": job_id
     }
 
+
 def map_result_to_annotation(digital_media: Dict,
-        additional_info_annotations: List[Dict[str, Any]], width: int,
-        height: int) \
+                             additional_info_annotations: List[Dict[str, Any]], width: int,
+                             height: int) \
         -> List[Dict[str, Any]]:
     """
     Builds the annotation records (one per ROI) from the prediction result.
@@ -70,16 +70,18 @@ def map_result_to_annotation(digital_media: Dict,
     :return: Returns a list of annotations (one per ROI), can be empty
     """
     annotations = list()
-    timestamp = timestamp_now()
-    ods_agent = get_agent()
+    timestamp = shared.timestamp_now()
+    ods_agent = shared.get_agent()
 
     for value in additional_info_annotations:
         oa_value = {
             'class': value['class'],
             'score': value['score'],
         }
-        oa_selector = build_fragment_selector(value, width, height)
-        annotation = map_to_annotation(ods_agent, timestamp, oa_value, oa_selector, digital_media[ODS_ID], digital_media[ODS_TYPE], 'https://github.com/2younis/plant-organ-detection')
+        oa_selector = shared.build_fragment_selector(value, width, height)
+        annotation = shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector, digital_media[shared.ODS_ID],
+                                              digital_media[shared.ODS_TYPE],
+                                              'https://github.com/2younis/plant-organ-detection')
         annotations.append(annotation)
     return annotations
 
@@ -158,9 +160,10 @@ if __name__ == '__main__':
     cfg = get_cfg()
     cfg.merge_from_file(model_zoo.get_config_file(
         'PascalVOC-Detection/faster_rcnn_R_50_FPN.yaml'))
-    cfg.merge_from_file('/home/soulaine/IdeaProjects/demo-enrichment-service-image/herbarium-sheet-plant-organ-detection/config/custom_model_config.yaml')
+    cfg.merge_from_file(
+        '/home/soulaine/IdeaProjects/demo-enrichment-service-image/herbarium-sheet-plant-organ-detection/config/custom_model_config.yaml')
     cfg.freeze()
     predictor = DefaultPredictor(cfg)
 
     start_kafka(predictor)
-    #run_local("https://sandbox.dissco.tech/api/v1/digitalmedia/SANDBOX/72P-6SY-Q94")
+    # run_local("https://sandbox.dissco.tech/api/v1/digitalmedia/SANDBOX/72P-6SY-Q94")
