@@ -3,4 +3,3 @@ requests==2.31.0
 Pillow==10.1.0
 torch==2.1.1
 torchvision==0.16.1
-detectron2 @ git+https://github.com/facebookresearch/detectron2.git@5b72c27ae39f99db75d43f18fd1312e1ea934e60
