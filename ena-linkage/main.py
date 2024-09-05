@@ -8,6 +8,8 @@ import requests
 from kafka import KafkaConsumer, KafkaProducer
 import shared
 
+HAS_EVENT = 'ods:hasEvent'
+
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
 
@@ -103,25 +105,25 @@ def run_additional_checks(response_json: Dict, specimen_data: Dict) -> bool:
     :return: Returns whether it passes for the checks (True) or not (False)
     """
     is_valid = False
-    if specimen_data.get('ods:hasEvent')[0].get(
+    if specimen_data.get(HAS_EVENT)[0].get(
             'dwc:eventDate') and response_json.get('collection_date'):
-        if specimen_data.get('ods:hasEvent')[0].get(
+        if specimen_data.get(HAS_EVENT)[0].get(
                 'dwc:eventDate') == response_json.get('collection_date'):
             is_valid = True
         else:
             logging.info(
                 f'Event date {response_json.get("collection_date")} does not match for specimen: '
-                f'{specimen_data.get("ods:hasEvent")[0].get("dwc:eventDate")}')
+                f'{specimen_data.get(HAS_EVENT)[0].get("dwc:eventDate")}')
             is_valid = False
-    if specimen_data.get('ods:hasEvent')[0].get('ods:Location').get(
+    if specimen_data.get(HAS_EVENT)[0].get('ods:Location').get(
             'dwc:country') and response_json.get('country'):
-        if specimen_data.get('ods:hasEvent')[0].get('ods:Location').get(
+        if specimen_data.get(HAS_EVENT)[0].get('ods:Location').get(
                 'dwc:country') in response_json.get('country'):
             is_valid = True
         else:
             logging.info(
                 f'Country {response_json.get("country")} does not match for specimen: '
-                f'{specimen_data.get("ods:hasEvent")[0].get("ods:Location").get("dwc:country")}')
+                f'{specimen_data.get(HAS_EVENT)[0].get("ods:Location").get("dwc:country")}')
             is_valid = False
     return is_valid
 
