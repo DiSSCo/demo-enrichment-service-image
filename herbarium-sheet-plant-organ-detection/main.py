@@ -13,12 +13,9 @@ from detectron2.config import get_cfg
 from detectron2.engine.defaults import DefaultPredictor
 from detectron2 import model_zoo
 from typing import Tuple, Any, Dict, List
+from shared import *
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
-
-ODS_TYPE = 'ods:type'
-ODS_ID = 'ods:id'
-
 
 def start_kafka(predictor: DefaultPredictor) -> None:
     """
@@ -40,23 +37,33 @@ def start_kafka(predictor: DefaultPredictor) -> None:
         try:
             logging.info(msg.value)
             json_value = msg.value
-            digital_entity = json_value['object']['digitalEntity']
-            additional_info_annotations, width, height = run_object_detection(digital_entity['ac:accessUri'], predictor)
-            annotations = map_to_annotation(digital_entity, additional_info_annotations, width, height)
-            event = {
-                "jobId": json_value['jobId'],
-                'annotations': annotations
-            }
+            mark_job_as_running(json_value['jobId'])
+            digital_media = json_value['object']['attributes']
+            additional_info_annotations, width, height = run_object_detection(
+                digital_media['ac:accessUri'], predictor)
+            annotations = map_result_to_annotation(digital_media,
+                                                   additional_info_annotations, width,
+                                                   height)
+            event = map_to_annotation_event(annotations, json_value['jobId'])
             send_updated_opends(event, producer)
         except Exception as e:
             logging.exception(e)
 
 
-def map_to_annotation(digital_entity: Dict, additional_info_annotations: List[Dict[str, Any]], width: int, height: int) \
+def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
+
+    return {
+        "annotations": annotations,
+        "jobId": job_id
+    }
+
+def map_result_to_annotation(digital_media: Dict,
+        additional_info_annotations: List[Dict[str, Any]], width: int,
+        height: int) \
         -> List[Dict[str, Any]]:
     """
     Builds the annotation records (one per ROI) from the prediction result.
-    :param digital_entity: The Digital Entity Json
+    :param digital_media: The Digital Media Json
     :param additional_info_annotations: The additional info from the object detection
     :param width: The width of the image, used to calculate the ROI
     :param height: the height of the image, used to calculate the ROI
@@ -64,57 +71,17 @@ def map_to_annotation(digital_entity: Dict, additional_info_annotations: List[Di
     """
     annotations = list()
     timestamp = timestamp_now()
+    ods_agent = get_agent()
+
     for value in additional_info_annotations:
         oa_value = {
             'class': value['class'],
             'score': value['score'],
         }
-        selector = {
-            ODS_TYPE: 'FragmentSelector',
-            'dcterms:conformsTo': 'https://www.w3.org/TR/media-frags/',
-            'ac:hasRoi': {
-                "ac:xFrac": value['boundingBox'][0] / width,
-                "ac:yFrac": value['boundingBox'][1] / height,
-                "ac:widthFrac": (value['boundingBox'][2] -
-                                 value['boundingBox'][0]) / width,
-                "ac:heightFrac": (value['boundingBox'][3]
-                                  - value['boundingBox'][1]) / height
-            }
-        }
-        annotation = {
-            'rdf:type': 'Annotation',
-            'oa:motivation': 'ods:adding',
-            'oa:creator': {
-                ODS_TYPE: 'oa:SoftwareAgent',
-                'foaf:name': os.environ.get('MAS_NAME'),
-                ODS_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
-            },
-            'dcterms:created': timestamp,
-            'oa:target': {
-                ODS_ID: digital_entity[ODS_ID],
-                ODS_TYPE: digital_entity[ODS_TYPE],
-                'oa:selector': selector
-            },
-            'oa:body': {
-                ODS_TYPE: 'TextualBody',
-                'oa:value': [json.dumps(oa_value)],
-                'dcterms:reference': 'https://github.com/2younis/plant-organ-detection',
-            }
-        }
+        oa_selector = build_fragment_selector(value, width, height)
+        annotation = map_to_annotation(ods_agent, timestamp, oa_value, oa_selector, digital_media[ODS_ID], digital_media[ODS_TYPE], 'https://github.com/2younis/plant-organ-detection')
         annotations.append(annotation)
     return annotations
-
-
-def timestamp_now() -> str:
-    """
-    Create a timestamp in the correct format
-    :return: The timestamp as a string
-    """
-    timestamp = str(datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"
-                                                           ".%f"))
-    timestamp_cleaned = timestamp[:-3]
-    timestamp_timezone = timestamp_cleaned + 'Z'
-    return timestamp_timezone
 
 
 def send_updated_opends(event: dict, producer: KafkaProducer) -> None:
@@ -128,7 +95,8 @@ def send_updated_opends(event: dict, producer: KafkaProducer) -> None:
     producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), event)
 
 
-def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[List[Dict[str, Any]], int, int]:
+def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[
+    List[Dict[str, Any]], int, int]:
     """
     Checks if the Image url works and gathers metadata information from the image.
     :param image_uri: The image url from which we will gather metadata
@@ -177,21 +145,22 @@ def run_local(example: str) -> None:
     """
     response = requests.get(example)
     json_value = json.loads(response.content)['data']
-    digital_entity = json_value['attributes']['digitalEntity']
-    additional_info_annotations, width, height = run_object_detection(digital_entity['ac:accessUri'], predictor)
-    annotations = map_to_annotation(digital_entity, additional_info_annotations, width, height)
-    event = {
-        "jobId": str(uuid.uuid4()),
-        'annotations': annotations
-    }
+    digital_media = json_value['attributes']
+    additional_info_annotations, width, height = run_object_detection(
+        digital_media['ac:accessURI'], predictor)
+    annotations = map_result_to_annotation(digital_media, additional_info_annotations,
+                                           width, height)
+    event = map_to_annotation_event(annotations, str(uuid.uuid4()))
     logging.info('Created annotations: ' + json.dumps(event))
 
 
 if __name__ == '__main__':
     cfg = get_cfg()
-    cfg.merge_from_file(model_zoo.get_config_file('PascalVOC-Detection/faster_rcnn_R_50_FPN.yaml'))
-    cfg.merge_from_file('config/custom_model_config.yaml')
+    cfg.merge_from_file(model_zoo.get_config_file(
+        'PascalVOC-Detection/faster_rcnn_R_50_FPN.yaml'))
+    cfg.merge_from_file('/home/soulaine/IdeaProjects/demo-enrichment-service-image/herbarium-sheet-plant-organ-detection/config/custom_model_config.yaml')
     cfg.freeze()
     predictor = DefaultPredictor(cfg)
 
     start_kafka(predictor)
+    #run_local("https://sandbox.dissco.tech/api/v1/digitalmedia/SANDBOX/72P-6SY-Q94")

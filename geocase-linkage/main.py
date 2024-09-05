@@ -7,11 +7,9 @@ from typing import Dict, List
 
 import requests
 from kafka import KafkaConsumer, KafkaProducer
+from shared import *
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
-
-ODS_TYPE = "ods:type"
-ODS_ID = "ods:id"
 
 
 def start_kafka() -> None:
@@ -21,24 +19,30 @@ def start_kafka() -> None:
     """
     consumer = KafkaConsumer(os.environ.get('KAFKA_CONSUMER_TOPIC'),
                              group_id=os.environ.get('KAFKA_CONSUMER_GROUP'),
-                             bootstrap_servers=[os.environ.get('KAFKA_CONSUMER_HOST')],
-                             value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+                             bootstrap_servers=[
+                                 os.environ.get('KAFKA_CONSUMER_HOST')],
+                             value_deserializer=lambda m: json.loads(
+                                 m.decode('utf-8')),
                              enable_auto_commit=True)
-    producer = KafkaProducer(bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
-                             value_serializer=lambda m: json.dumps(m).encode('utf-8'))
+    producer = KafkaProducer(
+        bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
+        value_serializer=lambda m: json.dumps(m).encode('utf-8'))
     for msg in consumer:
         try:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
-            specimen_data = json_value['object']['digitalSpecimen']
+            mark_job_as_running(json_value['jobId'])
+            specimen_data = json_value['object']['attributes']
             result = run_api_call(specimen_data)
-            mas_job_record = map_to_mas_job_record(specimen_data, result, json_value["jobId"])
-            send_updated_opends(mas_job_record, producer)
+            mas_job_record = map_to_annotation_event(specimen_data, result,
+                                                     json_value['jobId'])
+            publish_annotation_event(mas_job_record, producer)
         except Exception as e:
             logging.exception(e)
 
 
-def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> dict:
+def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
+        job_id: str) -> dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -50,7 +54,11 @@ def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], jo
     if results is None:
         annotations = list()
     else:
-        annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp), results))
+        ods_agent = get_agent()
+        annotations = list(
+            map(lambda result: map_result_to_annotation(specimen_data, result,
+                                                        timestamp, ods_agent),
+                results))
     mas_job_record = {
         "jobId": job_id,
         "annotations": annotations
@@ -58,54 +66,21 @@ def map_to_mas_job_record(specimen_data: Dict, results: List[Dict[str, str]], jo
     return mas_job_record
 
 
-def map_to_annotation(specimen_data, result, timestamp):
-    oa_value = {
-        'entityRelationships': {
-            'entityRelationshipType': 'hasGeoCASeID',
-            'objectEntityIri': f'https://geocase.eu/specimen/{result["geocaseId"]}',
-            'entityRelationshipDate': timestamp,
-            'entityRelationshipCreatorName': os.environ.get('MAS_NAME'),
-            'entityRelationshipCreatorId': f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
-        }
-    }
-    annotation = {
-        'rdf:type': 'Annotation',
-        'oa:motivation': 'ods:adding',
-        'oa:creator': {
-            ODS_TYPE: 'oa:SoftwareAgent',
-            'foaf:name': os.environ.get('MAS_NAME'),
-            ODS_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
-        },
-        'dcterms:created': timestamp,
-        'oa:target': {
-            ODS_ID: specimen_data[ODS_ID],
-            ODS_TYPE: specimen_data[ODS_TYPE],
-            'oa:selector': {
-                ODS_TYPE: 'ClassSelector',
-                'oa:class': '$.entityRelationships'
-            },
-        },
-        'oa:body': {
-            ODS_TYPE: 'TextualBody',
-            'oa:value': [json.dumps(oa_value)],
-            'dcterms:reference': result['queryString']
-        }
-    }
-    return annotation
+def map_result_to_annotation(specimen_data: Dict, result: Dict, timestamp: str,
+        ods_agent: Dict) -> Dict:
+    oa_value = map_to_entity_relationship(
+        'hasGeoCASeID',
+        f'https://geocase.eu/specimen/{result["geocaseId"]}',
+        timestamp,
+        ods_agent
+    )
+    oa_selector = build_class_selector('ods:hasEntityRelationship')
+    return map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
+                             specimen_data[ODS_ID],
+                             specimen_data[ODS_TYPE], result['queryString'])
 
 
-def timestamp_now() -> str:
-    """
-    Create a timestamp in the correct format
-    :return: The timestamp as a string
-    """
-    timestamp = str(datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
-    timestamp_cleaned = timestamp[:-3]
-    timestamp_timezone = timestamp_cleaned + 'Z'
-    return timestamp_timezone
-
-
-def send_updated_opends(annotation: Dict, producer: KafkaProducer) -> None:
+def publish_annotation_event(annotation: Dict, producer: KafkaProducer) -> None:
     """
     Send the annotation to the Kafka topic
     :param annotation: The formatted annotationRecord
@@ -132,12 +107,15 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
         hits = response_json.get('response').get('numFound')
         if hits <= 5:
             return list(map(
-                lambda result: {'queryString': query_string, 'geocaseId': result['geocase_id']},
+                lambda result: {'queryString': query_string,
+                                'geocaseId': result['geocase_id']},
                 response_json.get('response').get('docs')))
         else:
-            logging.info(f'Too many hits ({hits}) were found for specimen: {specimen_data["ods:id"]}')
+            logging.info(
+                f'Too many hits ({hits}) were found for specimen: {specimen_data[ODS_ID]}')
     else:
-        logging.info(f'No relevant identifiers found for specimen: {specimen_data["ods:id"]}')
+        logging.info(
+            f'No relevant identifiers found for specimen: {specimen_data[ODS_ID]}')
 
 
 def build_query_string(identifiers: Dict[str, str]):
@@ -161,11 +139,13 @@ def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:
     :return: The mapped relevant_identifiers (unitId and recordURI)
     """
     relevant_identifiers = {}
-    for identifier in specimen_data['identifiers']:
-        if identifier.get('???:identifierType') in ['abcd:unitID']:
-            relevant_identifiers['unitid'] = identifier.get('???:identifierValue')
-        if identifier.get('???:identifierType') in ['abcd:recordURI']:
-            relevant_identifiers['recordURI'] = identifier.get('???:identifierValue')
+    for identifier in specimen_data['ods:hasIdentifier']:
+        if identifier.get('dcterms:title') in ['abcd:unitID']:
+            relevant_identifiers['unitid'] = identifier.get(
+                'dcterms:identifier')
+        if identifier.get('dcterms:title') in ['abcd:recordURI']:
+            relevant_identifiers['recordURI'] = identifier.get(
+                'dcterms:identifier')
     return relevant_identifiers
 
 
@@ -179,12 +159,13 @@ def run_local(example: str) -> None:
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
-    attributes = json.loads(response.content)['data']['attributes']
-    specimen_data = attributes['digitalSpecimen']
+    specimen_data = json.loads(response.content)['data']['attributes']
     result = run_api_call(specimen_data)
-    mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
+    mas_job_record = map_to_annotation_event(specimen_data, result,
+                                             str(uuid.uuid4()))
     logging.info('Created annotations: ' + str(mas_job_record))
 
 
 if __name__ == '__main__':
     start_kafka()
+    # run_local('https://dev.dissco.tech/api/v1/digital-specimen/TEST/VGJ-1R7-JSJ')
