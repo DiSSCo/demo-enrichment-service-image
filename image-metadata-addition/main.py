@@ -34,15 +34,15 @@ def start_kafka() -> None:
 
     for msg in consumer:
         json_value = msg.value
-        shared.mark_job_as_running(json_value['jobId'])
-        image_uri = json_value['attributes']['ac:accessURI']
+        shared.mark_job_as_running(json_value.get('jobId'))
+        image_uri = json_value.get('object').get('ac:accessURI')
         timestamp = shared.timestamp_now()
         image_assertions = get_image_assertions(image_uri, timestamp)
-        annotations = create_annotation(image_assertions, json_value['attributes'], timestamp)
-        publish_annotation_event(map_to_annotation_event(annotations, json_value['jobId']), producer)
+        annotations = create_annotation(image_assertions, json_value.get('object'), timestamp)
+        publish_annotation_event(map_to_annotation_event(annotations, json_value.get('jobId')), producer)
 
 
-def run_local(example: str) -> Dict:
+def run_local(example: str) -> None:
     """
     Run the script locally. Can be called by replacing the kafka call with this  a method call in the main method.
     Will call the DiSSCo API to retrieve the specimen data.
@@ -51,9 +51,8 @@ def run_local(example: str) -> Dict:
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
-    shared.mark_job_as_running("aaa")
-    media = json.loads(response.content)['data']['attributes']
-    image_uri = media['ac:accessURI']
+    media = json.loads(response.content).get('data').get('attributes')
+    image_uri = media.get('ac:accessURI')
     timestamp = shared.timestamp_now()
     image_assertions = get_image_assertions(image_uri, timestamp)
     annotations = create_annotation(image_assertions, media, timestamp)

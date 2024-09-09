@@ -37,14 +37,14 @@ def start_kafka(predictor: DefaultPredictor) -> None:
         try:
             logging.info(msg.value)
             json_value = msg.value
-            shared.mark_job_as_running(json_value['jobId'])
-            digital_media = json_value['object']['attributes']
+            shared.mark_job_as_running(json_value.get('jobId'))
+            digital_media = json_value.get('object')
             additional_info_annotations, width, height = run_object_detection(
-                digital_media['ac:accessUri'], predictor)
+                digital_media.get('ac:accessUri'), predictor)
             annotations = map_result_to_annotation(digital_media,
                                                    additional_info_annotations, width,
                                                    height)
-            event = map_to_annotation_event(annotations, json_value['jobId'])
+            event = map_to_annotation_event(annotations, json_value.get('jobId'))
             send_updated_opends(event, producer)
         except Exception as e:
             logging.exception(e)
@@ -146,10 +146,10 @@ def run_local(example: str) -> None:
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
-    json_value = json.loads(response.content)['data']
-    digital_media = json_value['attributes']
+    json_value = json.loads(response.content).get('data')
+    digital_media = json_value.get('attributes')
     additional_info_annotations, width, height = run_object_detection(
-        digital_media['ac:accessURI'], predictor)
+        digital_media.get('ac:accessURI'), predictor)
     annotations = map_result_to_annotation(digital_media, additional_info_annotations,
                                            width, height)
     event = map_to_annotation_event(annotations, str(uuid.uuid4()))

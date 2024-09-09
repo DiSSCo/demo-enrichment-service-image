@@ -30,13 +30,13 @@ def start_kafka() -> None:
         try:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
-            shared.mark_job_as_running(json_value["jobId"])
-            specimen_data = json_value['object']['attributes']
+            shared.mark_job_as_running(json_value.get('jobId'))
+            specimen_data = json_value.get('object')
             batching_requested = json_value['batchingRequested']
             result, batch_metadata = run_georeference(specimen_data,
                                                       batching_requested)
             mas_job_record = map_to_annotation_event(specimen_data, result,
-                                                     json_value["jobId"],
+                                                     json_value.get('jobId'),
                                                      batch_metadata)
             send_updated_opends(mas_job_record, producer)
         except Exception as e:
@@ -235,7 +235,7 @@ def run_local(example: str):
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
-    specimen_data = json.loads(response.content)['data']['attributes']
+    specimen_data = json.loads(response.content).get('data').get('attributes')
     result, batch_metadata = run_georeference(specimen_data, True)
     annotation_event = map_to_annotation_event(specimen_data, result,
                                                str(uuid.uuid4()),
