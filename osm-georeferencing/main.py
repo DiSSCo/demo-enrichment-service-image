@@ -305,8 +305,8 @@ def get_geopick_auth():
     :return: Authorization header
     """
     auth_info = {
-        'username': os.environ.get('GEOPICK_USER'),
-        'password': os.environ.get('GEOPICK_PWD')
+        'username': os.environ.get('geopick_user'),
+        'password': os.environ.get('geopick_password')
     }
     headers = {
         'Content-Type': 'application/json',
@@ -358,6 +358,6 @@ def reduce_annotation_size_for_printing(annotation: dict) -> dict:
 
 
 if __name__ == '__main__':
-    # start_kafka()
-    run_local(
-        'https://dev.dissco.tech/api/v1/digital-specimen/TEST/RRH-DLL-K87')
+    start_kafka()
+    # run_local(
+    #    'https://dev.dissco.tech/api/v1/digital-specimen/TEST/RRH-DLL-K87')

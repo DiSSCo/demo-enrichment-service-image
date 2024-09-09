@@ -147,5 +147,5 @@ def build_assertion(timestamp: str, ods_agent: Dict, msmt_type: str, msmt_value:
 
 
 if __name__ == '__main__':
-    # start_kafka()
-    run_local('https://dev.dissco.tech/api/v1/digital-media/TEST/95K-GH1-562')
+    start_kafka()
+    # run_local('https://dev.dissco.tech/api/v1/digital-media/TEST/95K-GH1-562')

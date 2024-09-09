@@ -161,7 +161,7 @@ if __name__ == '__main__':
     cfg.merge_from_file(model_zoo.get_config_file(
         'PascalVOC-Detection/faster_rcnn_R_50_FPN.yaml'))
     cfg.merge_from_file(
-        '/home/soulaine/IdeaProjects/demo-enrichment-service-image/herbarium-sheet-plant-organ-detection/config/custom_model_config.yaml')
+        'config/custom_model_config.yaml')
     cfg.freeze()
     predictor = DefaultPredictor(cfg)
 

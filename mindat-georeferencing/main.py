@@ -30,7 +30,7 @@ def start_kafka() -> None:
         try:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
-            mark_job_as_running(json_value["jobId"])
+            shared.mark_job_as_running(json_value["jobId"])
             specimen_data = json_value['object']['attributes']
             batching_requested = json_value['batchingRequested']
             result, batch_metadata = run_georeference(specimen_data,
@@ -42,17 +42,6 @@ def start_kafka() -> None:
         except Exception as e:
             logging.exception(e)
 
-
-def mark_job_as_running(job_id: str):
-    """
-    Calls DiSSCo's RUNNING endpoint to inform the system that the message has
-    been received by the MAS. Doing so will update the status of the job to
-    "RUNNING" for any observing users.
-    :param job_id: the job id from the kafka message
-    """
-    query_string = os.environ.get('RUNNING_ENDPOINT') + os.environ.get(
-        'MAS_ID') + '/' + job_id + '/running'
-    requests.get(query_string)
 
 
 def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
