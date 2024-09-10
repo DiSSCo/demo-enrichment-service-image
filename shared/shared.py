@@ -64,11 +64,11 @@ def map_to_entity_relationship(relationship_type: str, resource_id: str,
     """
     return {
         AT_TYPE: 'ods:EntityRelationship',
-        "dwc:relationshipOfResource": relationship_type,
-        "dwc:relatedResourceID": resource_id,
-        "ods:relatedResourceURI": resource_id,
-        "dwc:relationshipEstablishedDate": timestamp,
-        "ods:RelationshipAccordingToAgent": ods_agent
+        'dwc:relationshipOfResource': relationship_type,
+        'dwc:relatedResourceID': resource_id,
+        'ods:relatedResourceURI': resource_id,
+        'dwc:relationshipEstablishedDate': timestamp,
+        'ods:RelationshipAccordingToAgent': ods_agent
     }
 
 
@@ -87,21 +87,21 @@ def map_to_annotation(ods_agent: Dict, timestamp: str,
     :return: Returns a formatted annotation Record
     """
     annotation = {
-        AT_TYPE: "ods:Annotation",
-        "oa:motivation": "ods:adding",
-        "dcterms:creator": ods_agent,
-        "dcterms:created": timestamp,
-        "oa:hasTarget": {
+        AT_TYPE: 'ods:Annotation',
+        'oa:motivation': 'ods:adding',
+        'dcterms:creator': ods_agent,
+        'dcterms:created': timestamp,
+        'oa:hasTarget': {
             ODS_ID: target_id,
             AT_ID: target_id,
             ODS_TYPE: target_type,
             AT_TYPE: target_type,
-            "oa:hasSelector": oa_selector,
+            'oa:hasSelector': oa_selector,
         },
-        "oa:hasBody": {
-            AT_TYPE: "oa:TextualBody",
-            "oa:value": [json.dumps(oa_value)],
-            "dcterms:references": dcterms_ref,
+        'oa:hasBody': {
+            AT_TYPE: 'oa:TextualBody',
+            'oa:value': [json.dumps(oa_value)],
+            'dcterms:references': dcterms_ref,
         },
     }
     return annotation
@@ -114,8 +114,8 @@ def build_class_selector(oa_class: str) -> Dict:
     :return: class selector object
     """
     return {
-        AT_TYPE: "ods:ClassSelector",
-        "ods:class": oa_class,
+        AT_TYPE: 'ods:ClassSelector',
+        'ods:class': oa_class,
     }
 
 
@@ -126,8 +126,8 @@ def build_field_selector(ods_field: str) -> Dict:
     :return: field selector object
     """
     return {
-        AT_TYPE: "ods:FieldSelector",
-        "ods:field": ods_field
+        AT_TYPE: 'ods:FieldSelector',
+        'ods:field': ods_field
     }
 
 
@@ -144,11 +144,11 @@ def build_fragment_selector(bounding_box: Dict, width: int,
         ODS_TYPE: 'oa:FragmentSelector',
         'dcterms:conformsTo': 'https://www.w3.org/TR/media-frags/',
         'ac:hasROI': {
-            "ac:xFrac": bounding_box['boundingBox'][0] / width,
-            "ac:yFrac": bounding_box['boundingBox'][1] / height,
-            "ac:widthFrac": (bounding_box['boundingBox'][2] -
+            'ac:xFrac': bounding_box['boundingBox'][0] / width,
+            'ac:yFrac': bounding_box['boundingBox'][1] / height,
+            'ac:widthFrac': (bounding_box['boundingBox'][2] -
                              bounding_box['boundingBox'][0]) / width,
-            "ac:heightFrac": (bounding_box['boundingBox'][3]
+            'ac:heightFrac': (bounding_box['boundingBox'][3]
                               - bounding_box['boundingBox'][1]) / height
         }
     }

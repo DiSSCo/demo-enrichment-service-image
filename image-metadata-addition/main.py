@@ -5,13 +5,15 @@ from io import BytesIO
 import uuid
 
 import requests as requests
-from typing import Dict, List
+from typing import Dict, List, Tuple, Any
 from kafka import KafkaConsumer, KafkaProducer
 from PIL import Image, UnidentifiedImageError
 from requests.exceptions import MissingSchema
 
 import shared
+
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
+CODE_BASE = 'https://pypi.org/project/pillow/'
 
 
 def start_kafka() -> None:
@@ -37,9 +39,12 @@ def start_kafka() -> None:
         shared.mark_job_as_running(json_value.get('jobId'))
         image_uri = json_value.get('object').get('ac:accessURI')
         timestamp = shared.timestamp_now()
-        image_assertions = get_image_assertions(image_uri, timestamp)
-        annotations = create_annotation(image_assertions, json_value.get('object'), timestamp)
-        publish_annotation_event(map_to_annotation_event(annotations, json_value.get('jobId')), producer)
+        image_assertions, additional_info = get_image_measurements(image_uri, timestamp)
+        annotations = create_annotation(image_assertions, additional_info,
+                                        json_value.get('object'), timestamp)
+        publish_annotation_event(
+            map_to_annotation_event(annotations, json_value.get('jobId')),
+            producer)
 
 
 def run_local(example: str) -> None:
@@ -54,22 +59,25 @@ def run_local(example: str) -> None:
     media = json.loads(response.content).get('data').get('attributes')
     image_uri = media.get('ac:accessURI')
     timestamp = shared.timestamp_now()
-    image_assertions = get_image_assertions(image_uri, timestamp)
-    annotations = create_annotation(image_assertions, media, timestamp)
-    event = map_to_annotation_event(annotations,  str(uuid.uuid4()))
+    image_assertions, additional_info = get_image_measurements(image_uri, timestamp)
+    annotations = create_annotation(image_assertions, additional_info, media, timestamp)
+    event = map_to_annotation_event(annotations, str(uuid.uuid4()))
     logging.info('Created annotations: ' + json.dumps(event, indent=2))
 
 
 def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
     return {
-        "annotations": annotations,
-        "jobId": job_id
+        'annotations': annotations,
+        'jobId': job_id
     }
 
 
-def create_annotation(image_assertions: List[Dict], digital_media: dict, timestamp: str) -> List[Dict]:
+def create_annotation(image_assertions: List[Dict[str, Any]],
+                      additional_info: Dict[str, Any], digital_media: dict,
+                      timestamp: str) -> List[Dict]:
     """
     Builds an annotation out of the assertions created by the Pillow imaging library
+    :param additional_info: Other oa values to add
     :param image_assertions: assertions declared by library
     :param digital_media: json of the digital-media object
     :param timestamp: formatted date time
@@ -80,9 +88,23 @@ def create_annotation(image_assertions: List[Dict], digital_media: dict, timesta
     oa_selector = shared.build_class_selector("$ods:hasAssertion")
 
     for assertion in image_assertions:
-        annotation = shared.map_to_annotation(ods_agent, timestamp, assertion, oa_selector, digital_media[shared.ODS_ID],
-                                       digital_media[shared.ODS_TYPE], "https://pypi.org/project/pillow/")
+        annotation = shared.map_to_annotation(ods_agent, timestamp, assertion,
+                                              oa_selector,
+                                              digital_media[shared.ODS_ID],
+                                              digital_media[shared.ODS_TYPE],
+                                              CODE_BASE)
         annotations.append(annotation)
+    additional_info_annotation = shared.map_to_annotation(ods_agent, timestamp,
+                                                          additional_info,
+                                                          shared.build_field_selector(
+                                                              'dcterms:format'),
+                                                          digital_media[
+                                                              shared.ODS_ID],
+                                                          digital_media[
+                                                              shared.ODS_TYPE],
+                                                          CODE_BASE)
+    additional_info_annotation['oa:motivation'] = 'oa:editing'
+    annotations.append(additional_info_annotation)
     return annotations
 
 
@@ -98,47 +120,63 @@ def publish_annotation_event(annotation_event: Dict,
     producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), annotation_event)
 
 
-def get_image_assertions(image_uri: str, timestamp: str) -> List[Dict]:
+def get_image_measurements(image_uri: str, timestamp: str) -> Tuple[
+    List[Dict[str, Any]], Dict[str, Any]]:
     """
     Checks if the Image url works and gathers metadata information from the image
     :param image_uri: The image url from which we will gather metadata
-    :return: Returns a list of additional info about the image
+    :param timestamp: time of the annotation
+    :return: Returns a Dict of assertions about the image and any additional information
     """
     ods_agent = shared.get_agent()
     assertions = list()
     assertions.append(
         build_assertion(timestamp, ods_agent, 'ac:variant', 'acvariant:v008',
                         None))
+    img_format = ''
     try:
         img = Image.open(requests.get(image_uri, stream=True).raw)
         img_file = BytesIO()
         img.save(img_file, img.format, quality='keep')
         assertions.append(
-            build_assertion(timestamp, ods_agent, 'exif:PixelXDimension', str(img.width),
+            build_assertion(timestamp, ods_agent, 'exif:PixelXDimension',
+                            str(img.width),
                             'pixel'))
         assertions.append(
-            build_assertion(timestamp, ods_agent, 'exif:PixelYDimension', str(img.height),
+            build_assertion(timestamp, ods_agent, 'exif:PixelYDimension',
+                            str(img.height),
                             'pixel'))
         assertions.append(
-            build_assertion(timestamp, ods_agent, 'dcterms:format', img.format.lower(),
+            build_assertion(timestamp, ods_agent, 'dcterms:format',
+                            img.format.lower(),
                             None))
         assertions.append(
-            build_assertion(timestamp, ods_agent, 'dcterms:extent', str(round(img_file.tell() / 1000000, 2)),
+            build_assertion(timestamp, ods_agent, 'dcterms:extent',
+                            str(round(img_file.tell() / 1000000, 2)),
                             "MB"))
+        img_format = img.format.lower()
     except (FileNotFoundError, UnidentifiedImageError, MissingSchema):
         logging.exception('Failed to retrieve picture')
-    return assertions
+    if img_format:
+        format_dict = {
+            "format": img_format
+        }
+    else:
+        format_dict = {}
+
+    return assertions, format_dict
 
 
-def build_assertion(timestamp: str, ods_agent: Dict, msmt_type: str, msmt_value: str, unit) -> Dict:
+def build_assertion(timestamp: str, ods_agent: Dict, msmt_type: str,
+                    msmt_value: str, unit) -> Dict:
     assertion = {
-        shared.AT_TYPE: "ods:Assertion",
-        "dwc:measurementDeterminedDate": timestamp,
-        "dwc:measurementType": msmt_type,
-        "dwc:measurementValue": msmt_value,
-        "ods:AssertionByAgent": ods_agent,
-        "ods:assertionProtocol": "Image processing with Python Pillow library",
-        "ods:assertionProtocolID": "https://pypi.org/project/pillow/"
+        shared.AT_TYPE: 'ods:Assertion',
+        'dwc:measurementDeterminedDate': timestamp,
+        'dwc:measurementType': msmt_type,
+        'dwc:measurementValue': msmt_value,
+        'ods:AssertionByAgent': ods_agent,
+        'ods:assertionProtocol': 'Image processing with Python Pillow library',
+        'ods:assertionProtocolID': CODE_BASE
     }
     if unit is not None:
         assertion['dwc:measurementUnit'] = unit
