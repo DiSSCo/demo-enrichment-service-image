@@ -14,6 +14,7 @@ import shared
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 CODE_BASE = 'https://pypi.org/project/pillow/'
+DCTERMS_FORMAT = 'dcterms:format'
 
 
 def start_kafka() -> None:
@@ -39,7 +40,8 @@ def start_kafka() -> None:
         shared.mark_job_as_running(json_value.get('jobId'))
         image_uri = json_value.get('object').get('ac:accessURI')
         timestamp = shared.timestamp_now()
-        image_assertions, additional_info = get_image_measurements(image_uri, timestamp)
+        image_assertions, additional_info = get_image_measurements(image_uri,
+                                                                   timestamp)
         annotations = create_annotation(image_assertions, additional_info,
                                         json_value.get('object'), timestamp)
         publish_annotation_event(
@@ -59,8 +61,10 @@ def run_local(example: str) -> None:
     media = json.loads(response.content).get('data').get('attributes')
     image_uri = media.get('ac:accessURI')
     timestamp = shared.timestamp_now()
-    image_assertions, additional_info = get_image_measurements(image_uri, timestamp)
-    annotations = create_annotation(image_assertions, additional_info, media, timestamp)
+    image_assertions, additional_info = get_image_measurements(image_uri,
+                                                               timestamp)
+    annotations = create_annotation(image_assertions, additional_info, media,
+                                    timestamp)
     event = map_to_annotation_event(annotations, str(uuid.uuid4()))
     logging.info('Created annotations: ' + json.dumps(event, indent=2))
 
@@ -97,13 +101,14 @@ def create_annotation(image_assertions: List[Dict[str, Any]],
     additional_info_annotation = shared.map_to_annotation(ods_agent, timestamp,
                                                           additional_info,
                                                           shared.build_field_selector(
-                                                              'dcterms:format'),
+                                                              DCTERMS_FORMAT),
                                                           digital_media[
                                                               shared.ODS_ID],
                                                           digital_media[
                                                               shared.ODS_TYPE],
                                                           CODE_BASE)
-    additional_info_annotation['oa:motivation'] = 'oa:editing'
+    if digital_media.get(DCTERMS_FORMAT) is not None:
+        additional_info_annotation['oa:motivation'] = 'oa:editing'
     annotations.append(additional_info_annotation)
     return annotations
 
@@ -112,7 +117,7 @@ def publish_annotation_event(annotation_event: Dict,
                              producer: KafkaProducer) -> None:
     """
       Send the annotation to the Kafka topic
-      :param annotations: The formatted list of annotations
+      :param annotation_event: The formatted annotation event
       :param producer: The initiated Kafka producer
       :return: Will not return anything
       """
@@ -147,7 +152,7 @@ def get_image_measurements(image_uri: str, timestamp: str) -> Tuple[
                             str(img.height),
                             'pixel'))
         assertions.append(
-            build_assertion(timestamp, ods_agent, 'dcterms:format',
+            build_assertion(timestamp, ods_agent, DCTERMS_FORMAT,
                             img.format.lower(),
                             None))
         assertions.append(
