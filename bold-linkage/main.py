@@ -2,18 +2,14 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
 from typing import Dict, List
 
 import requests
 from kafka import KafkaConsumer, KafkaProducer
 from requests.auth import HTTPBasicAuth
+import shared
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
-
-ODS_TYPE = "ods:type"
-ODS_ID = "ods:id"
-
 
 def start_kafka() -> None:
     """
@@ -35,18 +31,19 @@ def start_kafka() -> None:
         try:
             logging.info("Received message: " + str(msg.value))
             json_value = msg.value
-            specimen_data = json_value["object"]["digitalSpecimen"]
+            shared.mark_job_as_running(json_value.get('jobId'))
+            specimen_data = json_value.get('object')
             result = run_api_call(specimen_data)
-            mas_job_record = map_to_mas_job_record(
-                specimen_data, result, json_value["jobId"]
+            mas_job_record = map_to_annotation_event(
+                specimen_data, result, json_value.get('jobId')
             )
-            send_updated_opends(mas_job_record, producer)
+            publish_annotation_event(mas_job_record, producer)
         except Exception as e:
             logging.exception(e)
 
 
-def map_to_mas_job_record(
-    specimen_data: Dict, results: List[Dict[str, str]], job_id: str
+def map_to_annotation_event(
+        specimen_data: Dict, results: List[Dict[str, str]], job_id: str
 ) -> Dict:
     """
     Map the result of the API call to an annotation
@@ -55,13 +52,14 @@ def map_to_mas_job_record(
     :param job_id: The job ID of the MAS
     :return: Returns a formatted annotation Record which includes the Job ID
     """
-    timestamp = timestamp_now()
+    timestamp = shared.timestamp_now()
     if results is None:
         annotations = list()
     else:
         annotations = list(
             map(
-                lambda result: map_to_annotation(specimen_data, result, timestamp),
+                lambda result: map_result_to_annotation(specimen_data, result,
+                                                        timestamp),
                 results,
             )
         )
@@ -69,71 +67,36 @@ def map_to_mas_job_record(
     return annotation_event
 
 
-def map_to_annotation(
-    specimen_data: Dict, result: Dict[str, str], timestamp: str
+def map_result_to_annotation(
+        specimen_data: Dict, result: Dict[str, str], timestamp: str
 ) -> Dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The original specimen data
     :param result: The result from BOLD EU, contains the Bold EU processid and the queryString
     :param timestamp: A formatted timestamp of the current time
-    :return: Returns a formatted annotation Record
+    :return: Returns a formatted annotation
     """
-    oa_value = {
-        "entityRelationships": {
-            "entityRelationshipType": "hasBOLDEUProcessID",
-            "objectEntityIri": f'https://boldsystems.eu/record/{result["processid"]}',
-            "entityRelationshipDate": timestamp,
-            "entityRelationshipCreatorName": os.environ.get("MAS_NAME"),
-            "entityRelationshipCreatorId": f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
-        }
-    }
-    annotation = {
-        "rdf:type": "Annotation",
-        "oa:motivation": "ods:adding",
-        "oa:creator": {
-            ODS_TYPE: "oa:SoftwareAgent",
-            "foaf:name": os.environ.get("MAS_NAME"),
-            ODS_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
-        },
-        "dcterms:created": timestamp,
-        "oa:target": {
-            ODS_ID: specimen_data[ODS_ID],
-            ODS_TYPE: specimen_data[ODS_TYPE],
-            "oa:selector": {
-                ODS_TYPE: "ClassSelector",
-                "oa:class": "$.entityRelationships",
-            },
-        },
-        "oa:body": {
-            ODS_TYPE: "TextualBody",
-            "oa:value": [json.dumps(oa_value)],
-            "dcterms:reference": result["queryString"],
-        },
-    }
-    return annotation
+    ods_agent = shared.get_agent()
+    oa_value = shared.map_to_entity_relationship('hasBOLDEUProcessID',
+                                          f'https://boldsystems.eu/record/{result["processid"]}',
+                                          timestamp, ods_agent)
+    oa_selector = shared.build_class_selector('$.ods:hasEntityRelationship')
+    return shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
+                             specimen_data[shared.ODS_ID],
+                             specimen_data[shared.ODS_TYPE],
+                             result["queryString"])
 
 
-def timestamp_now() -> str:
-    """
-    Create a timestamp in the correct format
-    :return: The timestamp as a string
-    """
-    timestamp = str(datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
-    timestamp_cleaned = timestamp[:-3]
-    timestamp_timezone = timestamp_cleaned + "Z"
-    return timestamp_timezone
-
-
-def send_updated_opends(annotation: Dict, producer: KafkaProducer) -> None:
+def publish_annotation_event(annotation_event: Dict, producer: KafkaProducer) -> None:
     """
     Send the annotation to the Kafka topic
-    :param annotation: The formatted annotationRecord
+    :param annotation_event: The formatted annotationRecord
     :param producer: The initiated Kafka producer
     :return: Will not return anything
     """
-    logging.info("Publishing annotation: " + str(annotation))
-    producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation)
+    logging.info("Publishing annotation: " + str(annotation_event))
+    producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation_event)
 
 
 def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
@@ -150,11 +113,10 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     # be enormous - but perhaps 100 IDs is fine as a batch size.
     identifiers = list(
         map(
-            lambda identifier: identifier.get("???:identifierValue"),
-            specimen_data.get("identifiers"),
+            lambda identifier: identifier.get("dcterms:identifier"),
+            specimen_data.get("ods:hasIdentifier"),
         )
     )
-
     # BOLD's API has a concept of 'scope' (here: 'ids') and 'subscope' (here: 'sampleid'),
     # where the value is the third part of a triple. All triples are joined with commas.
     query_value = ",".join([f"ids:sampleid:{id}" for id in identifiers])
@@ -167,7 +129,8 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     response = requests.get(
         query_string,
         headers=headers,
-        auth=HTTPBasicAuth(os.environ.get("API_USER"), os.environ.get("API_PASSWORD")),
+        auth=HTTPBasicAuth(os.environ.get("API_USER"),
+                           os.environ.get("API_PASSWORD")),
     )
     response.raise_for_status()  # Raises an HTTPError if the status is 4xx, 5xx
 
@@ -184,7 +147,8 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     response = requests.get(
         docs_endpoint,
         headers=headers,
-        auth=HTTPBasicAuth(os.environ.get("API_USER"), os.environ.get("API_PASSWORD")),
+        auth=HTTPBasicAuth(os.environ.get("API_USER"),
+                           os.environ.get("API_PASSWORD")),
     )
     response.raise_for_status()  # Ensure the request was successful
 
@@ -212,13 +176,14 @@ def run_local(example: str) -> None:
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
-    specimen = json.loads(response.content)["data"]
-    specimen_data = specimen["attributes"]["digitalSpecimen"]
+    specimen = json.loads(response.content).get('data')
+    specimen_data = specimen.get('attributes')
     result = run_api_call(specimen_data)
-    mas_job_record = map_to_mas_job_record(specimen_data, result, str(uuid.uuid4()))
+    mas_job_record = map_to_annotation_event(specimen_data, result,
+                                             str(uuid.uuid4()))
     logging.info("Created annotations: " + json.dumps(mas_job_record, indent=2))
 
 
 if __name__ == "__main__":
     start_kafka()
-    # run_local("https://sandbox.dissco.tech/api/v1/specimens/SANDBOX/NMT-F9R-FWK")
+     #run_local("https://sandbox.dissco.tech/api/v1/specimens/SANDBOX/NMT-F9R-FWK")

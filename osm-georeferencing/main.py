@@ -8,16 +8,13 @@ from typing import Dict, Any, List, Union, Tuple
 import requests
 from kafka import KafkaConsumer, KafkaProducer
 from shapely import from_geojson
+import shared
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
-AT_TYPE = "@type"
-ODS_TYPE = "ods:type"
-AT_ID = "@id"
-ODS_ID = "ods:ID"
 OA_BODY = "oa:hasBody"
 DWC_LOCALITY = "dwc:locality"
 OA_VALUE = "oa:value"
-LOCATION_PATH = "digitalSpecimenWrapper.ods:attributes.occurrences[*].location."
+LOCATION_PATH = "$.ods:hasEvent[*].ods:Location."
 USER_AGENT = "Distributed System of Scientific Collections"
 
 
@@ -26,26 +23,35 @@ def start_kafka() -> None:
     Start a kafka listener and process the messages by unpacking the image.
     When done it will republish the object, so it can be validated and storage by the processing service
     """
-    consumer = KafkaConsumer(os.environ.get('KAFKA_CONSUMER_TOPIC'), group_id=os.environ.get('KAFKA_CONSUMER_GROUP'),
-                             bootstrap_servers=[os.environ.get('KAFKA_CONSUMER_HOST')],
-                             value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+    consumer = KafkaConsumer(os.environ.get('KAFKA_CONSUMER_TOPIC'),
+                             group_id=os.environ.get('KAFKA_CONSUMER_GROUP'),
+                             bootstrap_servers=[
+                                 os.environ.get('KAFKA_CONSUMER_HOST')],
+                             value_deserializer=lambda m: json.loads(
+                                 m.decode('utf-8')),
                              enable_auto_commit=True)
-    producer = KafkaProducer(bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
-                             value_serializer=lambda m: json.dumps(m).encode('utf-8'))
+    producer = KafkaProducer(
+        bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
+        value_serializer=lambda m: json.dumps(m).encode('utf-8'))
     for msg in consumer:
         try:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
-            mark_job_as_running(json_value['jobId'])
-            specimen_data = json_value['object']
+            shared.mark_job_as_running(json_value.get('jobId'))
+            specimen_data = json_value.get('object')
             result, batch_metadata = run_georeference(specimen_data)
-            annotation_event = map_to_annotation_event(specimen_data, result, json_value['jobId'], json_value['batchingRequested'], batch_metadata)
-            send_updated_opends(annotation_event, producer)
+            annotation_event = map_to_annotation_event(specimen_data, result,
+                                                       json_value.get('jobId'),
+                                                       json_value.get(
+                                                           'batchingRequested'),
+                                                       batch_metadata)
+            publish_annotation_event(annotation_event, producer)
         except Exception as e:
             logging.error(e)
 
 
-def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], job_id: str, batching: bool, batch_metadata: List[Dict]) -> Dict:
+def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
+        job_id: str, batching: bool, batch_metadata: List[Dict]) -> Dict:
     """
     Map the result of the API call to a mas job record
     :param specimen_data: The JSON value of the Digital Specimen
@@ -55,11 +61,16 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
     :param batch_metadata: metadata to facilitate batching downstream
     :return: Returns a formatted annotation Record which includes the Job ID
     """
-    timestamp = timestamp_now()
+    timestamp = shared.timestamp_now()
     if results is None:
         annotations = list()
     else:
-        annotations = list(map(lambda result: map_to_annotation(specimen_data, result, timestamp, batching), results))
+        ods_agent = shared.get_agent()
+        annotations = list(
+            map(lambda result: map_result_to_annotation(specimen_data, result,
+                                                        timestamp, batching,
+                                                        ods_agent),
+                results))
     annotation_event = {
         "jobId": job_id,
         "annotations": annotations
@@ -69,7 +80,8 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
     return annotation_event
 
 
-def map_to_annotation(specimen_data: Dict, result: Dict[str, Any], timestamp: str, batching: bool) -> Dict:
+def map_result_to_annotation(specimen_data: Dict, result: Dict[str, Any],
+        timestamp: str, batching: bool, ods_agent: Dict) -> Dict:
     """
     Map the result of the Locality API call, to a georeference annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -82,38 +94,43 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, Any], timestamp: st
         point_coordinate = result['osm_result']['geometry']
     else:
         point_coordinate = {
-           'coordinates': [
-               result['geopick_result']['decimalLongitude'],
-               result['geopick_result']['decimalLatitude']
-           ]
+            'coordinates': [
+                result['geopick_result']['decimalLongitude'],
+                result['geopick_result']['decimalLatitude']
+            ]
         }
     oa_value = {
-        "georeference": {
-            "dwc:decimalLatitude": round(point_coordinate['coordinates'][1], 7),
-            "dwc:decimalLongitude": round(point_coordinate['coordinates'][0], 7),
-            "dwc:geodeticDatum": 'epsg:4326',
-            "dwc:coordinateUncertaintyInMeters": None if result['is_point'] else
-            result['geopick_result']['coordinateUncertaintyInMeters'],
-            "dwc:pointRadiusSpatialFit": None if result['is_point'] else result['geopick_result']['pointRadiusSpatialFit'],
-            "dwc:coordinatePrecision": 0.0000001,
-            "dwc:footprintSRS": 'epsg:4326',
-            "dwc:footprintWKT": from_geojson(json.dumps(result.get('osm_result').get('geometry'))).wkt,
-            "dwc:footprintSpatialFit": None if result['is_point'] else 1,
-            "dwc:georeferencedBy": f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
-            "dwc:georeferencedDate": timestamp,
-            "dwc:georeferenceSources": 'GeoPick v.1.0.4',
-            "dwc:georeferenceProtocol": 'Georeferencing Quick Reference Guide (Zermoglio et al. 2020, '
-                                        'https://doi.org/10.35035/e09p-h128)',
-            "dwc:georeferenceRemarks": f"This georeference was created by the GeoPick API. Based on OpenStreetMap API "
-                                       f"query of {result['queryString']}"
-        }
+        shared.AT_TYPE: "ods:GeoReference",
+        "dwc:decimalLatitude": round(point_coordinate['coordinates'][1], 7),
+        "dwc:decimalLongitude": round(point_coordinate['coordinates'][0],
+                                      7),
+        "dwc:geodeticDatum": 'epsg:4326',
+        "dwc:coordinateUncertaintyInMeters": None if result['is_point'] else
+        result['geopick_result']['coordinateUncertaintyInMeters'],
+        "dwc:pointRadiusSpatialFit": None if result['is_point'] else
+        result['geopick_result']['pointRadiusSpatialFit'],
+        "dwc:coordinatePrecision": 0.0000001,
+        "dwc:footprintSRS": 'epsg:4326',
+        "dwc:footprintWKT": from_geojson(
+            json.dumps(result.get('osm_result').get('geometry'))).wkt,
+        "dwc:footprintSpatialFit": None if result['is_point'] else 1,
+        "dwc:georeferencedBy": f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
+        "dwc:georeferencedDate": timestamp,
+        "dwc:georeferenceSources": 'GeoPick v.1.0.4',
+        "dwc:georeferenceProtocol": 'Georeferencing Quick Reference Guide (Zermoglio et al. 2020, '
+                                    'https://doi.org/10.35035/e09p-h128)',
+        "dwc:georeferenceRemarks": f"This georeference was created by the GeoPick API. Based on OpenStreetMap API "
+                                   f"query of {result['queryString']}"
+
     }
 
     return wrap_oa_value(oa_value, result, specimen_data, timestamp,
-                         f"$.occurrences[{result['occurrence_index']}].location.georeference", batching)
+                         f"$.occurrences[{result['occurrence_index']}].location.georeference",
+                         batching, ods_agent)
 
 
-def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, timestamp: str, oa_class: str, batching: bool) -> Dict:
+def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict,
+        timestamp: str, oa_class: str, batching: bool, ods_agent: Dict) -> Dict:
     """
     Generic method to wrap the oa_value into an annotation object
     :param oa_value: The value that contains the result of the MAS
@@ -124,63 +141,31 @@ def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict, t
     :param batching: batch functionality was requested
     :return: Returns an annotation with all the relevant metadata
     """
-    annotation = {
-        AT_TYPE: 'ods:Annotation',
-        'oa:motivation': 'ods:adding',
-        'dcterms:creator': {
-            AT_TYPE: 'prov:SoftwareAgent',
-            'schema:name': os.environ.get('MAS_NAME'),
-            AT_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
-        },
-        'dcterms:created': timestamp,
-        'oa:hasTarget': {
-            AT_ID: specimen_data[ODS_ID],
-            ODS_ID: specimen_data[ODS_ID],
-            AT_TYPE: specimen_data[AT_TYPE],
-            ODS_TYPE: "https://doi.org/21.T11148/894b1e6cad57e921764e",
-            'oa:hasSelector': {
-                AT_TYPE: 'ods:ClassSelector',
-                'ods:class': oa_class
-            },
-        },
-        OA_BODY: {
-            AT_TYPE: 'TextualBody',
-            OA_VALUE: [json.dumps(oa_value)],
-            'dcterms:references': result['queryString']
-        }
-    }
+    oa_selector = shared.build_class_selector(oa_class)
+    annotation = shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
+                                   specimen_data[shared.ODS_ID],
+                                   specimen_data[shared.ODS_TYPE],
+                                   result['queryString'])
     if batching:
         annotation['placeInBatch'] = result['occurrence_index']
     return annotation
 
-def mark_job_as_running(job_id: str):
-    query_string = os.environ.get('RUNNING_ENDPOINT') + os.environ.get('MAS_ID') + '/' + job_id + '/running'
-    requests.get(query_string)
 
-
-def timestamp_now() -> str:
-    """
-    Create a timestamp in the correct format
-    :return: The timestamp as a string
-    """
-    timestamp = str(datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
-    timestamp_cleaned = timestamp[:-3]
-    timestamp_timezone = timestamp_cleaned + 'Z'
-    return timestamp_timezone
-
-
-def send_updated_opends(annotation_event: Union[None, Dict], producer: KafkaProducer) -> None:
+def publish_annotation_event(annotation_event: Union[None, Dict],
+        producer: KafkaProducer) -> None:
     """
     Send the annotation to the Kafka topic
     :param annotation_event: The formatted annotationRecord
     :param producer: The initiated Kafka producer
     :return: Will not return anything
     """
-    logging.info('Publishing annotation: ' + reduce_event_for_printing(annotation_event))
+    logging.info(
+        'Publishing annotation: ' + reduce_event_for_printing(annotation_event))
     producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), annotation_event)
 
 
-def run_georeference(specimen_data: Dict) -> Tuple[List[Dict[str, Any]], List[Dict]]:
+def run_georeference(specimen_data: Dict) -> Tuple[
+    List[Dict[str, Any]], List[Dict]]:
     """
     Calls georeference APIs. First of Open Street Map to get the initial georeference of the locality.
     If response is a point location it is immediately returned.
@@ -195,14 +180,16 @@ def run_georeference(specimen_data: Dict) -> Tuple[List[Dict[str, Any]], List[Di
     for index, event in enumerate(events):
         if event.get('ods:Location') is not None:
             location = event.get('ods:Location')
-            query_string, batch_metadata_unit = build_query_string(location, index)
+            query_string, batch_metadata_unit = build_query_string(location,
+                                                                   index)
             headers = {
                 'User-Agent': USER_AGENT
             }
             response = requests.get(query_string, headers=headers)
             response_json = response.json()
             if len(response_json.get('features')) == 0:
-                logging.info("No results for this locality where found: " + query_string)
+                logging.info(
+                    "No results for this locality where found: " + query_string)
             else:
                 batch_metadata.append(batch_metadata_unit)
                 first_feature = response_json.get('features')[0]
@@ -250,7 +237,8 @@ def build_query_string(location: Dict, index: int) -> Tuple[str, Dict]:
                 'inputValue': ''
             }
         )
-    for field_name in ['dwc:municipality', 'dwc:county', 'dwc:stateProvince', 'dwc:country']:
+    for field_name in ['dwc:municipality', 'dwc:county', 'dwc:stateProvince',
+                       'dwc:country']:
         next_field, search_param = get_supporting_info(field_name, location)
         if trim_comma and next_field:
             trim_comma = False
@@ -270,6 +258,7 @@ def split_on_commas(location_value: str) -> str:
     else:
         return location_value + '&format=geojson&polygon_geojson=1'
 
+
 def get_supporting_info(field_name: str, location: Dict) -> Tuple[str, Dict]:
     """
     Get the supporting information from the specimen data
@@ -280,7 +269,9 @@ def get_supporting_info(field_name: str, location: Dict) -> Tuple[str, Dict]:
     if location.get(field_name) is None:
         return '', build_batch_metadata_search_param(field_name, '')
     else:
-        return ',' + split_on_commas(location.get(field_name)), build_batch_metadata_search_param(field_name, location.get(field_name))
+        return ',' + split_on_commas(
+            location.get(field_name)), build_batch_metadata_search_param(
+            field_name, location.get(field_name))
 
 
 def build_batch_metadata_search_param(field_name: str, field_val: str) -> Dict:
@@ -302,7 +293,8 @@ def run_geopick_api(feature) -> Dict:
     :return: The result of the GeoPick API call
     """
     querystring = 'https://geopick.gbif.org/v1/georeference-dwc'
-    response = requests.post(querystring, json=feature, headers=get_geopick_auth())
+    response = requests.post(querystring, json=feature,
+                             headers=get_geopick_auth())
     response_json = response.json()
     return response_json
 
@@ -313,8 +305,8 @@ def get_geopick_auth():
     :return: Authorization header
     """
     auth_info = {
-        'username':  os.environ.get('GEOPICK_USER'),
-        'password': os.environ.get('GEOPICK_PWD')
+        'username': os.environ.get('geopick_user'),
+        'password': os.environ.get('geopick_password')
     }
     headers = {
         'Content-Type': 'application/json',
@@ -339,24 +331,33 @@ def run_local(example: str):
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
-    specimen = json.loads(response.content)['data']
-    specimen_data = specimen['attributes']
+    specimen = json.loads(response.content).get('data')
+    specimen_data = specimen.get('attributes')
     result, batch_metadata = run_georeference(specimen_data)
-    annotation_event = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()), True, batch_metadata)
-    logging.info('Created annotations: ' + reduce_event_for_printing(annotation_event))
+    annotation_event = map_to_annotation_event(specimen_data, result,
+                                               str(uuid.uuid4()), True,
+                                               batch_metadata)
+    logging.info(
+        'Created annotations: ' + reduce_event_for_printing(annotation_event))
 
 
 def reduce_event_for_printing(annotation_event: dict) -> str:
     printed_event = annotation_event
-    printed_event['annotations'] = list(map(lambda a: reduce_annotation_size_for_printing(a), annotation_event['annotations']))
+    printed_event['annotations'] = list(
+        map(lambda a: reduce_annotation_size_for_printing(a),
+            annotation_event['annotations']))
     return json.dumps(printed_event, indent=2)
 
-def reduce_annotation_size_for_printing(annotation : dict) -> dict:
+
+def reduce_annotation_size_for_printing(annotation: dict) -> dict:
     printed_annotation = annotation
-    printed_annotation[OA_BODY][OA_VALUE] = list(map(lambda v : v[:200] + '...' + v[len(v)-200:], annotation[OA_BODY][OA_VALUE]))
+    printed_annotation[OA_BODY][OA_VALUE] = list(
+        map(lambda v: v[:200] + '...' + v[len(v) - 200:],
+            annotation[OA_BODY][OA_VALUE]))
     return printed_annotation
 
 
 if __name__ == '__main__':
     start_kafka()
-    #run_local('https://dev.dissco.tech/api/v1/digital-specimen/TEST/RRH-DLL-K87')
+    # run_local(
+    #    'https://dev.dissco.tech/api/v1/digital-specimen/TEST/RRH-DLL-K87')

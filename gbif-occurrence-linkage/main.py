@@ -2,16 +2,13 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
 from typing import Dict
 
 import requests
 from kafka import KafkaConsumer, KafkaProducer
+import shared
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
-
-ODS_TYPE = "ods:type"
-ODS_ID = "ods:id"
 
 
 def start_kafka() -> None:
@@ -21,24 +18,30 @@ def start_kafka() -> None:
     """
     consumer = KafkaConsumer(os.environ.get('KAFKA_CONSUMER_TOPIC'),
                              group_id=os.environ.get('KAFKA_CONSUMER_GROUP'),
-                             bootstrap_servers=[os.environ.get('KAFKA_CONSUMER_HOST')],
-                             value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+                             bootstrap_servers=[
+                                 os.environ.get('KAFKA_CONSUMER_HOST')],
+                             value_deserializer=lambda m: json.loads(
+                                 m.decode('utf-8')),
                              enable_auto_commit=True)
-    producer = KafkaProducer(bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
-                             value_serializer=lambda m: json.dumps(m).encode('utf-8'))
+    producer = KafkaProducer(
+        bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
+        value_serializer=lambda m: json.dumps(m).encode('utf-8'))
     for msg in consumer:
         try:
             logging.info('Received message: ' + str(msg.value))
             json_value = msg.value
-            specimen_data = json_value['object']['digitalSpecimen']
+            shared.mark_job_as_running(json_value.get('jobId'))
+            specimen_data = json_value.get('object')
             result = run_api_call(specimen_data)
-            annotations = map_to_annotation(specimen_data, result, json_value["jobId"])
-            send_updated_opends(annotations, producer)
+            annotation_event = map_to_annotation_event(specimen_data, result,
+                                                       json_value.get('jobId'))
+            publish_annotation_event(annotation_event, producer)
         except Exception as e:
             logging.exception(e)
 
 
-def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) -> dict:
+def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str],
+                            job_id: str) -> dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -46,58 +49,26 @@ def map_to_annotation(specimen_data: Dict, result: Dict[str, str], job_id: str) 
     :param job_id: The job ID of the MAS
     :return: Returns a formatted annotation Record which includes the Job ID
     """
-    timestamp = timestamp_now()
-    oa_value = {
-        'entityRelationships': {
-            'entityRelationshipType': 'hasGbifID',
-            'objectEntityIri': f'https://www.gbif.org/occurrence/{result["gbifId"]}',
-            'entityRelationshipDate': timestamp,
-            'entityRelationshipCreatorName': os.environ.get('MAS_NAME'),
-            'entityRelationshipCreatorId': f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
-        }
+    timestamp = shared.timestamp_now()
+    ods_agent = shared.get_agent()
+    oa_value = shared.map_to_entity_relationship('hasGbifID',
+                                                 f'https://www.gbif.org/occurrence/{result.get("gbifID")}',
+                                                 timestamp, ods_agent)
+    oa_selector = shared.build_class_selector('$.ods:hasEntityRelationship')
+    annotation = shared.map_to_annotation(ods_agent, timestamp, oa_value,
+                                          oa_selector,
+                                          specimen_data[shared.ODS_ID],
+                                          specimen_data[shared.ODS_TYPE],
+                                          result['queryString'])
+
+    return {
+        'jobId': job_id,
+        'annotations': [annotation]
     }
-    annotation = {
-        'rdf:type': 'Annotation',
-        'oa:motivation': 'ods:adding',
-        'oa:creator': {
-            ODS_TYPE: 'oa:SoftwareAgent',
-            'foaf:name': os.environ.get('MAS_NAME'),
-            ODS_ID: f"https://hdl.handle.net/{os.environ.get('MAS_ID')}"
-        },
-        'dcterms:created': timestamp,
-        'oa:target': {
-            ODS_ID: specimen_data[ODS_ID],
-            ODS_TYPE: specimen_data[ODS_TYPE],
-            'oa:selector': {
-                ODS_TYPE: 'ClassSelector',
-                'oa:class': '$.entityRelationships'
-            },
-        },
-        'oa:body': {
-            ODS_TYPE: 'TextualBody',
-            'oa:value': [json.dumps(oa_value)],
-            'dcterms:reference': result['queryString']
-        }
-    }
-    mas_job_record = {
-        "jobId": job_id,
-        "annotations": [annotation]
-    }
-    return mas_job_record
 
 
-def timestamp_now() -> str:
-    """
-    Create a timestamp in the correct format
-    :return: The timestamp as a string
-    """
-    timestamp = str(datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
-    timestamp_cleaned = timestamp[:-3]
-    timestamp_timezone = timestamp_cleaned + 'Z'
-    return timestamp_timezone
-
-
-def send_updated_opends(annotation: Dict, producer: KafkaProducer) -> None:
+def publish_annotation_event(annotation: Dict,
+                             producer: KafkaProducer) -> None:
     """
     Send the annotation to the Kafka topic
     :param annotation: The formatted annotationRecord
@@ -120,15 +91,21 @@ def run_api_call(specimen_data: Dict) -> Dict[str, str]:
                     f'&basisOfRecord={specimen_data["dwc:basisOfRecord"]}')
     response = requests.get(query_string)
     response_json = json.loads(response.content)
-    if response_json['count'] == 1:
-        logging.info('Successfully retrieved a single result from GBIF based on the identifiers')
-        return {'queryString': query_string, 'gbifId': response_json['results'][0]['gbifID']}
+    if response_json.get('count') == 1:
+        logging.info(
+            'Successfully retrieved a single result from GBIF based on the identifiers')
+        return {'queryString': query_string,
+                'gbifID': response_json.get('results')[0].get('gbifID')}
     elif response_json['count'] == 0:
-        logging.info('No results were returned, unable to create a relationship')
-        return {'queryString': query_string, 'error_message': 'Failed to make the match, no match could be created'}
+        logging.info(
+            'No results were returned, unable to create a relationship')
+        return {'queryString': query_string,
+                'error_message': 'Failed to make the match, no match could be created'}
     else:
-        logging.info('More than one result returned, unable to create a relationship')
-        return {'queryString': query_string, 'error_message': 'Failed to make the match, too many candidates'}
+        logging.info(
+            'More than one result returned, unable to create a relationship')
+        return {'queryString': query_string,
+                'error_message': 'Failed to make the match, too many candidates'}
 
 
 def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:
@@ -138,11 +115,15 @@ def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:
     :return: The mapped relevant_identifiers (occurrenceId and catalogNumber)
     """
     relevant_identifiers = {}
-    for identifier in specimen_data['identifiers']:
-        if identifier.get('???:identifierType') in ['dwc:occurrenceID', 'abcd:unitGUID']:
-            relevant_identifiers['occurrenceId'] = identifier.get('???:identifierValue')
-        if identifier.get('???:identifierType') in ['dwc:catalogNumber', 'abcd:unitID']:
-            relevant_identifiers['catalogNumber'] = identifier.get('???:identifierValue')
+    for identifier in specimen_data.get('ods:hasIdentifier'):
+        if identifier.get('dcterms:title') in ['dwc:occurrenceID',
+                                               'abcd:unitGUID']:
+            relevant_identifiers['occurrenceId'] = identifier.get(
+                'dcterms:identifier')
+        if identifier.get('dcterms:title') in ['dwc:catalogNumber',
+                                               'abcd:unitID']:
+            relevant_identifiers['catalogNumber'] = identifier.get(
+                "dcterms:identifier")
     return relevant_identifiers
 
 
@@ -152,16 +133,17 @@ def run_local(example: str) -> None:
     Will call the DiSSCo API to retrieve the specimen data.
     A record ID will be created but can only be used for testing.
     :param example: The full URL of the Digital Specimen to the API (for example
-    https://dev.dissco.tech/api/v1/specimens/TEST/M88-SJK-MDP
+    https://dev.dissco.tech/api/v1/digital-specimen/TEST/TYB-XNH-53H
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
-    attributes = json.loads(response.content)['data']['attributes']
-    specimen_data = attributes['digitalSpecimen']
+    specimen_data = json.loads(response.content).get('data').get('attributes')
     result = run_api_call(specimen_data)
-    annotations = map_to_annotation(specimen_data, result, str(uuid.uuid4()))
-    logging.info('Created annotations: ' + str(annotations))
+    annotations = map_to_annotation_event(specimen_data, result,
+                                          str(uuid.uuid4()))
+    logging.info('Created annotations: ' + json.dumps(annotations, indent=2))
 
 
 if __name__ == '__main__':
-    start_kafka()
+    #start_kafka()
+    run_local('https://dev.dissco.tech/api/v1/digital-specimen/TEST/TYB-XNH-53H')
