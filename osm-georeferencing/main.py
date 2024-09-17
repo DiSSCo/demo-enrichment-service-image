@@ -11,11 +11,11 @@ from shapely import from_geojson
 import shared
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
-OA_BODY = "oa:hasBody"
-DWC_LOCALITY = "dwc:locality"
-OA_VALUE = "oa:value"
-LOCATION_PATH = "$.ods:hasEvent[*].ods:Location."
-USER_AGENT = "Distributed System of Scientific Collections"
+OA_BODY = 'oa:hasBody'
+DWC_LOCALITY = 'dwc:locality'
+OA_VALUE = 'oa:value'
+LOCATION_PATH = "$['ods:hasEvent'][*]['ods:Location]"
+USER_AGENT = 'Distributed System of Scientific Collections'
 
 
 def start_kafka() -> None:
@@ -72,11 +72,11 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
                                                         ods_agent),
                 results))
     annotation_event = {
-        "jobId": job_id,
-        "annotations": annotations
+        'jobId': job_id,
+        'annotations': annotations
     }
     if batching:
-        annotation_event["batchMetadata"] = batch_metadata
+        annotation_event['batchMetadata'] = batch_metadata
     return annotation_event
 
 
@@ -100,24 +100,24 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, Any],
             ]
         }
     oa_value = {
-        shared.AT_TYPE: "ods:GeoReference",
-        "dwc:decimalLatitude": round(point_coordinate['coordinates'][1], 7),
-        "dwc:decimalLongitude": round(point_coordinate['coordinates'][0],
+        shared.AT_TYPE: 'ods:GeoReference',
+        'dwc:decimalLatitude': round(point_coordinate['coordinates'][1], 7),
+        'dwc:decimalLongitude': round(point_coordinate['coordinates'][0],
                                       7),
-        "dwc:geodeticDatum": 'epsg:4326',
-        "dwc:coordinateUncertaintyInMeters": None if result['is_point'] else
+        'dwc:geodeticDatum': 'epsg:4326',
+        'dwc:coordinateUncertaintyInMeters': None if result['is_point'] else
         result['geopick_result']['coordinateUncertaintyInMeters'],
-        "dwc:pointRadiusSpatialFit": None if result['is_point'] else
+        'dwc:pointRadiusSpatialFit': None if result['is_point'] else
         result['geopick_result']['pointRadiusSpatialFit'],
-        "dwc:coordinatePrecision": 0.0000001,
-        "dwc:footprintSRS": 'epsg:4326',
-        "dwc:footprintWKT": from_geojson(
+        'dwc:coordinatePrecision': 0.0000001,
+        'dwc:footprintSRS': 'epsg:4326',
+        'dwc:footprintWKT': from_geojson(
             json.dumps(result.get('osm_result').get('geometry'))).wkt,
-        "dwc:footprintSpatialFit": None if result['is_point'] else 1,
-        "dwc:georeferencedBy": f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
-        "dwc:georeferencedDate": timestamp,
-        "dwc:georeferenceSources": 'GeoPick v.1.0.4',
-        "dwc:georeferenceProtocol": 'Georeferencing Quick Reference Guide (Zermoglio et al. 2020, '
+        'dwc:footprintSpatialFit': None if result['is_point'] else 1,
+        'dwc:georeferencedBy': f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
+        'dwc:georeferencedDate': timestamp,
+        'dwc:georeferenceSources': 'GeoPick v.1.0.4',
+        'dwc:georeferenceProtocol': 'Georeferencing Quick Reference Guide (Zermoglio et al. 2020, '
                                     'https://doi.org/10.35035/e09p-h128)',
         "dwc:georeferenceRemarks": f"This georeference was created by the GeoPick API. Based on OpenStreetMap API "
                                    f"query of {result['queryString']}"
@@ -125,7 +125,7 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, Any],
     }
 
     return wrap_oa_value(oa_value, result, specimen_data, timestamp,
-                         f"$.occurrences[{result['occurrence_index']}].location.georeference",
+                         f"$['ods:hasEvent']['{result['occurrence_index']}']['ods:Location']['ods:GeoReference']",
                          batching, ods_agent)
 
 
@@ -189,7 +189,7 @@ def run_georeference(specimen_data: Dict) -> Tuple[
             response_json = response.json()
             if len(response_json.get('features')) == 0:
                 logging.info(
-                    "No results for this locality where found: " + query_string)
+                    'No results for this locality where found: ' + query_string)
             else:
                 batch_metadata.append(batch_metadata_unit)
                 first_feature = response_json.get('features')[0]
@@ -224,7 +224,7 @@ def build_query_string(location: Dict, index: int) -> Tuple[str, Dict]:
         trim_comma = False
         batch_metadata['searchParams'].append(
             {
-                'inputField': LOCATION_PATH + DWC_LOCALITY,
+                'inputField': LOCATION_PATH + "['" + DWC_LOCALITY + "']",
                 'inputValue': location[DWC_LOCALITY]
             }
         )
@@ -233,7 +233,7 @@ def build_query_string(location: Dict, index: int) -> Tuple[str, Dict]:
         trim_comma = True
         batch_metadata['searchParams'].append(
             {
-                'inputField': LOCATION_PATH + DWC_LOCALITY,
+                'inputField': LOCATION_PATH + "[" + DWC_LOCALITY + "]",
                 'inputValue': ''
             }
         )

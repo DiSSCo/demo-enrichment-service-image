@@ -54,7 +54,7 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str],
     oa_value = shared.map_to_entity_relationship('hasGbifID',
                                                  f'https://www.gbif.org/occurrence/{result.get("gbifID")}',
                                                  timestamp, ods_agent)
-    oa_selector = shared.build_class_selector('$.ods:hasEntityRelationship')
+    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationship']")
     annotation = shared.map_to_annotation(ods_agent, timestamp, oa_value,
                                           oa_selector,
                                           specimen_data[shared.ODS_ID],

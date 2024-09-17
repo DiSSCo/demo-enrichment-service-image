@@ -81,7 +81,7 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict, timestamp: str,
         timestamp,
         ods_agent
     )
-    oa_selector = shared.build_class_selector('ods:hasEntityRelationship')
+    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationship']")
     return shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
                              specimen_data[shared.ODS_ID],
                              specimen_data[shared.ODS_TYPE], result['queryString'])

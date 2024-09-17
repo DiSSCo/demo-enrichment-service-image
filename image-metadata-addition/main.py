@@ -89,7 +89,7 @@ def create_annotation(image_assertions: List[Dict[str, Any]],
     """
     annotations = list()
     ods_agent = shared.get_agent()
-    oa_selector = shared.build_class_selector("$ods:hasAssertion")
+    oa_selector = shared.build_class_selector("$['ods:hasAssertion']")
 
     for assertion in image_assertions:
         annotation = shared.map_to_annotation(ods_agent, timestamp, assertion,
@@ -101,7 +101,7 @@ def create_annotation(image_assertions: List[Dict[str, Any]],
     additional_info_annotation = shared.map_to_annotation(ods_agent, timestamp,
                                                           additional_info,
                                                           shared.build_field_selector(
-                                                              DCTERMS_FORMAT),
+                                                              "$['" + DCTERMS_FORMAT + "']"),
                                                           digital_media[
                                                               shared.ODS_ID],
                                                           digital_media[
