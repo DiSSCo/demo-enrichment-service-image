@@ -142,7 +142,7 @@ def run_local(example: str) -> None:
     Will call the DiSSCo API to retrieve the specimen data.
     A record ID will be created but can only be used for testing.
     :param example: The full URL of the Digital Specimen to the API (for example
-    https://dev.dissco.tech/api/v1/digitalmedia/TEST/E82-RZT-GP9
+    https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
@@ -166,4 +166,4 @@ if __name__ == '__main__':
     predictor = DefaultPredictor(cfg)
 
     start_kafka(predictor)
-    # run_local("https://sandbox.dissco.tech/api/v1/digitalmedia/SANDBOX/72P-6SY-Q94")
+    # run_local("https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90")

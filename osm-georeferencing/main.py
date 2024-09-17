@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
 from typing import Dict, Any, List, Union, Tuple
 
 import requests

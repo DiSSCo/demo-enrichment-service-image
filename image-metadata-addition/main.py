@@ -55,6 +55,7 @@ def run_local(example: str) -> None:
     Will call the DiSSCo API to retrieve the specimen data.
     A record ID will be created but can only be used for testing.
     :param example: The full URL of the Digital Specimen to the API (for example
+    https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90)
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
@@ -190,4 +191,4 @@ def build_assertion(timestamp: str, ods_agent: Dict, msmt_type: str,
 
 if __name__ == '__main__':
     start_kafka()
-    # run_local('https://dev.dissco.tech/api/v1/digital-media/TEST/95K-GH1-562')
+    # run_local('https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90')
