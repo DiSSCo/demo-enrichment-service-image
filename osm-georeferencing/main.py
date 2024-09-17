@@ -13,7 +13,7 @@ logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 OA_BODY = 'oa:hasBody'
 DWC_LOCALITY = 'dwc:locality'
 OA_VALUE = 'oa:value'
-LOCATION_PATH = "$['ods:hasEvent'][*]['ods:Location]"
+LOCATION_PATH = "$['ods:hasEvent'][*]['ods:Location']"
 USER_AGENT = 'Distributed System of Scientific Collections'
 
 
@@ -280,7 +280,7 @@ def build_batch_metadata_search_param(field_name: str, field_val: str) -> Dict:
     :return: Search param for
     """
     return {
-        'inputField': LOCATION_PATH + field_name,
+        'inputField': LOCATION_PATH + "['" + field_name + "']",
         'inputValue': field_val
     }
 
