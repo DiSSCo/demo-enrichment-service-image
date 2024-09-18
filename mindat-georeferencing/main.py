@@ -87,7 +87,7 @@ def build_batch_metadata(locality: str, place_in_batch: int) -> Dict[str, Any]:
         "ods:placeInBatch": place_in_batch,
         "searchParams": [
             {
-                "inputField": "$.ods:hasEvent[*].ods:Location.dwc:locality",
+                "inputField": "$['ods:hasEvent'][*]['ods:Location']['dwc:locality']",
                 "inputValue": locality
             }
         ]
@@ -112,7 +112,7 @@ def map_to_entity_relationship_annotation(specimen_data: Dict,
         timestamp, ods_agent
     )
     return wrap_oa_value(oa_value, result, specimen_data, timestamp,
-                         '$.ods:hasEntityRelationship', batching_requested,
+                         "$['ods:hasEntityRelationship']", batching_requested,
                          ods_agent)
 
 
@@ -142,7 +142,7 @@ def map_to_georeference_annotation(specimen_data: Dict, result: Dict[str, Any],
     }
 
     return wrap_oa_value(oa_value, result, specimen_data, timestamp,
-                         f"$.ods:hasEvent[{result['result_index']}].ods:Location.ods:GeoReference",
+                         f"$['ods:hasEvent']['{result['result_index']}']['ods:Location']['ods:GeoReference']",
                          batching_requested, ods_agent)
 
 

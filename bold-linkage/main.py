@@ -79,13 +79,13 @@ def map_result_to_annotation(
     """
     ods_agent = shared.get_agent()
     oa_value = shared.map_to_entity_relationship('hasBOLDEUProcessID',
-                                          f'https://boldsystems.eu/record/{result["processid"]}',
+                                          f"https://boldsystems.eu/record/{result['processid']}",
                                           timestamp, ods_agent)
-    oa_selector = shared.build_class_selector('$.ods:hasEntityRelationship')
+    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationship']")
     return shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
                              specimen_data[shared.ODS_ID],
                              specimen_data[shared.ODS_TYPE],
-                             result["queryString"])
+                             result['queryString'])
 
 
 def publish_annotation_event(annotation_event: Dict, producer: KafkaProducer) -> None:
