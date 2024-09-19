@@ -22,9 +22,10 @@ def build_secret(name: str, secret_key_ref: str) -> Dict[str, str]:
 
 def build_attributes(name: str, description: str, image: str, tag: str,
                      target_filter: Dict[str, Any], batching: bool,
-                     environment: List[Dict[str, Any]],
-                     secrets: List[Dict[str, Any]]) -> \
+                     secrets=None) -> \
         Dict[str, Any]:
+    if secrets is None:
+        secrets = []
     return {
         'data': {
             'type': 'ods:MachineAnnotationService',
@@ -38,7 +39,7 @@ def build_attributes(name: str, description: str, image: str, tag: str,
                 'schema:programmingLanguage': 'python',
                 'schema:license': 'https://www.apache.org/licenses/LICENSE-2.0',
                 'ods:batchingPermitted': batching,
-                'ods:hasEnvironmentalVariable': environment,
+                'ods:hasEnvironmentalVariable': [],
                 'ods:hasSecretVariable': secrets
             }
         }
@@ -55,13 +56,12 @@ def bold() -> Dict[str, Any]:
         ODS_TYPE: [SPECIMEN_TYPE]
     }
     batching = False
-    environment = []
     secrets = [
         build_secret('API_USER', 'bold-api-user'),
         build_secret('API_PASSWORD', 'bold-api-password')
     ]
     return build_attributes(name, description, image, tag, target_filter,
-                            batching, environment, secrets)
+                            batching, secrets)
 
 
 def ena() -> Dict[str, Any]:
@@ -75,10 +75,8 @@ def ena() -> Dict[str, Any]:
         ODS_TYPE: [SPECIMEN_TYPE]
     }
     batching = False
-    environment = []
-    secrets = []
     return build_attributes(name, description, image, tag, target_filter,
-                            batching, environment, secrets)
+                            batching)
 
 
 def gbif() -> Dict[str, Any]:
@@ -92,28 +90,8 @@ def gbif() -> Dict[str, Any]:
         ODS_TYPE: [SPECIMEN_TYPE]
     }
     batching = False
-    environment = []
-    secrets = []
     return build_attributes(name, description, image, tag, target_filter,
-                            batching, environment, secrets)
-
-
-def gbif() -> Dict[str, Any]:
-    name = 'gbif-linkage'
-    description = 'Links specimen to an occurrence in Global Biodiversity Information Facility (GBIF)'
-    image = 'public.ecr.aws/dissco/gbif-occurrence-linkage'
-    tag = 'latest'
-    target_filter = {
-        HAS_IDENTIFIER: ['*'],
-        "$['dwc:basisOfRecord']": ['*'],
-        ODS_TYPE: [SPECIMEN_TYPE]
-    }
-    batching = False
-    environment = []
-    secrets = []
-    return build_attributes(name, description, image, tag, target_filter,
-                            batching, environment, secrets)
-
+                            batching)
 
 def geocase() -> Dict[str, Any]:
     name = 'geocase-linkage'
@@ -125,10 +103,8 @@ def geocase() -> Dict[str, Any]:
         ODS_TYPE: [SPECIMEN_TYPE]
     }
     batching = False
-    environment = []
-    secrets = []
     return build_attributes(name, description, image, tag, target_filter,
-                            batching, environment, secrets)
+                            batching)
 
 
 def plant_organ() -> Dict[str, Any]:
@@ -141,10 +117,8 @@ def plant_organ() -> Dict[str, Any]:
         ODS_TYPE: [MEDIA_TYPE]
     }
     batching = False
-    environment = []
-    secrets = []
     return build_attributes(name, description, image, tag, target_filter,
-                            batching, environment, secrets)
+                            batching)
 
 
 def image_metadata() -> Dict[str, Any]:
@@ -157,10 +131,8 @@ def image_metadata() -> Dict[str, Any]:
         ODS_TYPE: [MEDIA_TYPE]
     }
     batching = False
-    environment = []
-    secrets = []
     return build_attributes(name, description, image, tag, target_filter,
-                            batching, environment, secrets)
+                            batching)
 
 
 def mindat() -> Dict[str, Any]:
@@ -173,12 +145,11 @@ def mindat() -> Dict[str, Any]:
         ODS_TYPE: [SPECIMEN_TYPE]
     }
     batching = True
-    environment = []
     secrets = [
         build_secret('API_KEY', 'mindat-api-key')
     ]
     return build_attributes(name, description, image, tag, target_filter,
-                            batching, environment, secrets)
+                            batching, secrets)
 
 
 def osm() -> Dict[str, Any]:
@@ -191,13 +162,12 @@ def osm() -> Dict[str, Any]:
         ODS_TYPE: [SPECIMEN_TYPE]
     }
     batching = True
-    environment = []
     secrets = [
         build_secret('GEOPICK_USER', 'geopick-user'),
         build_secret('GEOPICK_PASSWORD', 'geopick-password')
     ]
     return build_attributes(name, description, image, tag, target_filter,
-                            batching, environment, secrets)
+                            batching, secrets)
 
 
 def get_token() -> str:
