@@ -88,7 +88,7 @@ def run_api_call(specimen_data: Dict) -> Dict[str, str]:
     identifiers = get_identifiers_from_object(specimen_data)
     query_string = (f'https://api.gbif.org/v1/occurrence/search?occurrenceID='
                     f'{identifiers.get("occurrenceId")}&catalogNumber={identifiers.get("catalogNumber")}'
-                    f'&basisOfRecord={specimen_data["dwc:basisOfRecord"]}')
+                    f'&basisOfRecord={specimen_data.get("dwc:basisOfRecord")}')
     response = requests.get(query_string)
     response_json = json.loads(response.content)
     if response_json.get('count') == 1:

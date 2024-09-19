@@ -304,8 +304,8 @@ def get_geopick_auth():
     :return: Authorization header
     """
     auth_info = {
-        'username': os.environ.get('geopick_user'),
-        'password': os.environ.get('geopick_password')
+        'username': os.environ.get('GEOPICK_USER'),
+        'password': os.environ.get('GEOPICK_PASSWORD')
     }
     headers = {
         'Content-Type': 'application/json',
