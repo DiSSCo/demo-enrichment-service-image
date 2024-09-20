@@ -5,10 +5,12 @@ on:
       - main
     paths:
       - 'bold-linkage/**'
+      - 'shared/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - 'bold-linkage/**'
+      - 'shared/**'
 jobs:
   build:
     runs-on: ubuntu-latest
