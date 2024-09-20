@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, Tuple
 import os
 import requests
 import logging
@@ -26,7 +26,7 @@ def build_attributes(name: str, description: str, image: str, tag: str,
         Dict[str, Any]:
     if secrets is None:
         secrets = []
-    return {
+    request = {
         'data': {
             'type': 'ods:MachineAnnotationService',
             'attributes': {
@@ -44,9 +44,11 @@ def build_attributes(name: str, description: str, image: str, tag: str,
             }
         }
     }
+    return request
 
 
-def bold() -> Dict[str, Any]:
+def bold() -> Tuple[Dict[str, Any], str]:
+    test_id = 'TEST/72M-NDX-140'
     name = 'bold-linkage'
     description = 'Links specimen to an entry in the Barcode of Life Data System (BOLD)'
     image = 'public.ecr.aws/dissco/bold-linkage'
@@ -61,10 +63,11 @@ def bold() -> Dict[str, Any]:
         build_secret('API_PASSWORD', 'bold-api-password')
     ]
     return build_attributes(name, description, image, tag, target_filter,
-                            batching, secrets)
+                            batching, secrets), test_id
 
 
-def ena() -> Dict[str, Any]:
+def ena() -> Tuple[Dict[str, Any], str]:
+    test_id = 'TEST/FSJ-G4M-L47'
     name = 'ena-linkage'
     description = 'Links specimen to an entry in the European Nucleotide Archive (ENA)'
     image = 'public.ecr.aws/dissco/ena-linkage'
@@ -76,11 +79,12 @@ def ena() -> Dict[str, Any]:
     }
     batching = False
     return build_attributes(name, description, image, tag, target_filter,
-                            batching)
+                            batching, None), test_id
 
 
-def gbif() -> Dict[str, Any]:
-    name = 'gbig-linkage'
+def gbif() -> Tuple[Dict[str, Any], str]:
+    test_id = 'TEST/KV5-4SJ-384'
+    name = 'gbif-linkage'
     description = 'Links specimen to an occurrence in Global Biodiversity Information Facility (GBIF)'
     image = 'public.ecr.aws/dissco/gbif-occurrence-linkage'
     tag = 'latest'
@@ -91,9 +95,11 @@ def gbif() -> Dict[str, Any]:
     }
     batching = False
     return build_attributes(name, description, image, tag, target_filter,
-                            batching)
+                            batching, None), test_id
 
-def geocase() -> Dict[str, Any]:
+
+def geocase() -> Tuple[Dict[str, Any], str]:
+    test_id = 'TEST/37R-AG5-6KV'
     name = 'geocase-linkage'
     description = 'Links specimen to an entity in  Geoscience Collections Access Service (GeoCASe)'
     image = 'public.ecr.aws/dissco/geocase-linkage'
@@ -104,10 +110,11 @@ def geocase() -> Dict[str, Any]:
     }
     batching = False
     return build_attributes(name, description, image, tag, target_filter,
-                            batching)
+                            batching, None), test_id
 
 
-def plant_organ() -> Dict[str, Any]:
+def plant_organ() -> Tuple[Dict[str, Any], str]:
+    test_id = 'TEST/BEE-FF5-41X'
     name = 'herbarium-sheet-plant-organ-detection'
     description = 'Uses machine learning classifier to identify plant organs on herbarium sheets'
     image = 'public.ecr.aws/dissco/geocase-linkage'
@@ -118,10 +125,11 @@ def plant_organ() -> Dict[str, Any]:
     }
     batching = False
     return build_attributes(name, description, image, tag, target_filter,
-                            batching)
+                            batching, None), test_id
 
 
-def image_metadata() -> Dict[str, Any]:
+def image_metadata() -> Tuple[Dict[str, Any], str]:
+    test_id = 'TEST/QNH-4YQ-ZD4'
     name = 'image-metadata-addition'
     description = 'Uses the Python Imaging Library to add additional image metadata (size, format, etc.) to digital media'
     image = 'public.ecr.aws/dissco/image-metadata-addition'
@@ -132,10 +140,11 @@ def image_metadata() -> Dict[str, Any]:
     }
     batching = False
     return build_attributes(name, description, image, tag, target_filter,
-                            batching)
+                            batching, None), test_id
 
 
-def mindat() -> Dict[str, Any]:
+def mindat() -> Tuple[Dict[str, Any], str]:
+    test_id = 'TEST/3VL-80Q-8NK'
     name = 'mindat-georeferencing'
     description = 'Uses the Mindat georeferencing API to add Georeference coordinates'
     image = 'public.ecr.aws/dissco/mindat-georeferencing'
@@ -149,10 +158,11 @@ def mindat() -> Dict[str, Any]:
         build_secret('API_KEY', 'mindat-api-key')
     ]
     return build_attributes(name, description, image, tag, target_filter,
-                            batching, secrets)
+                            batching, secrets), test_id
 
 
-def osm() -> Dict[str, Any]:
+def osm() -> Tuple[Dict[str, Any], str]:
+    test_id = 'TEST/L9G-HB0-YPS'
     name = 'osm-geopick-georeferencing'
     description = 'Uses the OSM Georeferencing tool to get coordinates and the Geopick API to get the center of the polygon to apply Georeferencing coordinates'
     image = 'public.ecr.aws/dissco/osm-georeferencing'
@@ -167,7 +177,7 @@ def osm() -> Dict[str, Any]:
         build_secret('GEOPICK_PASSWORD', 'geopick-password')
     ]
     return build_attributes(name, description, image, tag, target_filter,
-                            batching, secrets)
+                            batching, secrets), test_id
 
 
 def get_token() -> str:
@@ -177,12 +187,26 @@ def get_token() -> str:
     response = requests.post(url=url, data=data, headers=header)
     return response.json().get('access_token')
 
-
-if __name__ == '__main__':
+def update(request_json: Dict[str, Any], test_id: str) -> None:
     header = {
         'Authorization': 'Bearer ' + get_token()
     }
-    url = 'https://dev-orchestration.dissco.tech/api/v1/mas'
-    response = requests.post(url=url, json=bold(), headers=header)
+    url = f"https://dev-orchestration.dissco.tech/api/v1/mas/{test_id}"
+    response = requests.patch(url=url, json=request_json, headers=header)
     response.raise_for_status()
     logging.info(json.dumps(response.json(), indent=2))
+
+def post(request_json: Dict[str, Any]) -> None:
+    header = {
+        'Authorization': 'Bearer ' + get_token()
+    }
+    url = 'https://dev-orchestration.dissco.tech/api/v1/mas/'
+    response = requests.post(url=url, json=request_json, headers=header)
+    response.raise_for_status()
+    logging.info(json.dumps(response.json(), indent=2))
+
+
+if __name__ == '__main__':
+    request_json, test_id = gbif()
+    update(request_json, test_id)
+
