@@ -9,6 +9,7 @@ RUN adduser --disabled-password --gecos '' --system --uid 1001 python && chown -
 
 # copy the dependencies file to the working directory
 COPY requirements.txt .
+COPY ../shared shared/
 
 # install dependencies
 RUN pip install -r requirements.txt
