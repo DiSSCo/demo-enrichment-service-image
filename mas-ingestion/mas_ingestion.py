@@ -162,7 +162,7 @@ def mindat() -> Tuple[Dict[str, Any], str]:
 
 
 def osm() -> Tuple[Dict[str, Any], str]:
-    test_id = 'TEST/L9G-HB0-YPS'
+    test_id = 'TEST/HA8-QPG-Y1J'
     name = 'osm-geopick-georeferencing'
     description = 'Uses the OSM Georeferencing tool to get coordinates and the Geopick API to get the center of the polygon to apply Georeferencing coordinates'
     image = 'public.ecr.aws/dissco/osm-georeferencing'
@@ -200,7 +200,7 @@ def post(request_json: Dict[str, Any]) -> None:
     header = {
         'Authorization': 'Bearer ' + get_token()
     }
-    url = 'https://dev-orchestration.dissco.tech/api/v1/mas/'
+    url = 'https://dev-orchestration.dissco.tech/api/v1/mas'
     response = requests.post(url=url, json=request_json, headers=header)
     response.raise_for_status()
     logging.info(json.dumps(response.json(), indent=2))
