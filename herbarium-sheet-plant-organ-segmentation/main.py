@@ -87,7 +87,7 @@ def map_result_to_annotation(digital_object: Dict,
         oa_selector = shared.build_fragment_selector(annotation, image_width, image_height)
         annotation = shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector, digital_object[shared.ODS_ID],
                                               digital_object[shared.ODS_TYPE],
-                                              'https://gitlab.senckenberg.de/biodivit_f/machine-learning-projects/dissco-transition/plant-organ-segmentation')
+                                              'https://github.com/RajapreethiRajendran/demo-enrichment-service-image')
         annotations.append(annotation)
     
     return annotations
@@ -103,8 +103,12 @@ def run_plant_organ_segmentation(image_uri: str) -> Tuple[List[Dict[str, Any]], 
         "image_url": image_uri
     }
     annotations_list = []
+    auth_info = {
+        'username': os.environ.get('PLANT_ORGAN_SEGMENTATION_USER'),
+        'password': os.environ.get('PLANT_ORGAN_SEGMENTATION_PASSWORD')
+    }
     try:
-        response = requests.post("http://127.0.0.1:8000/plant_organ_segmentation", json=payload)
+        response = requests.post("https://webapp.senckenberg.de/dissco-mas-prototype/plant_organ_segmentation", auth=(auth_info['username'], auth_info['password']), json=payload)
         response.raise_for_status()
         response_json = response.json()
         if len(response_json) == 0:
@@ -151,5 +155,5 @@ def run_local(example: str) -> None:
 
 
 if __name__ == '__main__':
-    #start_kafka()
-    run_local("https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90")
+    start_kafka()
+    #run_local("https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90")
