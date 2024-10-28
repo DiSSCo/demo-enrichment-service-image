@@ -9,6 +9,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'herbarium-sheet-plant-organ-segmentation/**'
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
