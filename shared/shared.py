@@ -141,7 +141,7 @@ def build_fragment_selector(bounding_box: Dict, width: int,
     :return:
     """
     return {
-        ODS_TYPE: 'oa:FragmentSelector',
+        AT_TYPE: 'oa:FragmentSelector',
         'dcterms:conformsTo': 'https://www.w3.org/TR/media-frags/',
         'ac:hasROI': {
             'ac:xFrac': bounding_box['boundingBox'][0] / width,
