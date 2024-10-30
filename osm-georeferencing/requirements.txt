@@ -1,4 +1,4 @@
 kafka-python==2.0.2
 requests==2.31.0
 shapely==2.0.2
-
+numpy<2
