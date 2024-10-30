@@ -124,7 +124,7 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, Any],
     }
 
     return wrap_oa_value(oa_value, result, specimen_data, timestamp,
-                         f"$['ods:hasEvent']['{result['occurrence_index']}']['ods:Location']['ods:GeoReference']",
+                         f"$['ods:hasEvent'][{result['occurrence_index']}]['ods:Location']['ods:GeoReference']",
                          batching, ods_agent)
 
 
@@ -185,6 +185,7 @@ def run_georeference(specimen_data: Dict) -> Tuple[
                 'User-Agent': USER_AGENT
             }
             response = requests.get(query_string, headers=headers)
+            response.raise_for_status()
             response_json = response.json()
             if len(response_json.get('features')) == 0:
                 logging.info(
