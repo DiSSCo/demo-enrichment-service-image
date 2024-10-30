@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir --upgrade -r requirements.txt \
 # copy the content of the local src directory to the working directory
 COPY herbarium-sheet-plant-organ-detection/main.py .
 COPY herbarium-sheet-plant-organ-detection/config/custom_model_config.yaml ./config/custom_model_config.yaml
-COPY  herbarium-sheet-plant-organ-detection/data/model_final.pth ./data/model_final.pth
+COPY herbarium-sheet-plant-organ-detection/data/model_final.pth ./data/model_final.pth
 
 # copy shared directory
 COPY shared/ shared/
