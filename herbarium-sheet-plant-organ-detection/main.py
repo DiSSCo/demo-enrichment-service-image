@@ -165,5 +165,5 @@ if __name__ == '__main__':
     cfg.freeze()
     predictor = DefaultPredictor(cfg)
 
-    #start_kafka(predictor)
-    run_local("https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90")
+    start_kafka(predictor)
+    #run_local("https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90")
