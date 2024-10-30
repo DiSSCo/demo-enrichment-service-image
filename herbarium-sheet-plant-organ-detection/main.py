@@ -40,7 +40,7 @@ def start_kafka(predictor: DefaultPredictor) -> None:
             shared.mark_job_as_running(json_value.get('jobId'))
             digital_media = json_value.get('object')
             additional_info_annotations, width, height = run_object_detection(
-                digital_media.get('ac:accessUri'), predictor)
+                digital_media.get('ac:accessURI'), predictor)
             annotations = map_result_to_annotation(digital_media,
                                                    additional_info_annotations, width,
                                                    height)
@@ -165,5 +165,5 @@ if __name__ == '__main__':
     cfg.freeze()
     predictor = DefaultPredictor(cfg)
 
-    start_kafka(predictor)
-    # run_local("https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90")
+    #start_kafka(predictor)
+    run_local("https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90")
