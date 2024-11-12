@@ -78,10 +78,10 @@ def map_result_to_annotation(
     :return: Returns a formatted annotation
     """
     ods_agent = shared.get_agent()
-    oa_value = shared.map_to_entity_relationship('hasBOLDEUProcessID',
+    oa_value = shared.map_to_entity_relationship('hasBOLDEUProcessID', result['processid'],
                                           f"https://boldsystems.eu/record/{result['processid']}",
                                           timestamp, ods_agent)
-    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationship']")
+    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationships']")
     return shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
                              specimen_data[shared.ODS_ID],
                              specimen_data[shared.ODS_TYPE],
@@ -114,7 +114,7 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     identifiers = list(
         map(
             lambda identifier: identifier.get("dcterms:identifier"),
-            specimen_data.get("ods:hasIdentifier"),
+            specimen_data.get("ods:hasIdentifiers"),
         )
     )
     # BOLD's API has a concept of 'scope' (here: 'ids') and 'subscope' (here: 'sampleid'),

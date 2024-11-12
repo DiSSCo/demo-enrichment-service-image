@@ -87,7 +87,7 @@ def build_batch_metadata(locality: str, place_in_batch: int) -> Dict[str, Any]:
         "ods:placeInBatch": place_in_batch,
         "searchParams": [
             {
-                "inputField": "$['ods:hasEvent'][*]['ods:Location']['dwc:locality']",
+                "inputField": "$['ods:hasEvents'][*]['ods:hasLocation']['dwc:locality']",
                 "inputValue": locality
             }
         ]
@@ -112,7 +112,7 @@ def map_to_entity_relationship_annotation(specimen_data: Dict,
         timestamp, ods_agent
     )
     return wrap_oa_value(oa_value, result, specimen_data, timestamp,
-                         "$['ods:hasEntityRelationship']", batching_requested,
+                         "$['ods:hasEntityRelationships']", batching_requested,
                          ods_agent)
 
 
@@ -126,6 +126,7 @@ def map_to_georeference_annotation(specimen_data: Dict, result: Dict[str, Any],
     :param timestamp: The current timestamp
     :return: A single annotation with the georeference information from the Mindat locality
     """
+    ods_agent = shared.get_agent()
     oa_value = {
         "dwc:decimalLatitude": round(
             result['geo_reference_result']['latitude'],
@@ -134,7 +135,7 @@ def map_to_georeference_annotation(specimen_data: Dict, result: Dict[str, Any],
             result['geo_reference_result']['longitude'],
             7),
         "dwc:geodeticDatum": 'WGS84',
-        "dwc:georeferencedBy": f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
+        "dwc:hasAgents": [ods_agent],
         "dwc:georeferencedDate": timestamp,
         "dwc:georeferenceSources": f"https://www.mindat.org/loc-{result['geo_reference_result']['id']}.html",
         "dwc:georeferenceProtocol": "Georeferenced against the Mindat Locality API based on the specimen "
@@ -151,6 +152,7 @@ def wrap_oa_value(oa_value: Dict, result: Dict[str, Any], specimen_data: Dict,
                   ods_agent: Dict) -> Dict:
     """
     Generic method to wrap the oa_value into an annotation object
+    :param ods_agent: the agent creating the annotation
     :param batching_requested: Indicates if the scheduling party requested batching
     :param oa_value: The value that contains the result of the MAS
     :param result: The result of the Mindat Locality API call
@@ -191,13 +193,13 @@ def run_georeference(specimen_data: Dict, batching_requested: bool) -> Tuple[
     :param specimen_data: The full specimen object
     :return: List of the results including some metadata
     """
-    events = specimen_data.get('ods:hasEvent')
+    events = specimen_data.get('ods:hasEvents')
     result_list = list()
     batch_metadata = list()
     for index, event in enumerate(events):
-        if (event.get('ods:Location') is not None
-            and event.get("ods:Location").get("dwc:locality")) is not None:
-            location = event.get("ods:Location")
+        if (event.get('ods:hasLocation') is not None
+            and event.get("ods:hasLocation").get("dwc:locality")) is not None:
+            location = event.get("ods:hasLocation")
             querystring = f"https://api.mindat.org/localities/?txt={location.get('dwc:locality')}"
             response = requests.get(querystring, headers={
                 'Authorization': 'Token ' + os.environ.get('API_KEY')})
@@ -220,7 +222,7 @@ def run_georeference(specimen_data: Dict, batching_requested: bool) -> Tuple[
                 if batching_requested:
                     batch_metadata.append(
                         build_batch_metadata(
-                            event['ods:Location']['dwc:locality'],
+                            event['ods:hasLocation']['dwc:locality'],
                             index))
     return result_list, batch_metadata
 
@@ -245,6 +247,6 @@ def run_local(example: str):
 
 
 if __name__ == '__main__':
-    start_kafka()
-    # run_local(
-    #  'https://dev.dissco.tech/api/v1/digital-specimen/TEST/VGJ-1R7-JSJ')
+    # start_kafka()
+    run_local(
+     'https://dev.dissco.tech/api/v1/digital-specimen/TEST/VGJ-1R7-JSJ')

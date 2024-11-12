@@ -13,7 +13,7 @@ logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 OA_BODY = 'oa:hasBody'
 DWC_LOCALITY = 'dwc:locality'
 OA_VALUE = 'oa:value'
-LOCATION_PATH = "$['ods:hasEvent'][*]['ods:Location']"
+LOCATION_PATH = "$['ods:hasEvents'][*]['ods:hasLocation']"
 USER_AGENT = 'Distributed System of Scientific Collections'
 
 
@@ -83,6 +83,7 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, Any],
         timestamp: str, batching: bool, ods_agent: Dict) -> Dict:
     """
     Map the result of the Locality API call, to a georeference annotation
+    :param ods_agent: Agent creating the annotation
     :param specimen_data: The JSON value of the Digital Specimen
     :param result: The result of the Locality API call
     :param timestamp: The current timestamp
@@ -113,7 +114,7 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, Any],
         'dwc:footprintWKT': from_geojson(
             json.dumps(result.get('osm_result').get('geometry'))).wkt,
         'dwc:footprintSpatialFit': None if result['is_point'] else 1,
-        'dwc:georeferencedBy': f"https://hdl.handle.net/{os.environ.get('MAS_ID')}",
+        'dwc:hasAgents': [ods_agent],
         'dwc:georeferencedDate': timestamp,
         'dwc:georeferenceSources': 'GeoPick v.1.0.4',
         'dwc:georeferenceProtocol': 'Georeferencing Quick Reference Guide (Zermoglio et al. 2020, '
@@ -124,7 +125,7 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, Any],
     }
 
     return wrap_oa_value(oa_value, result, specimen_data, timestamp,
-                         f"$['ods:hasEvent'][{result['occurrence_index']}]['ods:Location']['ods:GeoReference']",
+                         f"$['ods:hasEvents'][{result['occurrence_index']}]['ods:hasLocation']['ods:hasGeoreference']",
                          batching, ods_agent)
 
 
@@ -173,12 +174,12 @@ def run_georeference(specimen_data: Dict) -> Tuple[
     :return: Returns a list of all the results. This could be multiple as we can have more than one occurrence
     per specimen. Also returns the batch metadata.
     """
-    events = specimen_data.get('ods:hasEvent')
+    events = specimen_data.get('ods:hasEvents')
     result_list = list()
     batch_metadata = []
     for index, event in enumerate(events):
-        if event.get('ods:Location') is not None:
-            location = event.get('ods:Location')
+        if event.get('ods:hasLocation') is not None:
+            location = event.get('ods:hasLocation')
             query_string, batch_metadata_unit = build_query_string(location,
                                                                    index)
             headers = {

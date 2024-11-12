@@ -76,12 +76,12 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict, timestamp: str,
     :return:
     """
     oa_value = shared.map_to_entity_relationship(
-        'hasGeoCASeID',
+        'hasGeoCASeID', result["geocaseId"],
         f'https://geocase.eu/specimen/{result["geocaseId"]}',
         timestamp,
         ods_agent
     )
-    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationship']")
+    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationships']")
     return shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
                              specimen_data[shared.ODS_ID],
                              specimen_data[shared.ODS_TYPE], result['queryString'])
@@ -146,7 +146,7 @@ def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:
     :return: The mapped relevant_identifiers (unitId and recordURI)
     """
     relevant_identifiers = {}
-    for identifier in specimen_data['ods:hasIdentifier']:
+    for identifier in specimen_data['ods:hasIdentifiers']:
         if identifier.get('dcterms:title') in ['abcd:unitID']:
             relevant_identifiers['unitid'] = identifier.get(
                 'dcterms:identifier')
