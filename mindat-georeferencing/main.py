@@ -120,13 +120,13 @@ def map_to_georeference_annotation(specimen_data: Dict, result: Dict[str, Any],
                                    timestamp: str, batching_requested: bool, ods_agent: Dict) -> Dict:
     """
     Map the result of the Mindat Locality API call to a georeference annotation
+    :param ods_agent: The agent creating the annotation
     :param batching_requested: Indicates if the scheduling party requested batching
     :param specimen_data: The JSON value of the Digital Specimen
     :param result: The result of the Mindat Locality API call
     :param timestamp: The current timestamp
     :return: A single annotation with the georeference information from the Mindat locality
     """
-    ods_agent = shared.get_agent()
     oa_value = {
         "dwc:decimalLatitude": round(
             result['geo_reference_result']['latitude'],
