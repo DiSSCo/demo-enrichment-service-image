@@ -82,7 +82,7 @@ def map_to_entity_relationship(relationship_type: str, resource_id: str, resourc
         'dwc:relatedResourceID': resource_id,
         'ods:relatedResourceURI': resource_uri,
         'dwc:relationshipEstablishedDate': timestamp,
-        'ods:RelationshipAccordingToAgent': ods_agent,
+        'ods:hasAgents': [ods_agent],
     }
 
 
