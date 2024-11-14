@@ -4,12 +4,13 @@ import json
 import os
 import requests
 
-ODS_TYPE = "ods:type"
-AT_TYPE = "@type"
-ODS_ID = "ods:ID"
-AT_ID = "@id"
+ODS_TYPE = 'ods:fdoType'
+AT_TYPE = '@type'
+ODS_ID = 'dcterms:identifier'
+AT_ID = '@id'
 MAS_ID = os.environ.get('MAS_ID')
 MAS_NAME = os.environ.get('MAS_NAME')
+
 
 def timestamp_now() -> str:
     """
@@ -40,24 +41,37 @@ def get_agent() -> Dict[str, Any]:
     :return: Agent object
     """
     return {
-        AT_ID: f"https://hdl.handle.net/{MAS_ID}",
-        AT_TYPE: 'as:Application',
+        AT_ID: f'https://hdl.handle.net/{MAS_ID}',
+        AT_TYPE: 'schema:SoftwareApplication',
+        'schema:identifier': f'https://hdl.handle.net/{MAS_ID}',
         'schema:name': MAS_NAME,
-        'ods:hasIdentifier': [
+        'ods:hasRoles': [
             {
-                AT_TYPE: "ods:Identifier",
-                'dcterms:title': 'handle',
-                'dcterms:identifier': f"https://hdl.handle.net/{MAS_ID}"
+                AT_TYPE: 'schema:Role',
+                'schema:roleName': 'machine-annotation-service',
             }
-        ]
+        ],
+        'ods:hasIdentifiers': [
+            {
+                AT_ID: f'https://hdl.handle.net/{MAS_ID}',
+                AT_TYPE: 'ods:Identifier',
+                'dcterms:type': 'Handle',
+                'dcterms:title': 'Handle',
+                'dcterms:identifier': f'https://hdl.handle.net/{MAS_ID}',
+                'ods:isPartOfLabel': False,
+                'ods:gupriLevel': 'GloballyUniqueStablePersistentResolvableFDOCompliant',
+                'ods:identifierStatus': 'Preferred',
+            }
+        ],
     }
 
 
-def map_to_entity_relationship(relationship_type: str, resource_id: str,
+def map_to_entity_relationship(relationship_type: str, resource_id: str, resource_uri: str,
                                timestamp: str, ods_agent: Dict) -> Dict:
     """
     :param relationship_type: Maps to dwc:relationshipOfResource
-    :param resource_id: Id of related resource, maps to dwc:relatedResourceID and ods:relatedResourceURI
+    :param resource_id: Id of related resource, maps to dwc:relatedResourceID
+    :param resource_uri: Full URI of related resource
     :param timestamp: timestamp of ER creation
     :param ods_agent: MAS as agent object
     :return: formatted Entity relationship annotation
@@ -66,9 +80,9 @@ def map_to_entity_relationship(relationship_type: str, resource_id: str,
         AT_TYPE: 'ods:EntityRelationship',
         'dwc:relationshipOfResource': relationship_type,
         'dwc:relatedResourceID': resource_id,
-        'ods:relatedResourceURI': resource_id,
+        'ods:relatedResourceURI': resource_uri,
         'dwc:relationshipEstablishedDate': timestamp,
-        'ods:RelationshipAccordingToAgent': ods_agent
+        'ods:hasAgents': [ods_agent],
     }
 
 
@@ -81,7 +95,7 @@ def map_to_annotation(ods_agent: Dict, timestamp: str,
     :param timestamp: A formatted timestamp of the current time
     :param oa_value: Value of the body of the annotation, the result of the computation
     :param oa_selector: selector of this annotation
-    :param target_id: ID of target maps to ods:ID
+    :param target_id: ID of target maps to dcterms:identifier
     :param target_type: target Type, maps to ods:type
     :param dcterms_ref: maps tp dcterms:references
     :return: Returns a formatted annotation Record
@@ -119,20 +133,16 @@ def build_class_selector(oa_class: str) -> Dict:
     }
 
 
-def build_field_selector(ods_field: str) -> Dict:
+def build_term_selector(ods_term: str) -> Dict:
     """
     A selector for an individual field.
-    :param ods_field: The full jsonPath of the field being annotated
+    :param ods_term: The full jsonPath of the field being annotated
     :return: field selector object
     """
-    return {
-        AT_TYPE: 'ods:FieldSelector',
-        'ods:field': ods_field
-    }
+    return {AT_TYPE: 'ods:TermSelector', 'ods:term': ods_term}
 
 
-def build_fragment_selector(bounding_box: Dict, width: int,
-                            height: int) -> Dict:
+def build_fragment_selector(bounding_box: Dict, width: int, height: int) -> Dict:
     """
     A selector for a specific Region of Interest (Roi). Only applicable on media objects
     :param bounding_box: object containing the bounding box of the ROI

@@ -51,10 +51,10 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str],
     """
     timestamp = shared.timestamp_now()
     ods_agent = shared.get_agent()
-    oa_value = shared.map_to_entity_relationship('hasGbifID',
+    oa_value = shared.map_to_entity_relationship('hasGbifID', result.get("gbifID"),
                                                  f'https://www.gbif.org/occurrence/{result.get("gbifID")}',
                                                  timestamp, ods_agent)
-    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationship']")
+    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationships']")
     annotation = shared.map_to_annotation(ods_agent, timestamp, oa_value,
                                           oa_selector,
                                           specimen_data[shared.ODS_ID],
@@ -87,7 +87,7 @@ def run_api_call(specimen_data: Dict) -> Dict[str, str]:
     """
     identifiers = get_identifiers_from_object(specimen_data)
     query_string = (f'https://api.gbif.org/v1/occurrence/search?occurrenceID='
-                    f'{identifiers.get("occurrenceId")}&catalogNumber={identifiers.get("catalogNumber")}'
+                    f'{identifiers.get("occurrenceID")}&catalogNumber={identifiers.get("catalogNumber")}'
                     f'&basisOfRecord={specimen_data.get("dwc:basisOfRecord")}')
     response = requests.get(query_string)
     response_json = json.loads(response.content)
@@ -112,13 +112,13 @@ def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:
     """
     Retrieve the correct identifiers from the Digital Specimen
     :param specimen_data: Json data of the Digital Specimen
-    :return: The mapped relevant_identifiers (occurrenceId and catalogNumber)
+    :return: The mapped relevant_identifiers (occurrenceID and catalogNumber)
     """
     relevant_identifiers = {}
-    for identifier in specimen_data.get('ods:hasIdentifier'):
+    for identifier in specimen_data.get('ods:hasIdentifiers'):
         if identifier.get('dcterms:title') in ['dwc:occurrenceID',
                                                'abcd:unitGUID']:
-            relevant_identifiers['occurrenceId'] = identifier.get(
+            relevant_identifiers['occurrenceID'] = identifier.get(
                 'dcterms:identifier')
         if identifier.get('dcterms:title') in ['dwc:catalogNumber',
                                                'abcd:unitID']:

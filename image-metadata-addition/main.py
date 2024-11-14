@@ -90,7 +90,7 @@ def create_annotation(image_assertions: List[Dict[str, Any]],
     """
     annotations = list()
     ods_agent = shared.get_agent()
-    oa_selector = shared.build_class_selector("$['ods:hasAssertion']")
+    oa_selector = shared.build_class_selector("$['ods:hasAssertions']")
 
     for assertion in image_assertions:
         annotation = shared.map_to_annotation(ods_agent, timestamp, assertion,
@@ -101,7 +101,7 @@ def create_annotation(image_assertions: List[Dict[str, Any]],
         annotations.append(annotation)
     additional_info_annotation = shared.map_to_annotation(ods_agent, timestamp,
                                                           additional_info,
-                                                          shared.build_field_selector(
+                                                          shared.build_term_selector(
                                                               "$['" + DCTERMS_FORMAT + "']"),
                                                           digital_media[
                                                               shared.ODS_ID],
@@ -180,9 +180,8 @@ def build_assertion(timestamp: str, ods_agent: Dict, msmt_type: str,
         'dwc:measurementDeterminedDate': timestamp,
         'dwc:measurementType': msmt_type,
         'dwc:measurementValue': msmt_value,
-        'ods:AssertionByAgent': ods_agent,
-        'ods:assertionProtocol': 'Image processing with Python Pillow library',
-        'ods:assertionProtocolID': CODE_BASE
+        'ods:hasAgents': [ods_agent],
+        'dwc:measurementMethod': 'Image processing with Python Pillow library'
     }
     if unit is not None:
         assertion['dwc:measurementUnit'] = unit

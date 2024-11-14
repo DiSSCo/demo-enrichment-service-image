@@ -8,7 +8,7 @@ import requests
 from kafka import KafkaConsumer, KafkaProducer
 import shared
 
-HAS_EVENT = 'ods:hasEvent'
+HAS_EVENT = 'ods:hasEvents'
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
@@ -59,8 +59,8 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]],
             map(lambda result: map_result_to_annotation(specimen_data, result,
                                                         timestamp), results))
     mas_job_record = {
-        "jobId": job_id,
-        "annotations": annotations
+        'jobId': job_id,
+        'annotations': annotations
     }
     return mas_job_record
 
@@ -76,11 +76,11 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, str],
     """
 
     ods_agent = shared.get_agent()
-    oa_value = shared.map_to_entity_relationship('hasEnaAccessionNumber',
+    oa_value = shared.map_to_entity_relationship('hasEnaAccessionNumber', result["enaAccessionId"],
                                           f'https://www.ebi.ac.uk/ena/browser/view/{result["enaAccessionId"]}',
                                           timestamp,
                                           ods_agent)
-    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationship']")
+    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationships']")
     return shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
                              specimen_data[shared.ODS_ID], specimen_data[shared.ODS_TYPE],
                              result['queryString'])
@@ -115,22 +115,22 @@ def run_additional_checks(response_json: Dict, specimen_data: Dict) -> bool:
                 f'Event date {response_json.get("collection_date")} does not match for specimen: '
                 f'{specimen_data.get(HAS_EVENT)[0].get("dwc:eventDate")}')
             is_valid = False
-    if specimen_data.get(HAS_EVENT)[0].get('ods:Location').get(
+    if specimen_data.get(HAS_EVENT)[0].get('ods:hasLocation').get(
             'dwc:country') and response_json.get('country'):
-        if specimen_data.get(HAS_EVENT)[0].get('ods:Location').get(
+        if specimen_data.get(HAS_EVENT)[0].get('ods:hasLocation').get(
                 'dwc:country') in response_json.get('country'):
             is_valid = True
         else:
             logging.info(
                 f'Country {response_json.get("country")} does not match for specimen: '
-                f'{specimen_data.get(HAS_EVENT)[0].get("ods:Location").get("dwc:country")}')
+                f'{specimen_data.get(HAS_EVENT)[0].get("ods:hasLocation").get("dwc:country")}')
             is_valid = False
     return is_valid
 
 
 def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     """
-    Calls GeoCASe API based on the available identifiers, unitId and/or recordURI.
+    Calls ENA API based on the available identifiers, unitId and/or recordURI.
     It is possible that one Digital Specimen has multiple GeoCASe records.
     If we get more than 5 GeoCASe hits we assume that something went wrong, and we will not return any results.
     :param specimen_data: The JSON data of the Digital Specimen
@@ -138,7 +138,7 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     """
     identifiers = list(
         map(lambda identifier: identifier.get("dcterms:identifierValue"),
-            specimen_data.get('ods:hasIdentifier')))
+            specimen_data.get('ods:hasIdentifiers')))
     sequence_query = build_query_string(identifiers, 'sequence')
     response = requests.get(sequence_query)
     response_json = json.loads(response.content)
@@ -156,7 +156,7 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
             return result_list
         else:
             logging.info(
-                f'No relevant identifiers found for specimen: {specimen_data["ods:id"]}')
+                f'No relevant identifiers found for specimen: {specimen_data["dcterms:identifier"]}')
 
 
 def check_result(response_json: Dict, result_list: List[Dict[str, str]],
@@ -215,4 +215,4 @@ def run_local(example: str) -> None:
 
 if __name__ == '__main__':
     start_kafka()
-    #run_local('https://dev.dissco.tech/api/v1/digital-specimen/TEST/0M6-9K9-H5P')
+    # run_local('https://dev.dissco.tech/api/v1/digital-specimen/TEST/0M6-9K9-H5P')
