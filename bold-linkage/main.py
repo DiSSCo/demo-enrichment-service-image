@@ -11,6 +11,7 @@ import shared
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
+
 def start_kafka() -> None:
     """
     Start a kafka listener and process the messages by unpacking the image.
@@ -31,20 +32,16 @@ def start_kafka() -> None:
         try:
             logging.info("Received message: " + str(msg.value))
             json_value = msg.value
-            shared.mark_job_as_running(json_value.get('jobId'))
-            specimen_data = json_value.get('object')
+            shared.mark_job_as_running(json_value.get("jobId"))
+            specimen_data = json_value.get("object")
             result = run_api_call(specimen_data)
-            mas_job_record = map_to_annotation_event(
-                specimen_data, result, json_value.get('jobId')
-            )
+            mas_job_record = map_to_annotation_event(specimen_data, result, json_value.get("jobId"))
             publish_annotation_event(mas_job_record, producer)
         except Exception as e:
             logging.exception(e)
 
 
-def map_to_annotation_event(
-        specimen_data: Dict, results: List[Dict[str, str]], job_id: str
-) -> Dict:
+def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> Dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -58,8 +55,7 @@ def map_to_annotation_event(
     else:
         annotations = list(
             map(
-                lambda result: map_result_to_annotation(specimen_data, result,
-                                                        timestamp),
+                lambda result: map_result_to_annotation(specimen_data, result, timestamp),
                 results,
             )
         )
@@ -67,9 +63,7 @@ def map_to_annotation_event(
     return annotation_event
 
 
-def map_result_to_annotation(
-        specimen_data: Dict, result: Dict[str, str], timestamp: str
-) -> Dict:
+def map_result_to_annotation(specimen_data: Dict, result: Dict[str, str], timestamp: str) -> Dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The original specimen data
@@ -78,14 +72,23 @@ def map_result_to_annotation(
     :return: Returns a formatted annotation
     """
     ods_agent = shared.get_agent()
-    oa_value = shared.map_to_entity_relationship('hasBOLDEUProcessID', result['processid'],
-                                          f"https://boldsystems.eu/record/{result['processid']}",
-                                          timestamp, ods_agent)
+    oa_value = shared.map_to_entity_relationship(
+        "hasBOLDEUProcessID",
+        result["processid"],
+        f"https://boldsystems.eu/record/{result['processid']}",
+        timestamp,
+        ods_agent,
+    )
     oa_selector = shared.build_class_selector("$['ods:hasEntityRelationships']")
-    return shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector,
-                             specimen_data[shared.ODS_ID],
-                             specimen_data[shared.ODS_TYPE],
-                             result['queryString'])
+    return shared.map_to_annotation(
+        ods_agent,
+        timestamp,
+        oa_value,
+        oa_selector,
+        specimen_data[shared.ODS_ID],
+        specimen_data[shared.ODS_TYPE],
+        result["queryString"],
+    )
 
 
 def publish_annotation_event(annotation_event: Dict, producer: KafkaProducer) -> None:
@@ -129,8 +132,7 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     response = requests.get(
         query_string,
         headers=headers,
-        auth=HTTPBasicAuth(os.environ.get("API_USER"),
-                           os.environ.get("API_PASSWORD")),
+        auth=HTTPBasicAuth(os.environ.get("API_USER"), os.environ.get("API_PASSWORD")),
     )
     response.raise_for_status()  # Raises an HTTPError if the status is 4xx, 5xx
 
@@ -147,8 +149,7 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     response = requests.get(
         docs_endpoint,
         headers=headers,
-        auth=HTTPBasicAuth(os.environ.get("API_USER"),
-                           os.environ.get("API_PASSWORD")),
+        auth=HTTPBasicAuth(os.environ.get("API_USER"), os.environ.get("API_PASSWORD")),
     )
     response.raise_for_status()  # Ensure the request was successful
 
@@ -176,14 +177,13 @@ def run_local(example: str) -> None:
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
-    specimen = json.loads(response.content).get('data')
-    specimen_data = specimen.get('attributes')
+    specimen = json.loads(response.content).get("data")
+    specimen_data = specimen.get("attributes")
     result = run_api_call(specimen_data)
-    mas_job_record = map_to_annotation_event(specimen_data, result,
-                                             str(uuid.uuid4()))
+    mas_job_record = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()))
     logging.info("Created annotations: " + json.dumps(mas_job_record, indent=2))
 
 
 if __name__ == "__main__":
     start_kafka()
-     #run_local("https://sandbox.dissco.tech/api/v1/specimens/SANDBOX/NMT-F9R-FWK")
+    # run_local("https://sandbox.dissco.tech/api/v1/specimens/SANDBOX/NMT-F9R-FWK")

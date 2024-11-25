@@ -14,7 +14,7 @@ from detectron2 import model_zoo
 from typing import Tuple, Any, Dict, List
 import shared
 
-logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
+logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
 
 def start_kafka(predictor: DefaultPredictor) -> None:
@@ -23,44 +23,40 @@ def start_kafka(predictor: DefaultPredictor) -> None:
     When done it will republish the object, so it can be validated and storage by the processing service
     :param predictor: The predictor which will be used to run the object detection
     """
-    consumer = KafkaConsumer(os.environ.get('KAFKA_CONSUMER_TOPIC'),
-                             group_id=os.environ.get('KAFKA_CONSUMER_GROUP'),
-                             bootstrap_servers=[
-                                 os.environ.get('KAFKA_CONSUMER_HOST')],
-                             value_deserializer=lambda m: json.loads(
-                                 m.decode('utf-8')),
-                             enable_auto_commit=True)
+    consumer = KafkaConsumer(
+        os.environ.get("KAFKA_CONSUMER_TOPIC"),
+        group_id=os.environ.get("KAFKA_CONSUMER_GROUP"),
+        bootstrap_servers=[os.environ.get("KAFKA_CONSUMER_HOST")],
+        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+        enable_auto_commit=True,
+    )
     producer = KafkaProducer(
-        bootstrap_servers=[os.environ.get('KAFKA_PRODUCER_HOST')],
-        value_serializer=lambda m: json.dumps(m).encode('utf-8'))
+        bootstrap_servers=[os.environ.get("KAFKA_PRODUCER_HOST")],
+        value_serializer=lambda m: json.dumps(m).encode("utf-8"),
+    )
     for msg in consumer:
         try:
             logging.info(msg.value)
             json_value = msg.value
-            shared.mark_job_as_running(json_value.get('jobId'))
-            digital_media = json_value.get('object')
+            shared.mark_job_as_running(json_value.get("jobId"))
+            digital_media = json_value.get("object")
             additional_info_annotations, width, height = run_object_detection(
-                digital_media.get('ac:accessURI'), predictor)
-            annotations = map_result_to_annotation(digital_media,
-                                                   additional_info_annotations, width,
-                                                   height)
-            event = map_to_annotation_event(annotations, json_value.get('jobId'))
+                digital_media.get("ac:accessURI"), predictor
+            )
+            annotations = map_result_to_annotation(digital_media, additional_info_annotations, width, height)
+            event = map_to_annotation_event(annotations, json_value.get("jobId"))
             send_updated_opends(event, producer)
         except Exception as e:
             logging.exception(e)
 
 
 def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
-    return {
-        "annotations": annotations,
-        "jobId": job_id
-    }
+    return {"annotations": annotations, "jobId": job_id}
 
 
-def map_result_to_annotation(digital_media: Dict,
-                             additional_info_annotations: List[Dict[str, Any]], width: int,
-                             height: int) \
-        -> List[Dict[str, Any]]:
+def map_result_to_annotation(
+    digital_media: Dict, additional_info_annotations: List[Dict[str, Any]], width: int, height: int
+) -> List[Dict[str, Any]]:
     """
     Builds the annotation records (one per ROI) from the prediction result.
     :param digital_media: The Digital Media Json
@@ -75,13 +71,19 @@ def map_result_to_annotation(digital_media: Dict,
 
     for value in additional_info_annotations:
         oa_value = {
-            'class': value['class'],
-            'score': value['score'],
+            "class": value["class"],
+            "score": value["score"],
         }
         oa_selector = shared.build_fragment_selector(value, width, height)
-        annotation = shared.map_to_annotation(ods_agent, timestamp, oa_value, oa_selector, digital_media[shared.ODS_ID],
-                                              digital_media[shared.ODS_TYPE],
-                                              'https://github.com/2younis/plant-organ-detection')
+        annotation = shared.map_to_annotation(
+            ods_agent,
+            timestamp,
+            oa_value,
+            oa_selector,
+            digital_media[shared.ODS_ID],
+            digital_media[shared.ODS_TYPE],
+            "https://github.com/2younis/plant-organ-detection",
+        )
         annotations.append(annotation)
     return annotations
 
@@ -93,12 +95,11 @@ def send_updated_opends(event: dict, producer: KafkaProducer) -> None:
     :param producer: The Kafka producer, topic will come from env variable
     :return: Nothing
     """
-    logging.info('Publishing annotation: ' + json.dumps(event))
-    producer.send(os.environ.get('KAFKA_PRODUCER_TOPIC'), event)
+    logging.info("Publishing annotation: " + json.dumps(event))
+    producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), event)
 
 
-def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[
-    List[Dict[str, Any]], int, int]:
+def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[List[Dict[str, Any]], int, int]:
     """
     Checks if the Image url works and gathers metadata information from the image.
     :param image_uri: The image url from which we will gather metadata
@@ -110,10 +111,10 @@ def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[
         img = Image.open(requests.get(image_uri, stream=True).raw)
         width, height = img.size
         predictions = predictor(np.array(img))
-        instances = predictions['instances']
+        instances = predictions["instances"]
         result = list()
 
-        class_names = ['leaf', 'flower', 'fruit', 'seed', 'stem', 'root']
+        class_names = ["leaf", "flower", "fruit", "seed", "stem", "root"]
         """
         Per template these are according to model training (pay attention to the order!):
         https://github.com/2younis/plant-organ-detection/blob/master/train_net.py
@@ -122,17 +123,15 @@ def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[
         classes = instances.pred_classes
         scores = instances.scores.numpy()
         num_instances = len(boxes)
-        logging.info('Detected %d instances' % num_instances)
+        logging.info("Detected %d instances" % num_instances)
         for i in range(num_instances):
-            result.append({
-                'class': class_names[classes[i]],
-                'score': float(scores[i]),
-                'boundingBox': [int(x) for x in boxes[i]]
-            })
+            result.append(
+                {"class": class_names[classes[i]], "score": float(scores[i]), "boundingBox": [int(x) for x in boxes[i]]}
+            )
 
         return result, width, height
     except FileNotFoundError:
-        logging.exception('Failed to retrieve picture')
+        logging.exception("Failed to retrieve picture")
         return [], -1, -1
 
 
@@ -146,24 +145,20 @@ def run_local(example: str) -> None:
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
-    json_value = json.loads(response.content).get('data')
-    digital_media = json_value.get('attributes')
-    additional_info_annotations, width, height = run_object_detection(
-        digital_media.get('ac:accessURI'), predictor)
-    annotations = map_result_to_annotation(digital_media, additional_info_annotations,
-                                           width, height)
+    json_value = json.loads(response.content).get("data")
+    digital_media = json_value.get("attributes")
+    additional_info_annotations, width, height = run_object_detection(digital_media.get("ac:accessURI"), predictor)
+    annotations = map_result_to_annotation(digital_media, additional_info_annotations, width, height)
     event = map_to_annotation_event(annotations, str(uuid.uuid4()))
-    logging.info('Created annotations: ' + json.dumps(event))
+    logging.info("Created annotations: " + json.dumps(event))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cfg = get_cfg()
-    cfg.merge_from_file(model_zoo.get_config_file(
-        'PascalVOC-Detection/faster_rcnn_R_50_FPN.yaml'))
-    cfg.merge_from_file(
-        'config/custom_model_config.yaml')
+    cfg.merge_from_file(model_zoo.get_config_file("PascalVOC-Detection/faster_rcnn_R_50_FPN.yaml"))
+    cfg.merge_from_file("config/custom_model_config.yaml")
     cfg.freeze()
     predictor = DefaultPredictor(cfg)
 
     start_kafka(predictor)
-    #run_local("https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90")
+    # run_local("https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90")
