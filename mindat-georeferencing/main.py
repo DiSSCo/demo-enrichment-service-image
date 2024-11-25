@@ -10,6 +10,8 @@ import shared
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
+HAS_LOCATION = "ods:hasLocation"
+
 
 def start_kafka() -> None:
     """
@@ -85,9 +87,7 @@ def map_to_annotation_event(
 def build_batch_metadata(locality: str, place_in_batch: int) -> Dict[str, Any]:
     batch_metadata = {
         "ods:placeInBatch": place_in_batch,
-        "searchParams": [
-            {"inputField": "$['ods:hasEvents'][*]['ods:hasLocation']['dwc:locality']", "inputValue": locality}
-        ],
+        "searchParams": [{"inputField": "$['ods:hasEvents'][*][HAS_LOCATION]['dwc:locality']", "inputValue": locality}],
     }
     return batch_metadata
 
@@ -142,7 +142,7 @@ def map_to_georeference_annotation(
         result,
         specimen_data,
         timestamp,
-        f"$['ods:hasEvents']['{result['result_index']}']['ods:hasLocation']['ods:hasGeoReference']",
+        f"$['ods:hasEvents']['{result['result_index']}'][HAS_LOCATION]['ods:hasGeoReference']",
         batching_requested,
         ods_agent,
     )
@@ -209,8 +209,8 @@ def run_georeference(
     result_list = list()
     batch_metadata = list()
     for index, event in enumerate(events):
-        if (event.get("ods:hasLocation") is not None and event.get("ods:hasLocation").get("dwc:locality")) is not None:
-            location = event.get("ods:hasLocation")
+        if (event.get(HAS_LOCATION) is not None and event.get(HAS_LOCATION).get("dwc:locality")) is not None:
+            location = event.get(HAS_LOCATION)
             querystring = f"https://api.mindat.org/localities/?txt={location.get('dwc:locality')}"
             response = requests.get(querystring, headers={"Authorization": "Token " + os.environ.get("API_KEY")})
             logging.info("Response from mindat status code: " + str(response.status_code))
@@ -228,7 +228,7 @@ def run_georeference(
                     }
                 )
                 if batching_requested:
-                    batch_metadata.append(build_batch_metadata(event["ods:hasLocation"]["dwc:locality"], index))
+                    batch_metadata.append(build_batch_metadata(event[HAS_LOCATION]["dwc:locality"], index))
     return result_list, batch_metadata
 
 
