@@ -4,12 +4,12 @@ import json
 import os
 import requests
 
-ODS_TYPE = 'ods:fdoType'
-AT_TYPE = '@type'
-ODS_ID = 'dcterms:identifier'
-AT_ID = '@id'
-MAS_ID = os.environ.get('MAS_ID')
-MAS_NAME = os.environ.get('MAS_NAME')
+ODS_TYPE = "ods:fdoType"
+AT_TYPE = "@type"
+ODS_ID = "dcterms:identifier"
+AT_ID = "@id"
+MAS_ID = os.environ.get("MAS_ID")
+MAS_NAME = os.environ.get("MAS_NAME")
 
 
 def timestamp_now() -> str:
@@ -17,10 +17,9 @@ def timestamp_now() -> str:
     Create a timestamp in the correct format
     :return: The timestamp as a string
     """
-    timestamp = str(
-        datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
+    timestamp = str(datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"))
     timestamp_cleaned = timestamp[:-3]
-    timestamp_timezone = timestamp_cleaned + 'Z'
+    timestamp_timezone = timestamp_cleaned + "Z"
     return timestamp_timezone
 
 
@@ -41,33 +40,34 @@ def get_agent() -> Dict[str, Any]:
     :return: Agent object
     """
     return {
-        AT_ID: f'https://hdl.handle.net/{MAS_ID}',
-        AT_TYPE: 'schema:SoftwareApplication',
-        'schema:identifier': f'https://hdl.handle.net/{MAS_ID}',
-        'schema:name': MAS_NAME,
-        'ods:hasRoles': [
+        AT_ID: f"https://hdl.handle.net/{MAS_ID}",
+        AT_TYPE: "schema:SoftwareApplication",
+        "schema:identifier": f"https://hdl.handle.net/{MAS_ID}",
+        "schema:name": MAS_NAME,
+        "ods:hasRoles": [
             {
-                AT_TYPE: 'schema:Role',
-                'schema:roleName': 'machine-annotation-service',
+                AT_TYPE: "schema:Role",
+                "schema:roleName": "machine-annotation-service",
             }
         ],
-        'ods:hasIdentifiers': [
+        "ods:hasIdentifiers": [
             {
-                AT_ID: f'https://hdl.handle.net/{MAS_ID}',
-                AT_TYPE: 'ods:Identifier',
-                'dcterms:type': 'Handle',
-                'dcterms:title': 'Handle',
-                'dcterms:identifier': f'https://hdl.handle.net/{MAS_ID}',
-                'ods:isPartOfLabel': False,
-                'ods:gupriLevel': 'GloballyUniqueStablePersistentResolvableFDOCompliant',
-                'ods:identifierStatus': 'Preferred',
+                AT_ID: f"https://hdl.handle.net/{MAS_ID}",
+                AT_TYPE: "ods:Identifier",
+                "dcterms:type": "Handle",
+                "dcterms:title": "Handle",
+                "dcterms:identifier": f"https://hdl.handle.net/{MAS_ID}",
+                "ods:isPartOfLabel": False,
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvableFDOCompliant",
+                "ods:identifierStatus": "Preferred",
             }
         ],
     }
 
 
-def map_to_entity_relationship(relationship_type: str, resource_id: str, resource_uri: str,
-                               timestamp: str, ods_agent: Dict) -> Dict:
+def map_to_entity_relationship(
+    relationship_type: str, resource_id: str, resource_uri: str, timestamp: str, ods_agent: Dict
+) -> Dict:
     """
     :param relationship_type: Maps to dwc:relationshipOfResource
     :param resource_id: Id of related resource, maps to dwc:relatedResourceID
@@ -77,18 +77,24 @@ def map_to_entity_relationship(relationship_type: str, resource_id: str, resourc
     :return: formatted Entity relationship annotation
     """
     return {
-        AT_TYPE: 'ods:EntityRelationship',
-        'dwc:relationshipOfResource': relationship_type,
-        'dwc:relatedResourceID': resource_id,
-        'ods:relatedResourceURI': resource_uri,
-        'dwc:relationshipEstablishedDate': timestamp,
-        'ods:hasAgents': [ods_agent],
+        AT_TYPE: "ods:EntityRelationship",
+        "dwc:relationshipOfResource": relationship_type,
+        "dwc:relatedResourceID": resource_id,
+        "ods:relatedResourceURI": resource_uri,
+        "dwc:relationshipEstablishedDate": timestamp,
+        "ods:hasAgents": [ods_agent],
     }
 
 
-def map_to_annotation(ods_agent: Dict, timestamp: str,
-                      oa_value: Dict, oa_selector: Dict, target_id: str, target_type: str,
-                      dcterms_ref: str) -> Dict[str, Any]:
+def map_to_annotation(
+    ods_agent: Dict,
+    timestamp: str,
+    oa_value: Dict,
+    oa_selector: Dict,
+    target_id: str,
+    target_type: str,
+    dcterms_ref: str,
+) -> Dict[str, Any]:
     """
     Map the result of the API call to an annotation
     :param ods_agent: Agent object of MAS
@@ -101,21 +107,21 @@ def map_to_annotation(ods_agent: Dict, timestamp: str,
     :return: Returns a formatted annotation Record
     """
     annotation = {
-        AT_TYPE: 'ods:Annotation',
-        'oa:motivation': 'ods:adding',
-        'dcterms:creator': ods_agent,
-        'dcterms:created': timestamp,
-        'oa:hasTarget': {
+        AT_TYPE: "ods:Annotation",
+        "oa:motivation": "ods:adding",
+        "dcterms:creator": ods_agent,
+        "dcterms:created": timestamp,
+        "oa:hasTarget": {
             ODS_ID: target_id,
             AT_ID: target_id,
             ODS_TYPE: target_type,
             AT_TYPE: target_type,
-            'oa:hasSelector': oa_selector,
+            "oa:hasSelector": oa_selector,
         },
-        'oa:hasBody': {
-            AT_TYPE: 'oa:TextualBody',
-            'oa:value': [json.dumps(oa_value)],
-            'dcterms:references': dcterms_ref,
+        "oa:hasBody": {
+            AT_TYPE: "oa:TextualBody",
+            "oa:value": [json.dumps(oa_value)],
+            "dcterms:references": dcterms_ref,
         },
     }
     return annotation
@@ -128,8 +134,8 @@ def build_class_selector(oa_class: str) -> Dict:
     :return: class selector object
     """
     return {
-        AT_TYPE: 'ods:ClassSelector',
-        'ods:class': oa_class,
+        AT_TYPE: "ods:ClassSelector",
+        "ods:class": oa_class,
     }
 
 
@@ -139,7 +145,7 @@ def build_term_selector(ods_term: str) -> Dict:
     :param ods_term: The full jsonPath of the field being annotated
     :return: field selector object
     """
-    return {AT_TYPE: 'ods:TermSelector', 'ods:term': ods_term}
+    return {AT_TYPE: "ods:TermSelector", "ods:term": ods_term}
 
 
 def build_fragment_selector(bounding_box: Dict, width: int, height: int) -> Dict:
@@ -151,14 +157,12 @@ def build_fragment_selector(bounding_box: Dict, width: int, height: int) -> Dict
     :return:
     """
     return {
-        AT_TYPE: 'oa:FragmentSelector',
-        'dcterms:conformsTo': 'https://www.w3.org/TR/media-frags/',
-        'ac:hasROI': {
-            'ac:xFrac': bounding_box['boundingBox'][0] / width,
-            'ac:yFrac': bounding_box['boundingBox'][1] / height,
-            'ac:widthFrac': (bounding_box['boundingBox'][2] -
-                             bounding_box['boundingBox'][0]) / width,
-            'ac:heightFrac': (bounding_box['boundingBox'][3]
-                              - bounding_box['boundingBox'][1]) / height
-        }
+        AT_TYPE: "oa:FragmentSelector",
+        "dcterms:conformsTo": "https://www.w3.org/TR/media-frags/",
+        "ac:hasROI": {
+            "ac:xFrac": bounding_box["boundingBox"][0] / width,
+            "ac:yFrac": bounding_box["boundingBox"][1] / height,
+            "ac:widthFrac": (bounding_box["boundingBox"][2] - bounding_box["boundingBox"][0]) / width,
+            "ac:heightFrac": (bounding_box["boundingBox"][3] - bounding_box["boundingBox"][1]) / height,
+        },
     }

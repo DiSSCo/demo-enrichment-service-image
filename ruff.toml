@@ -1,0 +1,11 @@
+# Set line lenght for both linter and formatter for Ruff (currently ignored by pre-commit)
+line-length = 120
+
+[format]
+quote-style = "double"
+docstring-code-format = true
+
+[lint]
+# Ignore `E402` (import violations) in all `__init__.py` files, and in select subdirectories.
+[lint.per-file-ignores]
+"__init__.py" = ["E402", "F401", "F403"]
