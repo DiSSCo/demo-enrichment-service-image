@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-import uuid
+from uuid import uuid4
 from typing import Dict, List
 
 import requests
@@ -179,11 +179,8 @@ def run_local(example: str) -> None:
     response = requests.get(example)
     specimen = json.loads(response.content).get("data")
     specimen_data = specimen.get("attributes")
-    if specimen_data is None:
-        logging.error("The Digital Specimen could not be retrieved, check the object")
-        return
     result = run_api_call(specimen_data)
-    mas_job_record = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()))
+    mas_job_record = map_to_annotation_event(specimen_data, result, str(uuid4()))
     logging.info("Created annotations: " + json.dumps(mas_job_record, indent=2))
 
 
