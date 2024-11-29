@@ -249,5 +249,5 @@ def run_local(example: str):
 
 
 if __name__ == "__main__":
-    # start_kafka()
-    run_local("https://dev.dissco.tech/api/v1/digital-specimen/TEST/VGJ-1R7-JSJ")
+    start_kafka()
+    # run_local("https://dev.dissco.tech/api/v1/digital-specimen/TEST/VGJ-1R7-JSJ")

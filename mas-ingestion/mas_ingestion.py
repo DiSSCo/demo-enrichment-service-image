@@ -121,7 +121,7 @@ def geocase(is_acceptance: bool) -> Dict[str, Any]:
 def plant_organ(is_acceptance: bool) -> Dict[str, Any]:
     name = "herbarium-sheet-plant-organ-detection"
     description = "Uses machine learning classifier to identify plant organs on herbarium sheets"
-    image = "public.ecr.aws/dissco/geocase-linkage"
+    image = "public.ecr.aws/dissco/herbarium-sheet-plant-organ-detection"
     tag = PLANT_ORGAN_TAG if is_acceptance else LATEST
     target_filter = {AC_URI: ["*"], ODS_FDO_TYPE: [MEDIA_TYPE]}
     batching = False
@@ -209,5 +209,5 @@ def post(request_json: Dict[str, Any], is_acceptance: bool) -> None:
 
 
 if __name__ == "__main__":
-    post(osm(False), False)
-    post(osm(True), True)
+    update(plant_organ(False), PLANT_ORGAN_TEST, False)
+    update(plant_organ(True), PLANT_ORGAN_ACC, True)
