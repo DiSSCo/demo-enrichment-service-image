@@ -30,7 +30,7 @@ MINDAT_ACC = ""
 OSM_TEST = ""
 OSM_ACC = ""
 SENCK_TEST = "TEST/V1Z-0JJ-GX7"
-SENCK_ACC = ""
+SENCK_ACC = "SANDBOX/F28-90S-SQX"
 
 def build_secret(name: str, secret_key_ref: str) -> Dict[str, str]:
     return {"schema:name": name, "ods:secretKeyRef": secret_key_ref}
@@ -149,7 +149,7 @@ def senck() -> Dict[str, Any]:
     name = "plant-organ-segmentation"
     description = "Herbarium sheet plant organ segmenter developed by Senckenberg Natural History Museum"
     image = "public.ecr.aws/dissco/herbarium-sheet-plant-organ-segmentation"
-    tag = "latest"
+    tag = "sha-276a7fb" # or late
     target_filter = {AC_URI: ["*"], ODS_FDO_TYPE: [MEDIA_TYPE]}
     batching = True
     secrets = [build_secret("PLANT_ORGAN_SEGMENTATION_USER", "plant-organ-segmentation-user"), build_secret("PLANT_ORGAN_SEGMENTATION_PASSWORD", "plant-organ-segmentation-password")]
@@ -174,7 +174,7 @@ def update(request_json: Dict[str, Any], test_id: str) -> None:
 
 def post(request_json: Dict[str, Any]) -> None:
     header = {"Authorization": "Bearer " + get_token()}
-    url = "https://dev-orchestration.dissco.tech/api/v1/mas"
+    url = "https://orchestration.dissco.tech/api/v1/mas"
     response = requests.post(url=url, json=request_json, headers=header)
     response.raise_for_status()
     logging.info(json.dumps(response.json(), indent=2))
@@ -182,4 +182,4 @@ def post(request_json: Dict[str, Any]) -> None:
 
 if __name__ == "__main__":
     request_json = senck()
-    update(request_json, SENCK_TEST)
+    post(request_json)
