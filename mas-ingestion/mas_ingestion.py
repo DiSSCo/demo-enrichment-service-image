@@ -1,4 +1,4 @@
-from typing import Dict, Any, Tuple
+from typing import Dict, Any
 import os
 import requests
 import logging
@@ -8,10 +8,29 @@ logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
 HAS_IDENTIFIER = "$['ods:hasIdentifiers']"
 HAS_EVENT = "$['ods:hasEvents']"
-ODS_TYPE = "$['ods:type']"
+ODS_FDO_TYPE = "$['ods:fdoType']"
+AC_URI = "$['ac:accessURI']"
 SPECIMEN_TYPE = "https://doi.org/21.T11148/894b1e6cad57e921764e"
 MEDIA_TYPE = "https://doi.org/21.T11148/bbad8c4e101e8af01115"
 
+BOLD_TEST = ""
+BOLD_ACC = ""
+ENA_TEST = ""
+ENA_ACC = ""
+GBIF_TEST = "TEST/X47-D32-7FW"
+GBIF_ACC = ""
+GEOCASE_TEST = ""
+GEOCASE_ACC = ""
+PLANT_ORGAN_TEST = ""
+PLANT_ORGAN_ACC = ""
+IMAGE_METADATA_TEST = ""
+IMAGE_METADATA_ACC = ""
+MINDAT_TEST = ""
+MINDAT_ACC = ""
+OSM_TEST = ""
+OSM_ACC = ""
+SENCK_TEST = "TEST/V1Z-0JJ-GX7"
+SENCK_ACC = ""
 
 def build_secret(name: str, secret_key_ref: str) -> Dict[str, str]:
     return {"schema:name": name, "ods:secretKeyRef": secret_key_ref}
@@ -30,110 +49,111 @@ def build_attributes(
                 "schema:description": description,
                 "ods:containerImage": image,
                 "ods:containerTag": tag,
-                "ods:TargetDigitalObjectFilter": target_filter,
+                "ods:hasTargetDigitalObjectFilter": target_filter,
                 "schema:codeRepository": "https://github.com/DiSSCo/demo-enrichment-service-image/",
                 "schema:programmingLanguage": "python",
                 "schema:license": "https://www.apache.org/licenses/LICENSE-2.0",
                 "ods:batchingPermitted": batching,
-                "ods:hasEnvironmentalVariable": [],
-                "ods:hasSecretVariable": secrets,
+                "ods:hasEnvironmentalVariables": [],
+                "ods:hasSecretVariables": secrets,
             },
         }
     }
     return request
 
 
-def bold() -> Tuple[Dict[str, Any], str]:
-    test_id = "TEST/72M-NDX-140"
+def bold() -> Dict[str, Any]:
     name = "bold-linkage"
     description = "Links specimen to an entry in the Barcode of Life Data System (BOLD)"
     image = "public.ecr.aws/dissco/bold-linkage"
     tag = "latest"
-    target_filter = {HAS_IDENTIFIER: ["*"], ODS_TYPE: [SPECIMEN_TYPE]}
+    target_filter = {HAS_IDENTIFIER: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
     batching = False
     secrets = [build_secret("API_USER", "bold-api-user"), build_secret("API_PASSWORD", "bold-api-password")]
-    return build_attributes(name, description, image, tag, target_filter, batching, secrets), test_id
+    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
 
-
-def ena() -> Tuple[Dict[str, Any], str]:
-    test_id = "TEST/FSJ-G4M-L47"
+def ena() -> Dict[str, Any]:
     name = "ena-linkage"
     description = "Links specimen to an entry in the European Nucleotide Archive (ENA)"
     image = "public.ecr.aws/dissco/ena-linkage"
     tag = "latest"
-    target_filter = {HAS_IDENTIFIER: ["*"], HAS_EVENT: ["*"], ODS_TYPE: [SPECIMEN_TYPE]}
+    target_filter = {HAS_IDENTIFIER: ["*"], HAS_EVENT: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
     batching = False
-    return build_attributes(name, description, image, tag, target_filter, batching, None), test_id
+    return build_attributes(name, description, image, tag, target_filter, batching, None)
 
 
-def gbif() -> Tuple[Dict[str, Any], str]:
-    test_id = "TEST/KV5-4SJ-384"
+def gbif() -> Dict[str, Any]:
     name = "gbif-linkage"
     description = "Links specimen to an occurrence in Global Biodiversity Information Facility (GBIF)"
     image = "public.ecr.aws/dissco/gbif-occurrence-linkage"
     tag = "latest"
-    target_filter = {HAS_IDENTIFIER: ["*"], "$['dwc:basisOfRecord']": ["*"], ODS_TYPE: [SPECIMEN_TYPE]}
+    target_filter = {HAS_IDENTIFIER: ["*"], "$['dwc:basisOfRecord']": ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
     batching = False
-    return build_attributes(name, description, image, tag, target_filter, batching, None), test_id
+    return build_attributes(name, description, image, tag, target_filter, batching, None)
 
 
-def geocase() -> Tuple[Dict[str, Any], str]:
-    test_id = "TEST/37R-AG5-6KV"
+def geocase() -> Dict[str, Any]:
     name = "geocase-linkage"
     description = "Links specimen to an entity in  Geoscience Collections Access Service (GeoCASe)"
     image = "public.ecr.aws/dissco/geocase-linkage"
     tag = "latest"
-    target_filter = {HAS_IDENTIFIER: ["*"], ODS_TYPE: [SPECIMEN_TYPE]}
+    target_filter = {HAS_IDENTIFIER: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
     batching = False
-    return build_attributes(name, description, image, tag, target_filter, batching, None), test_id
+    return build_attributes(name, description, image, tag, target_filter, batching, None)
 
 
-def plant_organ() -> Tuple[Dict[str, Any], str]:
-    test_id = "TEST/BEE-FF5-41X"
+def plant_organ() -> Dict[str, Any]:
     name = "herbarium-sheet-plant-organ-detection"
     description = "Uses machine learning classifier to identify plant organs on herbarium sheets"
     image = "public.ecr.aws/dissco/geocase-linkage"
     tag = "latest"
-    target_filter = {"$['ac:accessURI']": ["*"], ODS_TYPE: [MEDIA_TYPE]}
+    target_filter = {AC_URI: ["*"], ODS_FDO_TYPE: [MEDIA_TYPE]}
     batching = False
-    return build_attributes(name, description, image, tag, target_filter, batching, None), test_id
+    return build_attributes(name, description, image, tag, target_filter, batching, None)
 
 
-def image_metadata() -> Tuple[Dict[str, Any], str]:
-    test_id = "TEST/QNH-4YQ-ZD4"
+def image_metadata() -> Dict[str, Any]:
     name = "image-metadata-addition"
     description = (
         "Uses the Python Imaging Library to add additional image metadata (size, format, etc.) to digital media"
     )
     image = "public.ecr.aws/dissco/image-metadata-addition"
     tag = "latest"
-    target_filter = {"$['ac:accessURI']": ["*"], ODS_TYPE: [MEDIA_TYPE]}
+    target_filter = {AC_URI: ["*"], ODS_FDO_TYPE: [MEDIA_TYPE]}
     batching = False
-    return build_attributes(name, description, image, tag, target_filter, batching, None), test_id
+    return build_attributes(name, description, image, tag, target_filter, batching, None)
 
 
-def mindat() -> Tuple[Dict[str, Any], str]:
-    test_id = "TEST/3VL-80Q-8NK"
+def mindat() -> Dict[str, Any]:
     name = "mindat-georeferencing"
     description = "Uses the Mindat georeferencing API to add Georeference coordinates"
     image = "public.ecr.aws/dissco/mindat-georeferencing"
     tag = "latest"
-    target_filter = {HAS_EVENT: ["*"], ODS_TYPE: [SPECIMEN_TYPE]}
+    target_filter = {HAS_EVENT: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
     batching = True
     secrets = [build_secret("API_KEY", "mindat-api-key")]
-    return build_attributes(name, description, image, tag, target_filter, batching, secrets), test_id
+    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
 
 
-def osm() -> Tuple[Dict[str, Any], str]:
-    test_id = "TEST/HA8-QPG-Y1J"
+def osm() -> Dict[str, Any]:
     name = "osm-geopick-georeferencing"
     description = "Uses the OSM Georeferencing tool to get coordinates and the Geopick API to get the center of the polygon to apply Georeferencing coordinates"
     image = "public.ecr.aws/dissco/osm-georeferencing"
     tag = "latest"
-    target_filter = {HAS_EVENT: ["*"], ODS_TYPE: [SPECIMEN_TYPE]}
-    batching = True
+    target_filter = {HAS_EVENT: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
+    batching = False
     secrets = [build_secret("GEOPICK_USER", "geopick-user"), build_secret("GEOPICK_PASSWORD", "geopick-password")]
-    return build_attributes(name, description, image, tag, target_filter, batching, secrets), test_id
+    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
+
+def senck() -> Dict[str, Any]:
+    name = "plant-organ-segmentation"
+    description = "Herbarium sheet plant organ segmenter developed by Senckenberg Natural History Museum"
+    image = "public.ecr.aws/dissco/herbarium-sheet-plant-organ-segmentation"
+    tag = "latest"
+    target_filter = {AC_URI: ["*"], ODS_FDO_TYPE: [MEDIA_TYPE]}
+    batching = True
+    secrets = [build_secret("PLANT_ORGAN_SEGMENTATION_USER", "plant-organ-segmentation-user"), build_secret("PLANT_ORGAN_SEGMENTATION_PASSWORD", "plant-organ-segmentation-password")]
+    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
 
 
 def get_token() -> str:
@@ -161,5 +181,5 @@ def post(request_json: Dict[str, Any]) -> None:
 
 
 if __name__ == "__main__":
-    request_json, test_id = gbif()
-    update(request_json, test_id)
+    request_json = senck()
+    update(request_json, SENCK_TEST)
