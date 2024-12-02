@@ -138,9 +138,9 @@ def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[L
 def run_local(example: str) -> None:
     """
     Run the script locally. Can be called by replacing the kafka call with this  a method call in the main method.
-    Will call the DiSSCo API to retrieve the specimen data.
+    Will call the DiSSCo API to retrieve the media data.
     A record ID will be created but can only be used for testing.
-    :param example: The full URL of the Digital Specimen to the API (for example
+    :param example: The full URL of the Digital Media to the API (for example
     https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90
     :return: Return nothing but will log the result
     """
