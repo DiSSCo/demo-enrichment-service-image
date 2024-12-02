@@ -150,7 +150,8 @@ def build_term_selector(ods_term: str) -> Dict:
 
 def build_fragment_selector(bounding_box: Dict, width: int, height: int) -> Dict:
     """
-    A selector for a specific Region of Interest (Roi). Only applicable on media objects
+    A selector for a specific Region of Interest (Roi). Only applicable on media objects.
+    ConformsTo the TDWG region of interest vocabulary.
     :param bounding_box: object containing the bounding box of the ROI
     :param width: The width of the image, used to calculate the ROI
     :param height: the height of the image, used to calculate the ROI
