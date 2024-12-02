@@ -5,10 +5,12 @@ on:
       - main
     paths:
       - 'herbarium-sheet-plant-organ-detection/**'
+      - 'shared/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - 'herbarium-sheet-plant-organ-detection/**'
+      - 'shared/**'
 jobs:
   build:
     runs-on: ubuntu-latest

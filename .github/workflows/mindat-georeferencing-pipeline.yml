@@ -5,10 +5,12 @@ on:
       - main
     paths:
       - 'mindat-georeferencing/**'
+      - 'shared/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - 'mindat-georeferencing/**'
+      - 'shared/**'
 jobs:
   build:
     runs-on: ubuntu-latest

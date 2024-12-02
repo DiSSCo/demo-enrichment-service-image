@@ -5,10 +5,12 @@ on:
       - main
     paths:
       - 'osm-georeferencing/**'
+      - 'shared/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - 'osm-georeferencing/**'
+      - 'shared/**'
 jobs:
   build:
     runs-on: ubuntu-latest

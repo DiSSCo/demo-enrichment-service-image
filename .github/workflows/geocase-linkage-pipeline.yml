@@ -5,10 +5,12 @@ on:
       - main
     paths:
       - 'geocase-linkage/**'
+      - 'shared/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - 'geocase-linkage/**'
+      - 'shared/**'
 jobs:
   build:
     runs-on: ubuntu-latest
