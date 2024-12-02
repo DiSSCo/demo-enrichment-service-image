@@ -48,6 +48,8 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id:
     :param job_id: The job ID of the MAS
     :return: Returns a formatted annotation Record which includes the Job ID
     """
+    if result.get("error_message") is not None:
+        return {"jobId": job_id, "annotations": []}
     timestamp = shared.timestamp_now()
     ods_agent = shared.get_agent()
     oa_value = shared.map_to_entity_relationship(
@@ -139,5 +141,5 @@ def run_local(example: str) -> None:
 
 
 if __name__ == "__main__":
-    start_kafka()
-    # run_local('https://dev.dissco.tech/api/v1/digital-specimen/TEST/TYB-XNH-53H')
+    # start_kafka()
+    run_local("https://sandbox.dissco.tech/api/v1/digital-specimen/SANDBOX/2D1-512-55B")
