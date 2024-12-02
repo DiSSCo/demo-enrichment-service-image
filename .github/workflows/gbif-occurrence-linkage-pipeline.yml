@@ -5,10 +5,12 @@ on:
       - main
     paths:
       - 'gbif-occurrence-linkage/**'
+      - 'shared/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - 'gbif-occurrence-linkage/**'
+      - 'shared/**'
 jobs:
   build:
     runs-on: ubuntu-latest

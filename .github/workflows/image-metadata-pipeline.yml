@@ -5,10 +5,12 @@ on:
       - main
     paths:
       - 'image-metadata-addition/**'
+      - 'shared/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - 'image-metadata-addition/**'
+      - 'shared/**'
 jobs:
   build:
     runs-on: ubuntu-latest

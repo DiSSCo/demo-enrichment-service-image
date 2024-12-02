@@ -5,10 +5,12 @@ on:
       - main
     paths:
       - 'herbarium-sheet-plant-organ-segmentation/**'
+      - 'shared/**'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - 'herbarium-sheet-plant-organ-segmentation/**'
+      - 'shared/**'
   workflow_dispatch:
 jobs:
   build:
