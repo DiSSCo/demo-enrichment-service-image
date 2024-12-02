@@ -158,7 +158,7 @@ def build_fragment_selector(bounding_box: Dict, width: int, height: int) -> Dict
     """
     return {
         AT_TYPE: "oa:FragmentSelector",
-        "dcterms:conformsTo": "https://www.w3.org/TR/media-frags/",
+        "dcterms:conformsTo": "https://ac.tdwg.org/termlist/#711-region-of-interest-vocabulary",
         "ac:hasROI": {
             "ac:xFrac": bounding_box["boundingBox"][0] / width,
             "ac:yFrac": bounding_box["boundingBox"][1] / height,
