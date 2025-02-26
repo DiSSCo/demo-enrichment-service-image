@@ -49,8 +49,10 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
     :return: Returns a formatted annotation Record which includes the Job ID
     """
     timestamp = shared.timestamp_now()
-    if results is None:
-        annotations = list()
+    if len(results) == 1 and results[0].get("errors") is not None:
+        annotations = [
+            shared.map_to_annotation_no_er_found(timestamp, results[0].get("errors"), specimen_data[shared.ODS_ID], specimen_data[shared.ODS_TYPE], results[0].get("queryString"))
+        ]
     else:
         ods_agent = shared.get_agent()
         annotations = list(
@@ -118,8 +120,19 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
             )
         else:
             logging.info(f"Too many hits ({hits}) were found for specimen: {specimen_data[shared.ODS_ID]}")
+            return [
+                {
+                "queryString": query_string, "geocaseId": None, "errors": "Failed to make the match, too many candidates"
+                }
+            ]
     else:
         logging.info(f"No relevant identifiers found for specimen: {specimen_data[shared.ODS_ID]}")
+        return [
+            {
+                "queryString": "", "geocaseId": None,
+                "errors": "Failed to make the match, No relevant identifiers found for specimen"
+            }
+        ]
 
 
 def build_query_string(identifiers: Dict[str, str]):
@@ -169,4 +182,4 @@ def run_local(example: str) -> None:
 
 if __name__ == "__main__":
     start_kafka()
-    # run_local('https://dev.dissco.tech/api/v1/digital-specimen/TEST/1XG-Z5L-G4C')
+    #run_local('https://dev.dissco.tech/api/digital-specimen/v1/TEST/SGT-C68-7KY')

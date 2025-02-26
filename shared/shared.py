@@ -66,7 +66,7 @@ def get_agent() -> Dict[str, Any]:
 
 
 def map_to_entity_relationship(
-    relationship_type: str, resource_id: str, resource_uri: str, timestamp: str, ods_agent: Dict
+        relationship_type: str, resource_id: str, resource_uri: str, timestamp: str, ods_agent: Dict
 ) -> Dict:
     """
     :param relationship_type: Maps to dwc:relationshipOfResource
@@ -86,14 +86,79 @@ def map_to_entity_relationship(
     }
 
 
+def map_to_annotation_no_er_found(
+        timestamp: str,
+        message: str,
+        target_id: str,
+        target_type: str,
+        dcterms_ref: str = ""
+) -> Dict[str, Any]:
+    """
+    Returns an annotation for when no linkages for a given source were found
+    :param timestamp: A formatted timestamp of the current time
+    :param message: no results message
+    :param target_id: ID of target maps to dcterms:identifier
+    :param target_type: target Type, maps to ods:type
+    :param dcterms_ref: dcterms:ref value (value of the API call).
+    :return: formatted annotation
+    """
+    return map_to_annotation_str_val(
+        get_agent(),
+        timestamp, message,
+        build_term_selector("$['ods:hasEntityRelationships']"),
+        target_id, target_type, dcterms_ref, "oa:commenting")
+
+
+def map_to_annotation_str_val(
+        ods_agent: Dict,
+        timestamp: str,
+        oa_value: str,
+        oa_selector: Dict,
+        target_id: str,
+        target_type: str,
+        dcterms_ref: str,
+        motivation: str,
+) -> Dict[str, Any]:
+    """
+     Map the result of the API call to an annotation. Uses a string value
+    :param ods_agent: Agent object of MAS
+    :param timestamp: A formatted timestamp of the current time
+    :param oa_value: Value of the body of the annotation, the result of the computation
+    :param oa_selector: selector of this annotation
+    :param target_id: ID of target maps to dcterms:identifier
+    :param target_type: target Type, maps to ods:type
+    :param dcterms_ref: maps to dcterms:references
+    :param motivation: motivation of the annotation
+    :return: Returns a formatted annotation Record
+    """
+    return {
+        AT_TYPE: "ods:Annotation",
+        "oa:motivation": motivation,
+        "dcterms:creator": ods_agent,
+        "dcterms:created": timestamp,
+        "oa:hasTarget": {
+            ODS_ID: target_id,
+            AT_ID: target_id,
+            ODS_TYPE: target_type,
+            AT_TYPE: target_type,
+            "oa:hasSelector": oa_selector,
+        },
+        "oa:hasBody": {
+            AT_TYPE: "oa:TextualBody",
+            "oa:value": [oa_value],
+            "dcterms:references": dcterms_ref,
+        },
+    }
+
+
 def map_to_annotation(
-    ods_agent: Dict,
-    timestamp: str,
-    oa_value: Dict,
-    oa_selector: Dict,
-    target_id: str,
-    target_type: str,
-    dcterms_ref: str,
+        ods_agent: Dict,
+        timestamp: str,
+        oa_value: Dict,
+        oa_selector: Dict,
+        target_id: str,
+        target_type: str,
+        dcterms_ref: str,
 ) -> Dict[str, Any]:
     """
     Map the result of the API call to an annotation
@@ -106,25 +171,8 @@ def map_to_annotation(
     :param dcterms_ref: maps tp dcterms:references
     :return: Returns a formatted annotation Record
     """
-    annotation = {
-        AT_TYPE: "ods:Annotation",
-        "oa:motivation": "ods:adding",
-        "dcterms:creator": ods_agent,
-        "dcterms:created": timestamp,
-        "oa:hasTarget": {
-            ODS_ID: target_id,
-            AT_ID: target_id,
-            ODS_TYPE: target_type,
-            AT_TYPE: target_type,
-            "oa:hasSelector": oa_selector,
-        },
-        "oa:hasBody": {
-            AT_TYPE: "oa:TextualBody",
-            "oa:value": [json.dumps(oa_value)],
-            "dcterms:references": dcterms_ref,
-        },
-    }
-    return annotation
+    return map_to_annotation_str_val(ods_agent, timestamp, json.dumps(oa_value), oa_selector, target_id, target_type,
+                                     dcterms_ref, "ods:adding")
 
 
 def build_class_selector(oa_class: str) -> Dict:

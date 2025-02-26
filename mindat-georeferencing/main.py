@@ -106,8 +106,9 @@ def map_to_entity_relationship_annotation(
     oa_value = shared.map_to_entity_relationship(
         "hasMindatLocation",
         f"https://www.mindat.org/loc-{result['geo_reference_result']['id']}.html",
+        f"https://www.mindat.org/loc-{result['geo_reference_result']['id']}.html",
         timestamp,
-        ods_agent,
+        ods_agent
     )
     return wrap_oa_value(
         oa_value, result, specimen_data, timestamp, "$['ods:hasEntityRelationships']", batching_requested, ods_agent
@@ -250,4 +251,4 @@ def run_local(example: str):
 
 if __name__ == "__main__":
     start_kafka()
-    # run_local("https://dev.dissco.tech/api/v1/digital-specimen/TEST/VGJ-1R7-JSJ")
+    #run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/SGT-C68-7KY")

@@ -48,9 +48,11 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id:
     :param job_id: The job ID of the MAS
     :return: Returns a formatted annotation Record which includes the Job ID
     """
-    if result.get("error_message") is not None:
-        return {"jobId": job_id, "annotations": []}
     timestamp = shared.timestamp_now()
+    if result.get("error_message") is not None:
+        return {"jobId": job_id, "annotations": [
+            shared.map_to_annotation_no_er_found(timestamp, result.get("error_message"), specimen_data[shared.ODS_ID],
+                                                 specimen_data[shared.ODS_TYPE], result.get("queryString"))]}
     ods_agent = shared.get_agent()
     oa_value = shared.map_to_entity_relationship(
         "hasGbifID",
@@ -93,9 +95,11 @@ def run_api_call(specimen_data: Dict) -> Dict[str, str]:
     identifiers = get_identifiers_from_object(specimen_data)
     query_string = (
         f'https://api.gbif.org/v1/occurrence/search?occurrenceID='
-        f'{identifiers.get("occurrenceID")}&catalogNumber={identifiers.get("catalogNumber")}'
+        f'{identifiers.get("occurrenceID")}'
         f'&basisOfRecord={specimen_data.get("dwc:basisOfRecord")}'
     )
+    if specimen_data.get("catalogNumber") is not None:
+        query_string = query_string + f"&catalogNumber={identifiers.get("catalogNumber")}"
     response = requests.get(query_string)
     response_json = json.loads(response.content)
     if response_json.get("count") == 1:
@@ -142,4 +146,4 @@ def run_local(example: str) -> None:
 
 if __name__ == "__main__":
     start_kafka()
-    # run_local("https://sandbox.dissco.tech/api/v1/digital-specimen/SANDBOX/2D1-512-55B")
+    #run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/SGT-C68-7KY")
