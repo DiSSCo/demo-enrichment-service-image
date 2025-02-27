@@ -44,7 +44,7 @@ def start_kafka() -> None:
 
 
 def map_to_annotation_event(
-    specimen_data: Dict, results: List[Dict[str, str]], job_id: str, batch_metadata: List[Dict[str, Any]]
+        specimen_data: Dict, results: List[Dict[str, str]], job_id: str, batch_metadata: List[Dict[str, Any]]
 ) -> Dict:
     """
     Map the result of the API call to an annotation
@@ -58,7 +58,10 @@ def map_to_annotation_event(
     batching_requested = len(batch_metadata) > 0
     ods_agent = shared.get_agent()
     if results is None:
-        annotations = list()
+        annotations = list(
+            shared.map_to_empty_annotation(
+                timestamp, "Unable to determine locality from specimen information", specimen_data,
+                "$['ods:hasEvents']"))
     else:
         annotations = list(
             map(
@@ -93,7 +96,7 @@ def build_batch_metadata(locality: str, place_in_batch: int) -> Dict[str, Any]:
 
 
 def map_to_entity_relationship_annotation(
-    specimen_data: Dict, result: Dict[str, Any], timestamp: str, batching_requested: bool, ods_agent: Dict
+        specimen_data: Dict, result: Dict[str, Any], timestamp: str, batching_requested: bool, ods_agent: Dict
 ) -> Dict:
     """
     Map the result of the Mindat Locality API call to an entityRelationship annotation
@@ -111,12 +114,12 @@ def map_to_entity_relationship_annotation(
         ods_agent
     )
     return wrap_oa_value(
-        oa_value, result, specimen_data, timestamp, "$['ods:hasEntityRelationships']", batching_requested, ods_agent
+        oa_value, result, specimen_data, timestamp, shared.ER_PATH, batching_requested, ods_agent
     )
 
 
 def map_to_georeference_annotation(
-    specimen_data: Dict, result: Dict[str, Any], timestamp: str, batching_requested: bool, ods_agent: Dict
+        specimen_data: Dict, result: Dict[str, Any], timestamp: str, batching_requested: bool, ods_agent: Dict
 ) -> Dict:
     """
     Map the result of the Mindat Locality API call to a georeference annotation
@@ -135,7 +138,7 @@ def map_to_georeference_annotation(
         "dwc:georeferencedDate": timestamp,
         "dwc:georeferenceSources": f"https://www.mindat.org/loc-{result['geo_reference_result']['id']}.html",
         "dwc:georeferenceProtocol": "Georeferenced against the Mindat Locality API based on the specimen "
-        "locality string (dwc:locality)",
+                                    "locality string (dwc:locality)",
     }
 
     return wrap_oa_value(
@@ -150,13 +153,13 @@ def map_to_georeference_annotation(
 
 
 def wrap_oa_value(
-    oa_value: Dict,
-    result: Dict[str, Any],
-    specimen_data: Dict,
-    timestamp: str,
-    oa_class: str,
-    batching_requested: bool,
-    ods_agent: Dict,
+        oa_value: Dict,
+        result: Dict[str, Any],
+        specimen_data: Dict,
+        timestamp: str,
+        oa_class: str,
+        batching_requested: bool,
+        ods_agent: Dict,
 ) -> Dict:
     """
     Generic method to wrap the oa_value into an annotation object
@@ -198,7 +201,7 @@ def send_updated_opends(annotation: Dict, producer: KafkaProducer) -> None:
 
 
 def run_georeference(
-    specimen_data: Dict, batching_requested: bool
+        specimen_data: Dict, batching_requested: bool
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Run the value in the dwc:locality field through the Mindat Locality API and return the highest result per occurrence
@@ -250,5 +253,5 @@ def run_local(example: str):
 
 
 if __name__ == "__main__":
-    start_kafka()
-    #run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/SGT-C68-7KY")
+    # start_kafka()
+    run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/RPK-51F-ZY6")

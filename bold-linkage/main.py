@@ -79,7 +79,7 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, str], timest
         timestamp,
         ods_agent,
     )
-    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationships']")
+    oa_selector = shared.build_class_selector(shared.ER_PATH)
     return shared.map_to_annotation(
         ods_agent,
         timestamp,

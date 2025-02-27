@@ -8,6 +8,8 @@ ODS_TYPE = "ods:fdoType"
 AT_TYPE = "@type"
 ODS_ID = "dcterms:identifier"
 AT_ID = "@id"
+ER_PATH = "$['ods:hasEntityRelationships']"
+
 MAS_ID = os.environ.get("MAS_ID")
 MAS_NAME = os.environ.get("MAS_NAME")
 
@@ -86,27 +88,27 @@ def map_to_entity_relationship(
     }
 
 
-def map_to_annotation_no_er_found(
+def map_to_empty_annotation(
         timestamp: str,
         message: str,
-        target_id: str,
-        target_type: str,
+        target_data: Dict[str, Any],
+        selector: str,
         dcterms_ref: str = ""
 ) -> Dict[str, Any]:
     """
     Returns an annotation for when no linkages for a given source were found
     :param timestamp: A formatted timestamp of the current time
     :param message: no results message
-    :param target_id: ID of target maps to dcterms:identifier
-    :param target_type: target Type, maps to ods:type
+    :param target_data: Dict of the target data
+    :param selector: Target class/term
     :param dcterms_ref: dcterms:ref value (value of the API call).
     :return: formatted annotation
     """
     return map_to_annotation_str_val(
         get_agent(),
         timestamp, message,
-        build_term_selector("$['ods:hasEntityRelationships']"),
-        target_id, target_type, dcterms_ref, "oa:commenting")
+        build_term_selector(selector),
+        target_data[ODS_ID], target_data[ODS_TYPE], dcterms_ref, "oa:commenting")
 
 
 def map_to_annotation_str_val(

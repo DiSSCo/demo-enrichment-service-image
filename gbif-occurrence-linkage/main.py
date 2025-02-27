@@ -51,8 +51,9 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id:
     timestamp = shared.timestamp_now()
     if result.get("error_message") is not None:
         return {"jobId": job_id, "annotations": [
-            shared.map_to_annotation_no_er_found(timestamp, result.get("error_message"), specimen_data[shared.ODS_ID],
-                                                 specimen_data[shared.ODS_TYPE], result.get("queryString"))]}
+            shared.map_to_empty_annotation(
+                timestamp, result.get("error_message"), specimen_data, shared.ER_PATH,
+                result.get("queryString"))]}
     ods_agent = shared.get_agent()
     oa_value = shared.map_to_entity_relationship(
         "hasGbifID",
@@ -61,7 +62,7 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id:
         timestamp,
         ods_agent,
     )
-    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationships']")
+    oa_selector = shared.build_class_selector(shared.ER_PATH)
     annotation = shared.map_to_annotation(
         ods_agent,
         timestamp,
@@ -146,4 +147,4 @@ def run_local(example: str) -> None:
 
 if __name__ == "__main__":
     start_kafka()
-    #run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/SGT-C68-7KY")
+    # run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/SGT-C68-7KY")
