@@ -34,13 +34,17 @@ def start_kafka() -> None:
             shared.mark_job_as_running(json_value.get("jobId"))
             specimen_data = json_value.get("object")
             result = run_api_call(specimen_data)
-            annotation_event = map_to_annotation_event(specimen_data, result, json_value.get("jobId"))
+            annotation_event = map_to_annotation_event(
+                specimen_data, result, json_value.get("jobId")
+            )
             publish_annotation_event(annotation_event, producer)
         except Exception as e:
             logging.exception(e)
 
 
-def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id: str) -> dict:
+def map_to_annotation_event(
+    specimen_data: Dict, result: Dict[str, str], job_id: str
+) -> dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -50,10 +54,18 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id:
     """
     timestamp = shared.timestamp_now()
     if result.get("error_message") is not None:
-        return {"jobId": job_id, "annotations": [
-            shared.map_to_empty_annotation(
-                timestamp, result.get("error_message"), specimen_data, shared.ER_PATH,
-                result.get("queryString"))]}
+        return {
+            "jobId": job_id,
+            "annotations": [
+                shared.map_to_empty_annotation(
+                    timestamp,
+                    result.get("error_message"),
+                    specimen_data,
+                    shared.ER_PATH,
+                    result.get("queryString"),
+                )
+            ],
+        }
     ods_agent = shared.get_agent()
     oa_value = shared.map_to_entity_relationship(
         "hasGbifID",
@@ -95,23 +107,36 @@ def run_api_call(specimen_data: Dict) -> Dict[str, str]:
     """
     identifiers = get_identifiers_from_object(specimen_data)
     query_string = (
-        f'https://api.gbif.org/v1/occurrence/search?occurrenceID='
+        f"https://api.gbif.org/v1/occurrence/search?occurrenceID="
         f'{identifiers.get("occurrenceID")}'
         f'&basisOfRecord={specimen_data.get("dwc:basisOfRecord")}'
     )
     if specimen_data.get("catalogNumber") is not None:
-        query_string = query_string + f"&catalogNumber={identifiers.get("catalogNumber")}"
+        query_string = (
+            query_string + f"&catalogNumber={identifiers.get("catalogNumber")}"
+        )
     response = requests.get(query_string)
     response_json = json.loads(response.content)
     if response_json.get("count") == 1:
-        logging.info("Successfully retrieved a single result from GBIF based on the identifiers")
-        return {"queryString": query_string, "gbifID": response_json.get("results")[0].get("gbifID")}
+        logging.info(
+            "Successfully retrieved a single result from GBIF based on the identifiers"
+        )
+        return {
+            "queryString": query_string,
+            "gbifID": response_json.get("results")[0].get("gbifID"),
+        }
     elif response_json["count"] == 0:
         logging.info("No results were returned, unable to create a relationship")
-        return {"queryString": query_string, "error_message": "Failed to make the match, no match could be created"}
+        return {
+            "queryString": query_string,
+            "error_message": "Failed to make the match, no match could be created",
+        }
     else:
         logging.info("More than one result returned, unable to create a relationship")
-        return {"queryString": query_string, "error_message": "Failed to make the match, too many candidates"}
+        return {
+            "queryString": query_string,
+            "error_message": "Failed to make the match, too many candidates",
+        }
 
 
 def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:

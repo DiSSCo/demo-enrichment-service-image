@@ -52,7 +52,13 @@ def build_secret(name: str, secret_key_ref: str) -> Dict[str, str]:
 
 
 def build_attributes(
-    name: str, description: str, image: str, tag: str, target_filter: Dict[str, Any], batching: bool, secrets=None
+    name: str,
+    description: str,
+    image: str,
+    tag: str,
+    target_filter: Dict[str, Any],
+    batching: bool,
+    secrets=None,
 ) -> Dict[str, Any]:
     if secrets is None:
         secrets = []
@@ -84,8 +90,13 @@ def bold(is_acceptance: bool) -> Dict[str, Any]:
     tag = BOLD_TAG if is_acceptance else LATEST
     target_filter = {HAS_IDENTIFIER: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
     batching = False
-    secrets = [build_secret("API_USER", "bold-api-user"), build_secret("API_PASSWORD", "bold-api-password")]
-    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
+    secrets = [
+        build_secret("API_USER", "bold-api-user"),
+        build_secret("API_PASSWORD", "bold-api-password"),
+    ]
+    return build_attributes(
+        name, description, image, tag, target_filter, batching, secrets
+    )
 
 
 def ena(is_acceptance: bool) -> Dict[str, Any]:
@@ -93,9 +104,15 @@ def ena(is_acceptance: bool) -> Dict[str, Any]:
     description = "Links specimen to an entry in the European Nucleotide Archive (ENA)"
     image = "public.ecr.aws/dissco/ena-linkage"
     tag = ENA_TAG if is_acceptance else LATEST
-    target_filter = {HAS_IDENTIFIER: ["*"], HAS_EVENT: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
+    target_filter = {
+        HAS_IDENTIFIER: ["*"],
+        HAS_EVENT: ["*"],
+        ODS_FDO_TYPE: [SPECIMEN_TYPE],
+    }
     batching = False
-    return build_attributes(name, description, image, tag, target_filter, batching, None)
+    return build_attributes(
+        name, description, image, tag, target_filter, batching, None
+    )
 
 
 def gbif(is_acceptance: bool) -> Dict[str, Any]:
@@ -103,9 +120,15 @@ def gbif(is_acceptance: bool) -> Dict[str, Any]:
     description = "Links specimen to an occurrence in Global Biodiversity Information Facility (GBIF)"
     image = "public.ecr.aws/dissco/gbif-occurrence-linkage"
     tag = GBIF_TAG if is_acceptance else LATEST
-    target_filter = {HAS_IDENTIFIER: ["*"], "$['dwc:basisOfRecord']": ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
+    target_filter = {
+        HAS_IDENTIFIER: ["*"],
+        "$['dwc:basisOfRecord']": ["*"],
+        ODS_FDO_TYPE: [SPECIMEN_TYPE],
+    }
     batching = False
-    return build_attributes(name, description, image, tag, target_filter, batching, None)
+    return build_attributes(
+        name, description, image, tag, target_filter, batching, None
+    )
 
 
 def geocase(is_acceptance: bool) -> Dict[str, Any]:
@@ -115,29 +138,35 @@ def geocase(is_acceptance: bool) -> Dict[str, Any]:
     tag = GEOCASE_TAG if is_acceptance else LATEST
     target_filter = {HAS_IDENTIFIER: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
     batching = False
-    return build_attributes(name, description, image, tag, target_filter, batching, None)
+    return build_attributes(
+        name, description, image, tag, target_filter, batching, None
+    )
 
 
 def plant_organ(is_acceptance: bool) -> Dict[str, Any]:
     name = "herbarium-sheet-plant-organ-detection"
-    description = "Uses machine learning classifier to identify plant organs on herbarium sheets"
+    description = (
+        "Uses machine learning classifier to identify plant organs on herbarium sheets"
+    )
     image = "public.ecr.aws/dissco/herbarium-sheet-plant-organ-detection"
     tag = PLANT_ORGAN_TAG if is_acceptance else LATEST
     target_filter = {AC_URI: ["*"], ODS_FDO_TYPE: [MEDIA_TYPE]}
     batching = False
-    return build_attributes(name, description, image, tag, target_filter, batching, None)
+    return build_attributes(
+        name, description, image, tag, target_filter, batching, None
+    )
 
 
 def image_metadata(is_acceptance: bool) -> Dict[str, Any]:
     name = "image-metadata-addition"
-    description = (
-        "Uses the Python Imaging Library to add additional image metadata (size, format, etc.) to digital media"
-    )
+    description = "Uses the Python Imaging Library to add additional image metadata (size, format, etc.) to digital media"
     image = "public.ecr.aws/dissco/image-metadata-addition"
     tag = IMAGE_METADATA_TAG if is_acceptance else LATEST
     target_filter = {AC_URI: ["*"], ODS_FDO_TYPE: [MEDIA_TYPE]}
     batching = False
-    return build_attributes(name, description, image, tag, target_filter, batching, None)
+    return build_attributes(
+        name, description, image, tag, target_filter, batching, None
+    )
 
 
 def mindat(is_acceptance: bool) -> Dict[str, Any]:
@@ -148,7 +177,9 @@ def mindat(is_acceptance: bool) -> Dict[str, Any]:
     target_filter = {HAS_EVENT: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
     batching = True
     secrets = [build_secret("API_KEY", "mindat-api-key")]
-    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
+    return build_attributes(
+        name, description, image, tag, target_filter, batching, secrets
+    )
 
 
 def osm(is_acceptance: bool) -> Dict[str, Any]:
@@ -158,8 +189,13 @@ def osm(is_acceptance: bool) -> Dict[str, Any]:
     tag = OSM_TAG if is_acceptance else LATEST
     target_filter = {HAS_EVENT: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
     batching = False
-    secrets = [build_secret("GEOPICK_USER", "geopick-user"), build_secret("GEOPICK_PASSWORD", "geopick-password")]
-    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
+    secrets = [
+        build_secret("GEOPICK_USER", "geopick-user"),
+        build_secret("GEOPICK_PASSWORD", "geopick-password"),
+    ]
+    return build_attributes(
+        name, description, image, tag, target_filter, batching, secrets
+    )
 
 
 def senck(is_acceptance) -> Dict[str, Any]:
@@ -171,9 +207,13 @@ def senck(is_acceptance) -> Dict[str, Any]:
     batching = True
     secrets = [
         build_secret("PLANT_ORGAN_SEGMENTATION_USER", "plant-organ-segmentation-user"),
-        build_secret("PLANT_ORGAN_SEGMENTATION_PASSWORD", "plant-organ-segmentation-password"),
+        build_secret(
+            "PLANT_ORGAN_SEGMENTATION_PASSWORD", "plant-organ-segmentation-password"
+        ),
     ]
-    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
+    return build_attributes(
+        name, description, image, tag, target_filter, batching, secrets
+    )
 
 
 def get_token() -> str:

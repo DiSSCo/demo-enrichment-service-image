@@ -36,13 +36,17 @@ def start_kafka() -> None:
             shared.mark_job_as_running(json_value.get("jobId"))
             specimen_data = json_value.get("object")
             result = run_api_call(specimen_data)
-            mas_job_record = map_to_annotation_event(specimen_data, result, json_value.get("jobId"))
+            mas_job_record = map_to_annotation_event(
+                specimen_data, result, json_value.get("jobId")
+            )
             publish_annotation_event(mas_job_record, producer)
         except Exception as e:
             logging.exception(e)
 
 
-def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> Dict:
+def map_to_annotation_event(
+    specimen_data: Dict, results: List[Dict[str, str]], job_id: str
+) -> Dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -53,15 +57,27 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
     timestamp = shared.timestamp_now()
     if not results:
         # Build "no match" annotation: motivation is comment, selector is a termSelector instead of classSelector
-        annotations = [shared.map_to_empty_annotation(
-            timestamp,"No results found for ENA",  specimen_data, shared.ER_PATH)]
+        annotations = [
+            shared.map_to_empty_annotation(
+                timestamp, "No results found for ENA", specimen_data, shared.ER_PATH
+            )
+        ]
     else:
-        annotations = list(map(lambda result: map_result_to_annotation(specimen_data, result, timestamp), results))
+        annotations = list(
+            map(
+                lambda result: map_result_to_annotation(
+                    specimen_data, result, timestamp
+                ),
+                results,
+            )
+        )
     mas_job_record = {"jobId": job_id, "annotations": annotations}
     return mas_job_record
 
 
-def map_result_to_annotation(specimen_data: Dict, result: Dict[str, str], timestamp: str) -> Dict:
+def map_result_to_annotation(
+    specimen_data: Dict, result: Dict[str, str], timestamp: str
+) -> Dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The original specimen data
@@ -109,8 +125,12 @@ def run_additional_checks(response_json: Dict, specimen_data: Dict) -> bool:
     :return: Returns whether it passes for the checks (True) or not (False)
     """
     is_valid = False
-    if specimen_data.get(HAS_EVENT)[0].get("dwc:eventDate") and response_json.get("collection_date"):
-        if specimen_data.get(HAS_EVENT)[0].get("dwc:eventDate") == response_json.get("collection_date"):
+    if specimen_data.get(HAS_EVENT)[0].get("dwc:eventDate") and response_json.get(
+        "collection_date"
+    ):
+        if specimen_data.get(HAS_EVENT)[0].get("dwc:eventDate") == response_json.get(
+            "collection_date"
+        ):
             is_valid = True
         else:
             logging.info(
@@ -118,8 +138,12 @@ def run_additional_checks(response_json: Dict, specimen_data: Dict) -> bool:
                 f'{specimen_data.get(HAS_EVENT)[0].get("dwc:eventDate")}'
             )
             is_valid = False
-    if specimen_data.get(HAS_EVENT)[0].get("ods:hasLocation").get("dwc:country") and response_json.get("country"):
-        if specimen_data.get(HAS_EVENT)[0].get("ods:hasLocation").get("dwc:country") in response_json.get("country"):
+    if specimen_data.get(HAS_EVENT)[0].get("ods:hasLocation").get(
+        "dwc:country"
+    ) and response_json.get("country"):
+        if specimen_data.get(HAS_EVENT)[0].get("ods:hasLocation").get(
+            "dwc:country"
+        ) in response_json.get("country"):
             is_valid = True
         else:
             logging.info(
@@ -139,7 +163,10 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     :return:  A list of results that contain the queryString and the geoCASe identifier
     """
     identifiers = list(
-        map(lambda identifier: identifier.get("dcterms:identifierValue"), specimen_data.get("ods:hasIdentifiers"))
+        map(
+            lambda identifier: identifier.get("dcterms:identifierValue"),
+            specimen_data.get("ods:hasIdentifiers"),
+        )
     )
     sequence_query = build_query_string(identifiers, "sequence")
     response = requests.get(sequence_query)
@@ -156,11 +183,17 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
             check_result(response_json, result_list, sequence_query, specimen_data)
             return result_list
         else:
-            logging.info(f'No relevant identifiers found for specimen: {specimen_data["dcterms:identifier"]}')
+            logging.info(
+                f'No relevant identifiers found for specimen: {specimen_data["dcterms:identifier"]}'
+            )
             return list()
 
+
 def check_result(
-        response_json: Dict, result_list: List[Dict[str, str]], sequence_query: str, specimen_data: Dict
+    response_json: Dict,
+    result_list: List[Dict[str, str]],
+    sequence_query: str,
+    specimen_data: Dict,
 ) -> None:
     """
     Check the result of the API call and add it to the result list if it passes the additional checks
@@ -172,7 +205,9 @@ def check_result(
     """
     for result in response_json:
         if run_additional_checks(result, specimen_data):
-            result_list.append({"queryString": sequence_query, "enaAccessionId": result["accession"]})
+            result_list.append(
+                {"queryString": sequence_query, "enaAccessionId": result["accession"]}
+            )
 
 
 def build_query_string(identifiers: List[str], endpoint: str) -> str:

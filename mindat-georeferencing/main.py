@@ -37,14 +37,19 @@ def start_kafka() -> None:
             specimen_data = json_value.get("object")
             batching_requested = json_value["batchingRequested"]
             result, batch_metadata = run_georeference(specimen_data, batching_requested)
-            mas_job_record = map_to_annotation_event(specimen_data, result, json_value.get("jobId"), batch_metadata)
+            mas_job_record = map_to_annotation_event(
+                specimen_data, result, json_value.get("jobId"), batch_metadata
+            )
             send_updated_opends(mas_job_record, producer)
         except Exception as e:
             logging.exception(e)
 
 
 def map_to_annotation_event(
-        specimen_data: Dict, results: List[Dict[str, str]], job_id: str, batch_metadata: List[Dict[str, Any]]
+    specimen_data: Dict,
+    results: List[Dict[str, str]],
+    job_id: str,
+    batch_metadata: List[Dict[str, Any]],
 ) -> Dict:
     """
     Map the result of the API call to an annotation
@@ -60,8 +65,12 @@ def map_to_annotation_event(
     if results is None:
         annotations = list(
             shared.map_to_empty_annotation(
-                timestamp, "Unable to determine locality from specimen information", specimen_data,
-                "$['ods:hasEvents']"))
+                timestamp,
+                "Unable to determine locality from specimen information",
+                specimen_data,
+                "$['ods:hasEvents']",
+            )
+        )
     else:
         annotations = list(
             map(
@@ -90,13 +99,22 @@ def map_to_annotation_event(
 def build_batch_metadata(locality: str, place_in_batch: int) -> Dict[str, Any]:
     batch_metadata = {
         "ods:placeInBatch": place_in_batch,
-        "searchParams": [{"inputField": "$['ods:hasEvents'][*][HAS_LOCATION]['dwc:locality']", "inputValue": locality}],
+        "searchParams": [
+            {
+                "inputField": "$['ods:hasEvents'][*][HAS_LOCATION]['dwc:locality']",
+                "inputValue": locality,
+            }
+        ],
     }
     return batch_metadata
 
 
 def map_to_entity_relationship_annotation(
-        specimen_data: Dict, result: Dict[str, Any], timestamp: str, batching_requested: bool, ods_agent: Dict
+    specimen_data: Dict,
+    result: Dict[str, Any],
+    timestamp: str,
+    batching_requested: bool,
+    ods_agent: Dict,
 ) -> Dict:
     """
     Map the result of the Mindat Locality API call to an entityRelationship annotation
@@ -111,15 +129,25 @@ def map_to_entity_relationship_annotation(
         f"https://www.mindat.org/loc-{result['geo_reference_result']['id']}.html",
         f"https://www.mindat.org/loc-{result['geo_reference_result']['id']}.html",
         timestamp,
-        ods_agent
+        ods_agent,
     )
     return wrap_oa_value(
-        oa_value, result, specimen_data, timestamp, shared.ER_PATH, batching_requested, ods_agent
+        oa_value,
+        result,
+        specimen_data,
+        timestamp,
+        shared.ER_PATH,
+        batching_requested,
+        ods_agent,
     )
 
 
 def map_to_georeference_annotation(
-        specimen_data: Dict, result: Dict[str, Any], timestamp: str, batching_requested: bool, ods_agent: Dict
+    specimen_data: Dict,
+    result: Dict[str, Any],
+    timestamp: str,
+    batching_requested: bool,
+    ods_agent: Dict,
 ) -> Dict:
     """
     Map the result of the Mindat Locality API call to a georeference annotation
@@ -138,7 +166,7 @@ def map_to_georeference_annotation(
         "dwc:georeferencedDate": timestamp,
         "dwc:georeferenceSources": f"https://www.mindat.org/loc-{result['geo_reference_result']['id']}.html",
         "dwc:georeferenceProtocol": "Georeferenced against the Mindat Locality API based on the specimen "
-                                    "locality string (dwc:locality)",
+        "locality string (dwc:locality)",
     }
 
     return wrap_oa_value(
@@ -153,13 +181,13 @@ def map_to_georeference_annotation(
 
 
 def wrap_oa_value(
-        oa_value: Dict,
-        result: Dict[str, Any],
-        specimen_data: Dict,
-        timestamp: str,
-        oa_class: str,
-        batching_requested: bool,
-        ods_agent: Dict,
+    oa_value: Dict,
+    result: Dict[str, Any],
+    specimen_data: Dict,
+    timestamp: str,
+    oa_class: str,
+    batching_requested: bool,
+    ods_agent: Dict,
 ) -> Dict:
     """
     Generic method to wrap the oa_value into an annotation object
@@ -201,7 +229,7 @@ def send_updated_opends(annotation: Dict, producer: KafkaProducer) -> None:
 
 
 def run_georeference(
-        specimen_data: Dict, batching_requested: bool
+    specimen_data: Dict, batching_requested: bool
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Run the value in the dwc:locality field through the Mindat Locality API and return the highest result per occurrence
@@ -213,17 +241,30 @@ def run_georeference(
     result_list = list()
     batch_metadata = list()
     for index, event in enumerate(events):
-        if (event.get(HAS_LOCATION) is not None and event.get(HAS_LOCATION).get("dwc:locality")) is not None:
+        if (
+            event.get(HAS_LOCATION) is not None
+            and event.get(HAS_LOCATION).get("dwc:locality")
+        ) is not None:
             location = event.get(HAS_LOCATION)
-            querystring = f"https://api.mindat.org/localities/?txt={location.get('dwc:locality')}"
-            response = requests.get(querystring, headers={"Authorization": "Token " + os.environ.get("API_KEY")})
-            logging.info("Response from mindat status code: " + str(response.status_code))
+            querystring = (
+                f"https://api.mindat.org/localities/?txt={location.get('dwc:locality')}"
+            )
+            response = requests.get(
+                querystring,
+                headers={"Authorization": "Token " + os.environ.get("API_KEY")},
+            )
+            logging.info(
+                "Response from mindat status code: " + str(response.status_code)
+            )
             logging.info("Response from mindat" + str(response.content))
             response_json = json.loads(response.content)
             if not response_json:
                 logging.info("No results for this locality where found: " + querystring)
             else:
-                logging.info("Highest hit is: " + json.dumps(response_json.get("results")[0], indent=2))
+                logging.info(
+                    "Highest hit is: "
+                    + json.dumps(response_json.get("results")[0], indent=2)
+                )
                 result_list.append(
                     {
                         "queryString": querystring,
@@ -232,7 +273,9 @@ def run_georeference(
                     }
                 )
                 if batching_requested:
-                    batch_metadata.append(build_batch_metadata(event[HAS_LOCATION]["dwc:locality"], index))
+                    batch_metadata.append(
+                        build_batch_metadata(event[HAS_LOCATION]["dwc:locality"], index)
+                    )
     return result_list, batch_metadata
 
 
@@ -248,7 +291,9 @@ def run_local(example: str):
     response = requests.get(example)
     specimen_data = json.loads(response.content).get("data").get("attributes")
     result, batch_metadata = run_georeference(specimen_data, True)
-    annotation_event = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()), batch_metadata)
+    annotation_event = map_to_annotation_event(
+        specimen_data, result, str(uuid.uuid4()), batch_metadata
+    )
     logging.info("Created annotations: " + json.dumps(annotation_event, indent=2))
 
 
