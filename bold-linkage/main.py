@@ -35,13 +35,17 @@ def start_kafka() -> None:
             shared.mark_job_as_running(json_value.get("jobId"))
             specimen_data = json_value.get("object")
             result = run_api_call(specimen_data)
-            mas_job_record = map_to_annotation_event(specimen_data, result, json_value.get("jobId"))
+            mas_job_record = map_to_annotation_event(
+                specimen_data, result, json_value.get("jobId")
+            )
             publish_annotation_event(mas_job_record, producer)
         except Exception as e:
             logging.exception(e)
 
 
-def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> Dict:
+def map_to_annotation_event(
+    specimen_data: Dict, results: List[Dict[str, str]], job_id: str
+) -> Dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -55,7 +59,9 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
     else:
         annotations = list(
             map(
-                lambda result: map_result_to_annotation(specimen_data, result, timestamp),
+                lambda result: map_result_to_annotation(
+                    specimen_data, result, timestamp
+                ),
                 results,
             )
         )
@@ -63,7 +69,9 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
     return annotation_event
 
 
-def map_result_to_annotation(specimen_data: Dict, result: Dict[str, str], timestamp: str) -> Dict:
+def map_result_to_annotation(
+    specimen_data: Dict, result: Dict[str, str], timestamp: str
+) -> Dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The original specimen data
@@ -186,4 +194,4 @@ def run_local(example: str) -> None:
 
 if __name__ == "__main__":
     start_kafka()
-    #run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/MJG-GTC-5C2")
+    # run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/MJG-GTC-5C2")

@@ -42,8 +42,12 @@ def start_kafka() -> None:
         image_uri = json_value.get("object").get("ac:accessURI")
         timestamp = shared.timestamp_now()
         image_assertions, additional_info = get_image_measurements(image_uri, timestamp)
-        annotations = create_annotation(image_assertions, additional_info, json_value.get("object"), timestamp)
-        publish_annotation_event(map_to_annotation_event(annotations, json_value.get("jobId")), producer)
+        annotations = create_annotation(
+            image_assertions, additional_info, json_value.get("object"), timestamp
+        )
+        publish_annotation_event(
+            map_to_annotation_event(annotations, json_value.get("jobId")), producer
+        )
 
 
 def run_local(example: str) -> None:
@@ -70,7 +74,10 @@ def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
 
 
 def create_annotation(
-    image_assertions: List[Dict[str, Any]], additional_info: Dict[str, Any], digital_media: dict, timestamp: str
+    image_assertions: List[Dict[str, Any]],
+    additional_info: Dict[str, Any],
+    digital_media: dict,
+    timestamp: str,
 ) -> List[Dict]:
     """
     Builds an annotation out of the assertions created by the Pillow imaging library
@@ -121,7 +128,9 @@ def publish_annotation_event(annotation_event: Dict, producer: KafkaProducer) ->
     producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation_event)
 
 
-def get_image_measurements(image_uri: str, timestamp: str) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+def get_image_measurements(
+    image_uri: str, timestamp: str
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
     Checks if the Image url works and gathers metadata information from the image
     :param image_uri: The image url from which we will gather metadata
@@ -130,17 +139,37 @@ def get_image_measurements(image_uri: str, timestamp: str) -> Tuple[List[Dict[st
     """
     ods_agent = shared.get_agent()
     assertions = list()
-    assertions.append(build_assertion(timestamp, ods_agent, "ac:variant", "acvariant:v008", None))
+    assertions.append(
+        build_assertion(timestamp, ods_agent, "ac:variant", "acvariant:v008", None)
+    )
     img_format = ""
     try:
         img = Image.open(requests.get(image_uri, stream=True).raw)
         img_file = BytesIO()
         img.save(img_file, img.format, quality="keep")
-        assertions.append(build_assertion(timestamp, ods_agent, "exif:PixelXDimension", str(img.width), "pixel"))
-        assertions.append(build_assertion(timestamp, ods_agent, "exif:PixelYDimension", str(img.height), "pixel"))
-        assertions.append(build_assertion(timestamp, ods_agent, DCTERMS_FORMAT, img.format.lower(), None))
         assertions.append(
-            build_assertion(timestamp, ods_agent, "dcterms:extent", str(round(img_file.tell() / 1000000, 2)), "MB")
+            build_assertion(
+                timestamp, ods_agent, "exif:PixelXDimension", str(img.width), "pixel"
+            )
+        )
+        assertions.append(
+            build_assertion(
+                timestamp, ods_agent, "exif:PixelYDimension", str(img.height), "pixel"
+            )
+        )
+        assertions.append(
+            build_assertion(
+                timestamp, ods_agent, DCTERMS_FORMAT, img.format.lower(), None
+            )
+        )
+        assertions.append(
+            build_assertion(
+                timestamp,
+                ods_agent,
+                "dcterms:extent",
+                str(round(img_file.tell() / 1000000, 2)),
+                "MB",
+            )
         )
         img_format = img.format.lower()
     except (FileNotFoundError, UnidentifiedImageError, MissingSchema):
@@ -153,7 +182,9 @@ def get_image_measurements(image_uri: str, timestamp: str) -> Tuple[List[Dict[st
     return assertions, format_dict
 
 
-def build_assertion(timestamp: str, ods_agent: Dict, msmt_type: str, msmt_value: str, unit) -> Dict:
+def build_assertion(
+    timestamp: str, ods_agent: Dict, msmt_type: str, msmt_value: str, unit
+) -> Dict:
     assertion = {
         shared.AT_TYPE: "ods:Assertion",
         "dwc:measurementDeterminedDate": timestamp,

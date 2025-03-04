@@ -68,7 +68,11 @@ def get_agent() -> Dict[str, Any]:
 
 
 def map_to_entity_relationship(
-        relationship_type: str, resource_id: str, resource_uri: str, timestamp: str, ods_agent: Dict
+    relationship_type: str,
+    resource_id: str,
+    resource_uri: str,
+    timestamp: str,
+    ods_agent: Dict,
 ) -> Dict:
     """
     :param relationship_type: Maps to dwc:relationshipOfResource
@@ -89,11 +93,11 @@ def map_to_entity_relationship(
 
 
 def map_to_empty_annotation(
-        timestamp: str,
-        message: str,
-        target_data: Dict[str, Any],
-        selector: str,
-        dcterms_ref: str = ""
+    timestamp: str,
+    message: str,
+    target_data: Dict[str, Any],
+    selector: str,
+    dcterms_ref: str = "",
 ) -> Dict[str, Any]:
     """
     Returns an annotation for when no linkages for a given source were found
@@ -106,20 +110,25 @@ def map_to_empty_annotation(
     """
     return map_to_annotation_str_val(
         get_agent(),
-        timestamp, message,
+        timestamp,
+        message,
         build_term_selector(selector),
-        target_data[ODS_ID], target_data[ODS_TYPE], dcterms_ref, "oa:commenting")
+        target_data[ODS_ID],
+        target_data[ODS_TYPE],
+        dcterms_ref,
+        "oa:commenting",
+    )
 
 
 def map_to_annotation_str_val(
-        ods_agent: Dict,
-        timestamp: str,
-        oa_value: str,
-        oa_selector: Dict,
-        target_id: str,
-        target_type: str,
-        dcterms_ref: str,
-        motivation: str,
+    ods_agent: Dict,
+    timestamp: str,
+    oa_value: str,
+    oa_selector: Dict,
+    target_id: str,
+    target_type: str,
+    dcterms_ref: str,
+    motivation: str,
 ) -> Dict[str, Any]:
     """
      Map the result of the API call to an annotation. Uses a string value
@@ -154,13 +163,13 @@ def map_to_annotation_str_val(
 
 
 def map_to_annotation(
-        ods_agent: Dict,
-        timestamp: str,
-        oa_value: Dict,
-        oa_selector: Dict,
-        target_id: str,
-        target_type: str,
-        dcterms_ref: str,
+    ods_agent: Dict,
+    timestamp: str,
+    oa_value: Dict,
+    oa_selector: Dict,
+    target_id: str,
+    target_type: str,
+    dcterms_ref: str,
 ) -> Dict[str, Any]:
     """
     Map the result of the API call to an annotation
@@ -173,8 +182,16 @@ def map_to_annotation(
     :param dcterms_ref: maps tp dcterms:references
     :return: Returns a formatted annotation Record
     """
-    return map_to_annotation_str_val(ods_agent, timestamp, json.dumps(oa_value), oa_selector, target_id, target_type,
-                                     dcterms_ref, "ods:adding")
+    return map_to_annotation_str_val(
+        ods_agent,
+        timestamp,
+        json.dumps(oa_value),
+        oa_selector,
+        target_id,
+        target_type,
+        dcterms_ref,
+        "ods:adding",
+    )
 
 
 def build_class_selector(oa_class: str) -> Dict:
@@ -213,7 +230,13 @@ def build_fragment_selector(bounding_box: Dict, width: int, height: int) -> Dict
         "ac:hasROI": {
             "ac:xFrac": bounding_box["boundingBox"][0] / width,
             "ac:yFrac": bounding_box["boundingBox"][1] / height,
-            "ac:widthFrac": (bounding_box["boundingBox"][2] - bounding_box["boundingBox"][0]) / width,
-            "ac:heightFrac": (bounding_box["boundingBox"][3] - bounding_box["boundingBox"][1]) / height,
+            "ac:widthFrac": (
+                bounding_box["boundingBox"][2] - bounding_box["boundingBox"][0]
+            )
+            / width,
+            "ac:heightFrac": (
+                bounding_box["boundingBox"][3] - bounding_box["boundingBox"][1]
+            )
+            / height,
         },
     }

@@ -1,4 +1,4 @@
-name: Build Herbrarium Sheet Plat Organ Segmentation
+name: Build Herbrarium Sheet Plant Organ Segmentation
 on:
   push:
     branches:

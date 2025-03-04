@@ -43,7 +43,9 @@ def start_kafka(predictor: DefaultPredictor) -> None:
             additional_info_annotations, width, height = run_object_detection(
                 digital_media.get("ac:accessURI"), predictor
             )
-            annotations = map_result_to_annotation(digital_media, additional_info_annotations, width, height)
+            annotations = map_result_to_annotation(
+                digital_media, additional_info_annotations, width, height
+            )
             event = map_to_annotation_event(annotations, json_value.get("jobId"))
             send_updated_opends(event, producer)
         except Exception as e:
@@ -55,7 +57,10 @@ def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
 
 
 def map_result_to_annotation(
-    digital_media: Dict, additional_info_annotations: List[Dict[str, Any]], width: int, height: int
+    digital_media: Dict,
+    additional_info_annotations: List[Dict[str, Any]],
+    width: int,
+    height: int,
 ) -> List[Dict[str, Any]]:
     """
     Builds the annotation records (one per ROI) from the prediction result.
@@ -99,7 +104,9 @@ def send_updated_opends(event: dict, producer: KafkaProducer) -> None:
     producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), event)
 
 
-def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[List[Dict[str, Any]], int, int]:
+def run_object_detection(
+    image_uri: str, predictor: DefaultPredictor
+) -> Tuple[List[Dict[str, Any]], int, int]:
     """
     Checks if the Image url works and gathers metadata information from the image.
     :param image_uri: The image url from which we will gather metadata
@@ -126,7 +133,11 @@ def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[L
         logging.info("Detected %d instances" % num_instances)
         for i in range(num_instances):
             result.append(
-                {"class": class_names[classes[i]], "score": float(scores[i]), "boundingBox": [int(x) for x in boxes[i]]}
+                {
+                    "class": class_names[classes[i]],
+                    "score": float(scores[i]),
+                    "boundingBox": [int(x) for x in boxes[i]],
+                }
             )
 
         return result, width, height
@@ -147,15 +158,21 @@ def run_local(example: str) -> None:
     response = requests.get(example)
     json_value = json.loads(response.content).get("data")
     digital_media = json_value.get("attributes")
-    additional_info_annotations, width, height = run_object_detection(digital_media.get("ac:accessURI"), predictor)
-    annotations = map_result_to_annotation(digital_media, additional_info_annotations, width, height)
+    additional_info_annotations, width, height = run_object_detection(
+        digital_media.get("ac:accessURI"), predictor
+    )
+    annotations = map_result_to_annotation(
+        digital_media, additional_info_annotations, width, height
+    )
     event = map_to_annotation_event(annotations, str(uuid.uuid4()))
     logging.info("Created annotations: " + json.dumps(event))
 
 
 if __name__ == "__main__":
     cfg = get_cfg()
-    cfg.merge_from_file(model_zoo.get_config_file("PascalVOC-Detection/faster_rcnn_R_50_FPN.yaml"))
+    cfg.merge_from_file(
+        model_zoo.get_config_file("PascalVOC-Detection/faster_rcnn_R_50_FPN.yaml")
+    )
     cfg.merge_from_file("config/custom_model_config.yaml")
     cfg.freeze()
     predictor = DefaultPredictor(cfg)

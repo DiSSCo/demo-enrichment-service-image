@@ -1,4 +1,4 @@
-name: Build Herbrarium Sheet Plat Organ Detection
+name: Build Herbrarium Sheet Plant Organ Detection
 on:
   push:
     branches:

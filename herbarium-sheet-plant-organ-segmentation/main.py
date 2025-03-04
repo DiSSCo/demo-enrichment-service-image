@@ -36,8 +36,8 @@ def start_kafka() -> None:
             json_value = msg.value
             shared.mark_job_as_running(job_id=json_value.get("jobId"))
             digital_object = json_value.get("object")
-            additional_info_annotations, image_height, image_width = run_plant_organ_segmentation(
-                digital_object.get("ac:accessURI")
+            additional_info_annotations, image_height, image_width = (
+                run_plant_organ_segmentation(digital_object.get("ac:accessURI"))
             )
             annotations = map_result_to_annotation(
                 digital_object, additional_info_annotations, image_height, image_width
@@ -55,7 +55,9 @@ def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
     return {"annotations": annotations, "jobId": job_id}
 
 
-def publish_annotation_event(annotation_event: Dict[str, Any], producer: KafkaProducer) -> None:
+def publish_annotation_event(
+    annotation_event: Dict[str, Any], producer: KafkaProducer
+) -> None:
     """
     Send the annotation to the Kafka topic.
     :param annotation_event: The formatted list of annotations
@@ -67,7 +69,10 @@ def publish_annotation_event(annotation_event: Dict[str, Any], producer: KafkaPr
 
 
 def map_result_to_annotation(
-    digital_object: Dict, additional_info_annotations: List[Dict[str, Any]], image_height: int, image_width: int
+    digital_object: Dict,
+    additional_info_annotations: List[Dict[str, Any]],
+    image_height: int,
+    image_width: int,
 ):
     """
     Given a target object, computes a result and maps the result to an openDS annotation.
@@ -88,7 +93,9 @@ def map_result_to_annotation(
             "areaInCm2": annotation.get("areaInCm2"),
             "polygon": annotation.get("polygon"),
         }
-        oa_selector = shared.build_fragment_selector(annotation, image_width, image_height)
+        oa_selector = shared.build_fragment_selector(
+            annotation, image_width, image_height
+        )
         annotation = shared.map_to_annotation(
             ods_agent,
             timestamp,
@@ -103,7 +110,9 @@ def map_result_to_annotation(
     return annotations
 
 
-def run_plant_organ_segmentation(image_uri: str) -> Tuple[List[Dict[str, Any]], int, int]:
+def run_plant_organ_segmentation(
+    image_uri: str,
+) -> Tuple[List[Dict[str, Any]], int, int]:
     """
     post the image url request to plant organ segmentation service.
     :param image_uri: The image url from which we will gather metadata
@@ -160,10 +169,12 @@ def run_local(example: str) -> None:
     response = requests.get(example)
     json_value = json.loads(response.content).get("data")
     digital_object = json_value.get("attributes")
-    additional_info_annotations, image_height, image_width = run_plant_organ_segmentation(
-        digital_object.get("ac:accessURI")
+    additional_info_annotations, image_height, image_width = (
+        run_plant_organ_segmentation(digital_object.get("ac:accessURI"))
     )
-    annotations = map_result_to_annotation(digital_object, additional_info_annotations, image_height, image_width)
+    annotations = map_result_to_annotation(
+        digital_object, additional_info_annotations, image_height, image_width
+    )
 
     event = map_to_annotation_event(annotations, str(uuid.uuid4()))
     logging.info("Created annotations: " + json.dumps(event))

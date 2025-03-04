@@ -34,13 +34,17 @@ def start_kafka() -> None:
             shared.mark_job_as_running(json_value.get("jobId"))
             specimen_data = json_value.get("object")
             result = run_api_call(specimen_data)
-            mas_job_record = map_to_annotation_event(specimen_data, result, json_value.get("jobId"))
+            mas_job_record = map_to_annotation_event(
+                specimen_data, result, json_value.get("jobId")
+            )
             publish_annotation_event(mas_job_record, producer)
         except Exception as e:
             logging.exception(e)
 
 
-def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> dict:
+def map_to_annotation_event(
+    specimen_data: Dict, results: List[Dict[str, str]], job_id: str
+) -> dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -52,18 +56,29 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
     if len(results) == 1 and results[0].get("errors") is not None:
         annotations = [
             shared.map_to_empty_annotation(
-                timestamp, results[0].get("errors"), specimen_data,
-                shared.ER_PATH, results[0].get("queryString"))
+                timestamp,
+                results[0].get("errors"),
+                specimen_data,
+                shared.ER_PATH,
+                results[0].get("queryString"),
+            )
         ]
     else:
         ods_agent = shared.get_agent()
         annotations = list(
-            map(lambda result: map_result_to_annotation(specimen_data, result, timestamp, ods_agent), results)
+            map(
+                lambda result: map_result_to_annotation(
+                    specimen_data, result, timestamp, ods_agent
+                ),
+                results,
+            )
         )
     return {"jobId": job_id, "annotations": annotations}
 
 
-def map_result_to_annotation(specimen_data: Dict, result: Dict, timestamp: str, ods_agent: Dict) -> Dict:
+def map_result_to_annotation(
+    specimen_data: Dict, result: Dict, timestamp: str, ods_agent: Dict
+) -> Dict:
     """
     maps result of geocase linkage to an annotation
     :param specimen_data: specimen data
@@ -73,7 +88,11 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict, timestamp: str, 
     :return:
     """
     oa_value = shared.map_to_entity_relationship(
-        "hasGeoCASeID", result["geocaseId"], f'https://geocase.eu/specimen/{result["geocaseId"]}', timestamp, ods_agent
+        "hasGeoCASeID",
+        result["geocaseId"],
+        f'https://geocase.eu/specimen/{result["geocaseId"]}',
+        timestamp,
+        ods_agent,
     )
     oa_selector = shared.build_class_selector(shared.ER_PATH)
     return shared.map_to_annotation(
@@ -115,24 +134,33 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
         if hits <= 5:
             return list(
                 map(
-                    lambda result: {"queryString": query_string, "geocaseId": result["geocase_id"]},
+                    lambda result: {
+                        "queryString": query_string,
+                        "geocaseId": result["geocase_id"],
+                    },
                     response_json.get("response").get("docs"),
                 )
             )
         else:
-            logging.info(f"Too many hits ({hits}) were found for specimen: {specimen_data[shared.ODS_ID]}")
+            logging.info(
+                f"Too many hits ({hits}) were found for specimen: {specimen_data[shared.ODS_ID]}"
+            )
             return [
                 {
-                    "queryString": query_string, "geocaseId": None,
-                    "errors": "Failed to make the match, too many candidates"
+                    "queryString": query_string,
+                    "geocaseId": None,
+                    "errors": "Failed to make the match, too many candidates",
                 }
             ]
     else:
-        logging.info(f"No relevant identifiers found for specimen: {specimen_data[shared.ODS_ID]}")
+        logging.info(
+            f"No relevant identifiers found for specimen: {specimen_data[shared.ODS_ID]}"
+        )
         return [
             {
-                "queryString": "", "geocaseId": None,
-                "errors": "Failed to make the match, No relevant identifiers found for specimen"
+                "queryString": "",
+                "geocaseId": None,
+                "errors": "Failed to make the match, No relevant identifiers found for specimen",
             }
         ]
 
