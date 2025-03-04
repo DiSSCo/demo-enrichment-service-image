@@ -171,5 +171,5 @@ def run_local(example: str) -> None:
 
 
 if __name__ == "__main__":
-    #start_kafka()
-    run_local("https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/A7D-9PL-3YP")
+    start_kafka()
+    #run_local("https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/A7D-9PL-3YP")
