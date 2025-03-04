@@ -108,12 +108,12 @@ def run_api_call(specimen_data: Dict) -> Dict[str, str]:
     identifiers = get_identifiers_from_object(specimen_data)
     query_string = (
         f"https://api.gbif.org/v1/occurrence/search?occurrenceID="
-        f'{identifiers.get("occurrenceID")}'
-        f'&basisOfRecord={specimen_data.get("dwc:basisOfRecord")}'
+        f"{identifiers.get('occurrenceID')}"
+        f"&basisOfRecord={specimen_data.get('dwc:basisOfRecord')}"
     )
     if specimen_data.get("catalogNumber") is not None:
         query_string = (
-            query_string + f"&catalogNumber={identifiers.get("catalogNumber")}"
+            query_string + f"&catalogNumber={identifiers.get('catalogNumber')}"
         )
     response = requests.get(query_string)
     response_json = json.loads(response.content)
@@ -171,5 +171,5 @@ def run_local(example: str) -> None:
 
 
 if __name__ == "__main__":
-    start_kafka()
-    # run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/SGT-C68-7KY")
+    #start_kafka()
+    run_local("https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/A7D-9PL-3YP")
