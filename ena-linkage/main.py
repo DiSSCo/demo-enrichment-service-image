@@ -51,8 +51,10 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
     :return: Returns a formatted annotation Record which includes the Job ID
     """
     timestamp = shared.timestamp_now()
-    if results is None:
-        annotations = list()
+    if not results:
+        # Build "no match" annotation: motivation is comment, selector is a termSelector instead of classSelector
+        annotations = [shared.map_to_empty_annotation(
+            timestamp,"No results found for ENA",  specimen_data, shared.ER_PATH)]
     else:
         annotations = list(map(lambda result: map_result_to_annotation(specimen_data, result, timestamp), results))
     mas_job_record = {"jobId": job_id, "annotations": annotations}
@@ -76,7 +78,7 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, str], timest
         timestamp,
         ods_agent,
     )
-    oa_selector = shared.build_class_selector("$['ods:hasEntityRelationships']")
+    oa_selector = shared.build_class_selector(shared.ER_PATH)
     return shared.map_to_annotation(
         ods_agent,
         timestamp,
@@ -155,10 +157,10 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
             return result_list
         else:
             logging.info(f'No relevant identifiers found for specimen: {specimen_data["dcterms:identifier"]}')
-
+            return list()
 
 def check_result(
-    response_json: Dict, result_list: List[Dict[str, str]], sequence_query: str, specimen_data: Dict
+        response_json: Dict, result_list: List[Dict[str, str]], sequence_query: str, specimen_data: Dict
 ) -> None:
     """
     Check the result of the API call and add it to the result list if it passes the additional checks
@@ -213,4 +215,4 @@ def run_local(example: str) -> None:
 
 if __name__ == "__main__":
     start_kafka()
-    # run_local('https://dev.dissco.tech/api/v1/digital-specimen/TEST/0M6-9K9-H5P')
+    # run_local('https://dev.dissco.tech/api/digital-specimen/v1/TEST/C6B-MR9-PWV')
