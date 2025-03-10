@@ -31,9 +31,9 @@ def start_kafka() -> None:
     )
 
     for msg in consumer:
+        logging.info(f"Received message: {str(msg.value)}")
+        json_value = msg.value
         try:
-            logging.info(f"Received message: {str(msg.value)}")
-            json_value = msg.value
             shared.mark_job_as_running(job_id=json_value.get("jobId"))
             digital_object = json_value.get("object")
             additional_info_annotations, image_height, image_width = (
@@ -49,6 +49,7 @@ def start_kafka() -> None:
 
         except Exception as e:
             logging.error(f"Failed to publish annotation event: {e}")
+            send_failed_message(json_value["jobId"], str(e), producer)
 
 
 def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
@@ -56,7 +57,7 @@ def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
 
 
 def publish_annotation_event(
-    annotation_event: Dict[str, Any], producer: KafkaProducer
+        annotation_event: Dict[str, Any], producer: KafkaProducer
 ) -> None:
     """
     Send the annotation to the Kafka topic.
@@ -69,10 +70,10 @@ def publish_annotation_event(
 
 
 def map_result_to_annotation(
-    digital_object: Dict,
-    additional_info_annotations: List[Dict[str, Any]],
-    image_height: int,
-    image_width: int,
+        digital_object: Dict,
+        additional_info_annotations: List[Dict[str, Any]],
+        image_height: int,
+        image_width: int,
 ):
     """
     Given a target object, computes a result and maps the result to an openDS annotation.
@@ -111,7 +112,7 @@ def map_result_to_annotation(
 
 
 def run_plant_organ_segmentation(
-    image_uri: str,
+        image_uri: str,
 ) -> Tuple[List[Dict[str, Any]], int, int]:
     """
     post the image url request to plant organ segmentation service.
@@ -124,37 +125,48 @@ def run_plant_organ_segmentation(
         "username": os.environ.get("PLANT_ORGAN_SEGMENTATION_USER"),
         "password": os.environ.get("PLANT_ORGAN_SEGMENTATION_PASSWORD"),
     }
-    try:
-        response = requests.post(
-            "https://webapp.senckenberg.de/dissco-mas-prototype/plant_organ_segmentation",
-            auth=(auth_info["username"], auth_info["password"]),
-            json=payload,
-        )
-        response.raise_for_status()
-        response_json = response.json()
-        if len(response_json) == 0:
-            logging.info("No results for this herbarium sheet: " + payload["image_url"])
-            return [], -1, -1
-        else:
-            for response in response_json.get("output", []):
-                annotations_list.append(
-                    {
-                        "boundingBox": response.get("boundingBox"),
-                        "class": response.get("class"),
-                        "score": response.get("score"),
-                        "areaInPixel": response.get("areaInPixel"),
-                        "one_cm_in_pixel": response.get("one_cm_in_pixel"),
-                        "areaInCm2": response.get("areaInCm2"),
-                        "polygon": response.get("polygon"),
-                    }
-                )
-            image_height = response_json.get("image_height")
-            image_width = response_json.get("image_width")
-            return annotations_list, image_height, image_width
+    response = requests.post(
+        "https://webapp.senckenberg.de/dissco-mas-prototype/plant_organ_segmentation",
+        auth=(auth_info["username"], auth_info["password"]),
+        json=payload,
+        timeout=10
+    )
+    response.raise_for_status()
+    response_json = response.json()
+    if len(response_json) == 0:
+        logging.info("No results for this herbarium sheet: " + payload["image_url"])
+        return [], -1, -1
+    else:
+        for response in response_json.get("output", []):
+            annotations_list.append(
+                {
+                    "boundingBox": response.get("boundingBox"),
+                    "class": response.get("class"),
+                    "score": response.get("score"),
+                    "areaInPixel": response.get("areaInPixel"),
+                    "one_cm_in_pixel": response.get("one_cm_in_pixel"),
+                    "areaInCm2": response.get("areaInCm2"),
+                    "polygon": response.get("polygon"),
+                }
+            )
+        image_height = response_json.get("image_height")
+        image_width = response_json.get("image_width")
+        return annotations_list, image_height, image_width
 
-    except requests.RequestException as e:
-        logging.error(f"API call failed: {e}")
-        raise requests.RequestException
+
+def send_failed_message(job_id: str, message: str, producer: KafkaProducer) -> None:
+    """
+    Sends a failure message to the mas failure topic, mas-failed
+    :param job_id: The id of the job
+    :param message: The exception message
+    :param producer: The Kafka producer
+    """
+
+    mas_failed = {
+        "jobId": job_id,
+        "errorMessage": message
+    }
+    producer.send("mas-failed", mas_failed)
 
 
 def run_local(example: str) -> None:
@@ -182,4 +194,4 @@ def run_local(example: str) -> None:
 
 if __name__ == "__main__":
     start_kafka()
-    # run_local("https://dev.dissco.tech/api/v1/digital-media/TEST/GG9-1WB-N90")
+    #run_local("https://sandbox.dissco.tech/api/digital-media/v1/SANDBOX/TC9-7ER-QVP")
