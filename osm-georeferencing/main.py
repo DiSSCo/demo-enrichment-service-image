@@ -16,7 +16,6 @@ OA_VALUE = "oa:value"
 LOCATION_PATH = "$['ods:hasEvents'][*]['ods:hasLocation']"
 USER_AGENT = "Distributed System of Scientific Collections"
 
-
 def start_kafka() -> None:
     """
     Start a kafka listener and process the messages by unpacking the image.
@@ -168,11 +167,11 @@ def wrap_oa_value(
     :param result: The result of the Locality API call
     :param specimen_data: The JSON value of the Digital Specimen
     :param timestamp: The current timestamp
-    :param oa_class: The name of the class to which the class annotation points
+    :param oa_class: The name of the term to which the class annotation points
     :param batching: batch functionality was requested
     :return: Returns an annotation with all the relevant metadata
     """
-    oa_selector = shared.build_class_selector(oa_class)
+    oa_selector = shared.build_term_selector(oa_class)
     annotation = shared.map_to_annotation(
         ods_agent,
         timestamp,
@@ -392,5 +391,4 @@ def reduce_annotation_size_for_printing(annotation: dict) -> dict:
 
 if __name__ == "__main__":
     start_kafka()
-    # run_local(
-    #    'https://dev.dissco.tech/api/v1/digital-specimen/TEST/RRH-DLL-K87')
+    #run_local('https://dev.dissco.tech/api/digital-specimen/v1/TEST/D3B-3K8-EF9')
