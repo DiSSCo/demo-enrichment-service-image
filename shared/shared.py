@@ -218,11 +218,11 @@ def build_term_selector(ods_term: str) -> Dict:
 def build_fragment_selector(bounding_box: Dict, width: int, height: int) -> Dict:
     """
     A selector for a specific Region of Interest (Roi). Only applicable on media objects.
-    ConformsTo the TDWG region of interest vocabulary.
+    Conforms to the TDWG region of interest vocabulary.
     :param bounding_box: object containing the bounding box of the ROI
     :param width: The width of the image, used to calculate the ROI
     :param height: the height of the image, used to calculate the ROI
-    :return:
+    :return: A fragment selector for a specific ROI
     """
     return {
         AT_TYPE: "oa:FragmentSelector",
@@ -230,13 +230,27 @@ def build_fragment_selector(bounding_box: Dict, width: int, height: int) -> Dict
         "ac:hasROI": {
             "ac:xFrac": bounding_box["boundingBox"][0] / width,
             "ac:yFrac": bounding_box["boundingBox"][1] / height,
-            "ac:widthFrac": (
-                bounding_box["boundingBox"][2] - bounding_box["boundingBox"][0]
-            )
-            / width,
-            "ac:heightFrac": (
-                bounding_box["boundingBox"][3] - bounding_box["boundingBox"][1]
-            )
-            / height,
+            "ac:widthFrac": (bounding_box["boundingBox"][2] - bounding_box["boundingBox"][0]) / width,
+            "ac:heightFrac": (bounding_box["boundingBox"][3] - bounding_box["boundingBox"][1]) / height,
+        },
+    }
+
+
+def build_entire_image_fragment_selector(width: int, height: int) -> Dict:
+    """
+    Build a selector for the entire object. Only applicable on media objects.
+    Conforms to the TDWG region of interest vocabulary.
+    :param width: The width of the image
+    :param height: the height of the image
+    :return: A fragment selector for the entire image
+    """
+    return {
+        AT_TYPE: "oa:FragmentSelector",
+        "dcterms:conformsTo": "https://ac.tdwg.org/termlist/#711-region-of-interest-vocabulary",
+        "ac:hasROI": {
+            "ac:xFrac": 0,
+            "ac:yFrac": 0,
+            "ac:widthFrac": width,
+            "ac:heightFrac": height,
         },
     }
