@@ -38,16 +38,14 @@ def start_kafka() -> None:
             digital_object = json_value.get("object")
             image_uri = digital_object.get("ac:accessURI")
             additional_info_annotations, image_height, image_width = run_leafmachine(image_uri)
-            print("Additional info annotations", len(additional_info_annotations))
+
             # Publish an annotation comment if no plant components were found
             if len(additional_info_annotations) == 0:
                 logging.info(f"No results for this herbarium sheet: {image_uri} - jobId: {json_value['jobId']}")
                 annotation = map_result_to_empty_annotation(
                     digital_object, image_height=image_height, image_width=image_width
                 )
-                # debugging
-                print("Found no plant components")
-                print(annotation)
+
                 annotation_event = map_to_annotation_event([annotation], json_value["jobId"])
             # Publish the annotations if plant components were found
             else:
@@ -194,7 +192,7 @@ def run_local(example: str) -> None:
     digital_object = json_value.get("attributes")
     image_uri = digital_object.get("ac:accessURI")
     additional_info_annotations, image_height, image_width = run_leafmachine(image_uri)
-    additional_info_annotations = []
+    # additional_info_annotations = []
     # Publish an annotation comment if no plant components were found
     if len(additional_info_annotations) == 0:
         logging.info(f"No results for this herbarium sheet: {image_uri}")
