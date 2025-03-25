@@ -1,17 +1,12 @@
 import json
 import logging
 import os
-from uuid import uuid4
-from typing import Dict, List
-from typing import Tuple, Any, Dict, List
+from typing import Dict, List, Any
 import requests
 from kafka import KafkaConsumer, KafkaProducer
-from requests.auth import HTTPBasicAuth
 import requests_cache
 import shared 
-import hashlib
 import uuid
-from functools import lru_cache
 
 
 # Enable caching for both GET and POST requests
