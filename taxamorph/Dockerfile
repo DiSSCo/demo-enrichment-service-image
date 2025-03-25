@@ -8,13 +8,13 @@ WORKDIR /code
 RUN adduser --disabled-password --gecos '' --system --uid 1001 python && chown -R python /code
 
 # copy the dependencies file to the working directory
-COPY bold-linkage/requirements.txt .
+COPY requirements.txt .
 
 # install dependencies
 RUN pip install -r requirements.txt
 
 # copy the content of the local src directory to the working directory
-COPY bold-linkage/main.py .
+COPY main.py .
 
 # copy shared directory
 COPY shared/ shared/
