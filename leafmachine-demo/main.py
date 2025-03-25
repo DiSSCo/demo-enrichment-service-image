@@ -36,11 +36,25 @@ def start_kafka() -> None:
         try:
             shared.mark_job_as_running(job_id=json_value.get("jobId"))
             digital_object = json_value.get("object")
-            additional_info_annotations, image_height, image_width = run_leafmachine(digital_object.get("ac:accessURI"))
-            annotations = map_result_to_annotation(
-                digital_object, additional_info_annotations, image_height, image_width
-            )
-            annotation_event = map_to_annotation_event(annotations, json_value["jobId"])
+            image_uri = digital_object.get("ac:accessURI")
+            additional_info_annotations, image_height, image_width = run_leafmachine(image_uri)
+            print("Additional info annotations", len(additional_info_annotations))
+            # Publish an annotation comment if no plant components were found
+            if len(additional_info_annotations) == 0:
+                logging.info(f"No results for this herbarium sheet: {image_uri} - jobId: {json_value['jobId']}")
+                annotation = map_result_to_empty_annotation(
+                    digital_object, image_height=image_height, image_width=image_width
+                )
+                # debugging
+                print("Found no plant components")
+                print(annotation)
+                annotation_event = map_to_annotation_event([annotation], json_value["jobId"])
+            # Publish the annotations if plant components were found
+            else:
+                annotations = map_result_to_annotation(
+                    digital_object, additional_info_annotations, image_height=image_height, image_width=image_width
+                )
+                annotation_event = map_to_annotation_event(annotations, json_value["jobId"])
 
             logging.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
             publish_annotation_event(annotation_event, producer)
@@ -74,6 +88,9 @@ def map_result_to_annotation(
     """
     Given a target object, computes a result and maps the result to an openDS annotation.
     :param digital_object: the target object of the annotation
+    :param additional_info_annotations: the result of the computation
+    :param image_height: the height of the processed image
+    :param image_width: the width of the processed image
     :return: List of annotations
     """
     timestamp = shared.timestamp_now()
@@ -97,19 +114,39 @@ def map_result_to_annotation(
     return annotations
 
 
+def map_result_to_empty_annotation(digital_object: Dict, image_height: int, image_width: int):
+    """
+    Given a target object and no found plant components, map the result to an openDS comment annotation to inform the user.
+    :param digital_object: the target object of the annotation
+
+    :return: Annotation event
+    """
+    timestamp = shared.timestamp_now()
+    message = "Leafpriority model found no plant components in this image"
+    selector = shared.build_entire_image_fragment_selector(height=image_height, width=image_width)
+
+    annotation = shared.map_to_empty_annotation(
+        timestamp=timestamp,
+        message=message,
+        target_data=digital_object,
+        selector=selector,
+        dcterms_ref="https://github.com/kymillev/demo-enrichment-service-image",
+    )
+
+    return annotation
+
+
 def run_leafmachine(image_uri: str, model_name: str = "leafpriority") -> Tuple[List[Dict[str, Any]], int, int]:
     """
-    post the image url request to plant organ segmentation service.
-    :param image_uri: The image url from which we will gather metadata
-    :return: Returns a list of additional info about the image
+    Makes an API request to the LeafMachine backend service hosted at IDLab.
+    :param image_uri: The URI of the image to be processed
+    :param model_name: The name of the model used for inference
+    :return: Returns a list of detected plant components, the processed image height, the processed image width
     """
-
-    annotations_list = []
-
     # Create the payload with image url and model name
     payload = {"image_url": image_uri, "model_name": model_name}
 
-    # Send POST request to the server
+    # Send POST request to the IDLab server
     server_url = "https://herbaria.idlab.ugent.be/inference/process_image/"
     headers = {"Content-Type": "application/json"}
     response = requests.post(server_url, json=payload, headers=headers)
@@ -119,19 +156,15 @@ def run_leafmachine(image_uri: str, model_name: str = "leafpriority") -> Tuple[L
 
     detections = response_json.get("detections", [])
 
-    if len(detections) == 0:
-        logging.info("No results for this herbarium sheet: " + payload["image_url"])
-        return [], -1, -1
-    else:
-        img_shape = response_json["metadata"]["orig_img_shape"]
-        img_height, img_width = img_shape[:2]
+    img_shape = response_json["metadata"]["orig_img_shape"]
+    img_height, img_width = img_shape[:2]
 
-        for det in detections:
-            annotations_list.append(
-                {"boundingBox": det.get("bbox"), "class": det.get("class_name"), "score": det.get("confidence")}
-            )
+    annotations_list = [
+        {"boundingBox": det.get("bbox"), "class": det.get("class_name"), "score": det.get("confidence")}
+        for det in detections
+    ]
 
-        return annotations_list, img_height, img_width
+    return annotations_list, img_height, img_width
 
 
 def send_failed_message(job_id: str, message: str, producer: KafkaProducer) -> None:
@@ -159,14 +192,26 @@ def run_local(example: str) -> None:
     json_value = json.loads(response.content).get("data")
 
     digital_object = json_value.get("attributes")
+    image_uri = digital_object.get("ac:accessURI")
+    additional_info_annotations, image_height, image_width = run_leafmachine(image_uri)
+    additional_info_annotations = []
+    # Publish an annotation comment if no plant components were found
+    if len(additional_info_annotations) == 0:
+        logging.info(f"No results for this herbarium sheet: {image_uri}")
+        annotation = map_result_to_empty_annotation(digital_object, image_height=image_height, image_width=image_width)
+        annotation_event = map_to_annotation_event([annotation], str(uuid.uuid4()))
+    # Publish the annotations if plant components were found
+    else:
+        annotations = map_result_to_annotation(
+            digital_object, additional_info_annotations, image_height=image_height, image_width=image_width
+        )
+        annotation_event = map_to_annotation_event(annotations, str(uuid.uuid4()))
 
-    additional_info_annotations, image_height, image_width = run_leafmachine(digital_object.get("ac:accessURI"))
-    annotations = map_result_to_annotation(digital_object, additional_info_annotations, image_height, image_width)
-
-    event = map_to_annotation_event(annotations, str(uuid.uuid4()))
-    logging.info("Created annotations: " + json.dumps(event))
+    logging.info("Created annotations: " + json.dumps(annotation_event))
 
 
 if __name__ == "__main__":
+    # Local testing
+    # specimen_url = "https://sandbox.dissco.tech/api/digital-media/v1/SANDBOX/TC9-7ER-QVP"
+    # run_local(specimen_url)
     start_kafka()
-    # run_local("https://sandbox.dissco.tech/api/digital-media/v1/SANDBOX/TC9-7ER-QVP")
