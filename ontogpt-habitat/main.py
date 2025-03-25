@@ -1,12 +1,12 @@
 import json
 import logging
 import os
-import sys
 import uuid
 import requests
 import datetime
 from typing import Tuple, Any, Dict, List
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+#import sys
+#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from shared import shared
 from kafka import KafkaConsumer, KafkaProducer
@@ -89,12 +89,11 @@ def map_result_to_annotation(
 
     for annotation in additional_info_annotations:
         oa_value = {
-            "extracted_ontology": annotation.get("extracted_ontology")        
+            "id": annotation.get("id")  ,
+            "label" : annotation.get("label")     
         }
-
-        locality = digital_object.get("ods:hasEvents")[0].get("ods:hasLocation").get("dwc:locality")
         
-        oa_selector = shared.build_term_selector(locality)
+        oa_selector = shared.build_term_selector("dwc:locality")
         annotation = shared.map_to_annotation_str_val(
             ods_agent,
             timestamp,
@@ -103,7 +102,7 @@ def map_result_to_annotation(
             digital_object[shared.ODS_ID],
             digital_object[shared.ODS_TYPE],
             "https://github.com/RajapreethiRajendran/demo-enrichment-service-image",
-            oa_motivation = "oa:commenting"
+            motivation = "oa:commenting"
 
         )
         annotations.append(annotation)
@@ -118,7 +117,6 @@ def run_ontology_extraction(habitat_text: str,location_text: str) -> List[Dict[s
     :return: Returns a list of additional info about the image
     """
     payload = {"input_text": habitat_text + " " + location_text}
-    annotations_list = []
     auth_info = {
         "username": os.environ.get("HABITAT_ONTOGPT_USER"),
         "password": os.environ.get("HABITAT_ONTOGPT_PASSWORD"),
@@ -183,5 +181,5 @@ def run_local(example: str) -> None:
 
 
 if __name__ == "__main__":
-    #start_kafka()
-    run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/VHY-DC5-87F")
+    start_kafka()
+    #run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/VHY-DC5-87F")
