@@ -123,12 +123,15 @@ def map_result_to_empty_annotation(digital_object: Dict, image_height: int, imag
     message = "Leafpriority model found no plant components in this image"
     selector = shared.build_entire_image_fragment_selector(height=image_height, width=image_width)
 
-    annotation = shared.map_to_empty_annotation(
+    annotation = shared.map_to_annotation_str_val(
+        ods_agent=shared.get_agent(),
         timestamp=timestamp,
-        message=message,
-        target_data=digital_object,
-        selector=selector,
-        dcterms_ref="https://github.com/kymillev/demo-enrichment-service-image",
+        oa_value=message,
+        oa_selector=selector,
+        target_id=digital_object[shared.ODS_ID],
+        target_type=digital_object[shared.ODS_TYPE],
+        dcterms_ref="",
+        motivation="oa:commenting",
     )
 
     return annotation
