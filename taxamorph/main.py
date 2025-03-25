@@ -46,7 +46,7 @@ def start_kafka() -> None:
                 digital_media, taxamorph_result
             )
 
-            event = map_to_annotation_event(annotations, str(uuid.uuid4()))  
+            event = map_to_annotation_event(annotations, json_value.get("jobId"))
             publish_annotation_event(event, producer)
 
         except Exception as e:
