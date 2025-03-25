@@ -36,9 +36,7 @@ def start_kafka() -> None:
         try:
             shared.mark_job_as_running(job_id=json_value.get("jobId"))
             digital_object = json_value.get("object")
-            additional_info_annotations, image_height, image_width = (
-                run_leafmachine(digital_object.get("ac:accessURI"))
-            )
+            additional_info_annotations, image_height, image_width = run_leafmachine(digital_object.get("ac:accessURI"))
             annotations = map_result_to_annotation(
                 digital_object, additional_info_annotations, image_height, image_width
             )
@@ -56,9 +54,7 @@ def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
     return {"annotations": annotations, "jobId": job_id}
 
 
-def publish_annotation_event(
-        annotation_event: Dict[str, Any], producer: KafkaProducer
-) -> None:
+def publish_annotation_event(annotation_event: Dict[str, Any], producer: KafkaProducer) -> None:
     """
     Send the annotation to the Kafka topic.
     :param annotation_event: The formatted list of annotations
@@ -70,10 +66,10 @@ def publish_annotation_event(
 
 
 def map_result_to_annotation(
-        digital_object: Dict,
-        additional_info_annotations: List[Dict[str, Any]],
-        image_height: int,
-        image_width: int,
+    digital_object: Dict,
+    additional_info_annotations: List[Dict[str, Any]],
+    image_height: int,
+    image_width: int,
 ):
     """
     Given a target object, computes a result and maps the result to an openDS annotation.
@@ -86,9 +82,7 @@ def map_result_to_annotation(
 
     for annotation in additional_info_annotations:
         oa_value = annotation
-        oa_selector = shared.build_fragment_selector(
-            annotation, image_width, image_height
-        )
+        oa_selector = shared.build_fragment_selector(annotation, image_width, image_height)
         annotation = shared.map_to_annotation(
             ods_agent,
             timestamp,
@@ -103,28 +97,23 @@ def map_result_to_annotation(
     return annotations
 
 
-def run_leafmachine(
-        image_uri: str, model_name: str = "leafpriority"
-) -> Tuple[List[Dict[str, Any]], int, int]:
+def run_leafmachine(image_uri: str, model_name: str = "leafpriority") -> Tuple[List[Dict[str, Any]], int, int]:
     """
     post the image url request to plant organ segmentation service.
     :param image_uri: The image url from which we will gather metadata
     :return: Returns a list of additional info about the image
     """
-    
+
     annotations_list = []
-    
+
     # Create the payload with image url and model name
-    payload = {
-        "image_url": image_uri,
-        "model_name": model_name
-    }
+    payload = {"image_url": image_uri, "model_name": model_name}
 
     # Send POST request to the server
     server_url = "https://herbaria.idlab.ugent.be/inference/process_image/"
     headers = {"Content-Type": "application/json"}
     response = requests.post(server_url, json=payload, headers=headers)
-    
+
     response.raise_for_status()
     response_json = response.json()
 
@@ -134,23 +123,14 @@ def run_leafmachine(
         logging.info("No results for this herbarium sheet: " + payload["image_url"])
         return [], -1, -1
     else:
-
         img_shape = response_json["metadata"]["orig_img_shape"]
         img_height, img_width = img_shape[:2]
 
         for det in detections:
             annotations_list.append(
-                {
-                    "boundingBox": det.get("bbox"),
-                    "class": det.get("class_name"),
-                    "score": det.get("confidence")
-                }
+                {"boundingBox": det.get("bbox"), "class": det.get("class_name"), "score": det.get("confidence")}
             )
 
-        print(f"Annotations:")
-        for a in annotations_list:
-            print(a)
-        
         return annotations_list, img_height, img_width
 
 
@@ -162,10 +142,7 @@ def send_failed_message(job_id: str, message: str, producer: KafkaProducer) -> N
     :param producer: The Kafka producer
     """
 
-    mas_failed = {
-        "jobId": job_id,
-        "errorMessage": message
-    }
+    mas_failed = {"jobId": job_id, "errorMessage": message}
     producer.send("mas-failed", mas_failed)
 
 
@@ -180,15 +157,11 @@ def run_local(example: str) -> None:
     """
     response = requests.get(example)
     json_value = json.loads(response.content).get("data")
-   
+
     digital_object = json_value.get("attributes")
-    
-    additional_info_annotations, image_height, image_width = (
-        run_leafmachine(digital_object.get("ac:accessURI"))
-    )
-    annotations = map_result_to_annotation(
-        digital_object, additional_info_annotations, image_height, image_width
-    )
+
+    additional_info_annotations, image_height, image_width = run_leafmachine(digital_object.get("ac:accessURI"))
+    annotations = map_result_to_annotation(digital_object, additional_info_annotations, image_height, image_width)
 
     event = map_to_annotation_event(annotations, str(uuid.uuid4()))
     logging.info("Created annotations: " + json.dumps(event))
@@ -196,4 +169,4 @@ def run_local(example: str) -> None:
 
 if __name__ == "__main__":
     start_kafka()
-    #run_local("https://sandbox.dissco.tech/api/digital-media/v1/SANDBOX/TC9-7ER-QVP")
+    # run_local("https://sandbox.dissco.tech/api/digital-media/v1/SANDBOX/TC9-7ER-QVP")
