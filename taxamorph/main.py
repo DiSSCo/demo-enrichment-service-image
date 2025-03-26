@@ -16,7 +16,6 @@ requests_cache.install_cache(
     allowable_methods=["GET", "POST"]  # Include POST requests in the cache
 )
  
- 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
  
 TAXAMORPH_ENDPOINT = 'https://merry-malamute-bold.ngrok-free.app/infer'
@@ -63,32 +62,42 @@ def map_result_to_annotation(
     """
 
     """
-    annotations = list()
+    
     timestamp = shared.timestamp_now()
     ods_agent = shared.get_agent()
 
-    for result in taxamorph_result:
+    if taxamorph_result:
+        annotations = list()
 
-        oa_value = shared.map_to_entity_relationship(
-            "hasTaxaMorphDownloadURL",
-            result["downloadURL"],
-            result["downloadURL"],
-            timestamp,
-            ods_agent,
-        )    
+        for result in taxamorph_result:
 
-        oa_selector = shared.build_class_selector(shared.ER_PATH)
+            oa_value = shared.map_to_entity_relationship(
+                "hasTaxaMorphDownloadURL",
+                result["downloadURL"],
+                result["downloadURL"],
+                timestamp,
+                ods_agent,
+            )    
 
-        annotation = shared.map_to_annotation(
-            ods_agent,
-            timestamp,
-            oa_value,
-            oa_selector,
-            digital_media[shared.ODS_ID],
-            digital_media[shared.ODS_TYPE],
-            result["downloadURL"],
-        )
-        annotations.append(annotation)
+            oa_selector = shared.build_class_selector(shared.ER_PATH)
+
+            annotation = shared.map_to_annotation(
+                ods_agent,
+                timestamp,
+                oa_value,
+                oa_selector,
+                digital_media[shared.ODS_ID],
+                digital_media[shared.ODS_TYPE],
+                result["downloadURL"],
+            )
+            annotations.append(annotation)
+    else:
+
+        annotations = [
+            shared.map_to_empty_annotation(
+                timestamp, "No results for TaxaMorph", digital_media, shared.ER_PATH
+            )
+        ]        
 
     return annotations
  
@@ -118,22 +127,21 @@ def run_api_call(digital_media: Dict) -> List[Dict[str, str]]:
         response.raise_for_status()
         result = response.json()
     except requests.RequestException as e:
-        print(f"Request failed: {e}")
+        logging.error(f"Request failed: {e}")
         return []
- 
-    print("Response from server:")
-    print(result)
  
     annotations = result.get("annotations", [])
     if not annotations:
-        print("No annotations found in the response.")
+        logging.error("No annotations found in the response.")
         return []
  
     download_url = annotations[0].get("oa:hasBody", {}).get("oa:value")
-    if download_url:
-        print(f"Download your image here:\n{download_url}")
-    else:
-        print("No download URL found in the response.")
+
+    if not download_url:
+        logging.error("No download URL found in the response.")
+        return []
+    
+    logging.debug(f"Download image url:\n{download_url}")  
  
     return [{
         "downloadURL": download_url,
@@ -170,5 +178,5 @@ def run_local(media_id: str) -> None:
 
 
 if __name__ == "__main__":
-    # run_local('SANDBOX/4LB-38S-KSM')
-    start_kafka()
+    run_local('SANDBOX/4LB-38S-KSM')
+    # start_kafka()
