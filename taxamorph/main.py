@@ -178,5 +178,5 @@ def run_local(media_id: str) -> None:
 
 
 if __name__ == "__main__":
-    run_local('SANDBOX/4LB-38S-KSM')
-    # start_kafka()
+    # run_local('SANDBOX/4LB-38S-KSM')
+    start_kafka()
