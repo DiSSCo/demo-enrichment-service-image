@@ -1,4 +1,4 @@
-name: Build ENA Linkage
+name: Build OntoGPT Habitat
 on:
   push:
     branches:
