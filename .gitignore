@@ -10,3 +10,4 @@ herbarium-sheet-plant-organ-detection/data/model_final.pth
 
 .DS_Store
 __pycache__
+taxamorph/*.sqlite
