@@ -3,16 +3,14 @@ import logging
 import os
 import uuid
 import requests
-import datetime
 from typing import Tuple, Any, Dict, List
-#import sys
-#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from shared import shared
 from kafka import KafkaConsumer, KafkaProducer
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
-
+ods_has_events = "ods:hasEvents"
+dwc_locality = "dwc:locality"
 
 def start_kafka() -> None:
     """
@@ -40,19 +38,34 @@ def start_kafka() -> None:
         try:
             shared.mark_job_as_running(job_id=json_value.get("jobId"))
             digital_object = json_value.get("object")
-            habitat = digital_object.get("ods:hasEvents")[0].get("dwc:habitat")
-            locality = digital_object.get("ods:hasEvents")[0].get("ods:hasLocation").get("dwc:locality")
-            additional_info_annotations = (
-                run_ontology_extraction(habitat, locality)
-            )
-            annotations = map_result_to_annotation(
-                digital_object, additional_info_annotations
-            )
-            annotation_event = map_to_annotation_event(annotations, json_value["jobId"])
+            habitat = digital_object.get(ods_has_events)[0].get("dwc:habitat")
+            locality = digital_object.get(ods_has_events)[0].get("ods:hasLocation").get(dwc_locality)
+            if habitat or locality:
+                additional_info_annotations = (
+                    run_ontology_extraction(habitat, locality)
+                )
+                if len(additional_info_annotations[0]) == 0:
+                    annotations = map_empty_result_annotation(digital_object, "No habitat ontologies are extracted by ontoGPT")
+                    annotation_event = map_to_annotation_event(annotations, json_value["jobId"])
+                    logging.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
+                    publish_annotation_event(annotation_event, producer)
+                else:
+                    annotations = map_result_to_annotation(
+                        digital_object, additional_info_annotations
+                    )
+                    annotation_event = map_to_annotation_event(annotations, json_value["jobId"])
 
-            logging.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
-            publish_annotation_event(annotation_event, producer)
+                    logging.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
+                    publish_annotation_event(annotation_event, producer)
+            else:
+                annotations = map_empty_result_annotation(
+                    digital_object, "No habitat or locality information is found in digital specimen"
+                )
+                annotation_event = map_to_annotation_event(annotations, json_value["jobId"])
+                logging.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
+                publish_annotation_event(annotation_event, producer)
 
+                
         except Exception as e:
             logging.error(f"Failed to publish annotation event: {e}")
             send_failed_message(json_value["jobId"], str(e), producer)
@@ -74,6 +87,16 @@ def publish_annotation_event(
     logging.info(f"Publishing annotation: {str(annotation_event)}")
     producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation_event)
 
+def map_empty_result_annotation(digital_object: Dict, message: str):
+    annotation = shared.map_to_empty_annotation(
+                    timestamp = shared.timestamp_now(),
+                    message= message,
+                    target_data = digital_object,
+                    selector = shared.build_term_selector(dwc_locality),
+                    dcterms_ref = "https://github.com/RajapreethiRajendran/demo-enrichment-service-image"
+                )
+    return annotation
+
 
 def map_result_to_annotation(
         digital_object: Dict,
@@ -93,7 +116,7 @@ def map_result_to_annotation(
             "label" : annotation.get("label")     
         }
         
-        oa_selector = shared.build_term_selector("dwc:locality")
+        oa_selector = shared.build_term_selector(dwc_locality)
         annotation = shared.map_to_annotation_str_val(
             ods_agent,
             timestamp,
@@ -109,7 +132,6 @@ def map_result_to_annotation(
 
     return annotations
 
-
 def run_ontology_extraction(habitat_text: str,location_text: str) -> List[Dict[str, Any]]:
     """
     post the image url request to plant organ segmentation service.
@@ -121,14 +143,12 @@ def run_ontology_extraction(habitat_text: str,location_text: str) -> List[Dict[s
         "username": os.environ.get("HABITAT_ONTOGPT_USER"),
         "password": os.environ.get("HABITAT_ONTOGPT_PASSWORD"),
     }
-    print(datetime.datetime.now())
     response = requests.post(
         "https://webapp.senckenberg.de/dissco-ontogpt-mas-prototype/extract_ontogpt",
         auth=(auth_info["username"], auth_info["password"]),
         json=payload,
         timeout=600
     )
-    print(datetime.datetime.now())
     response.raise_for_status()
     response_json = response.json()
     if len(response_json) == 0:
@@ -136,8 +156,7 @@ def run_ontology_extraction(habitat_text: str,location_text: str) -> List[Dict[s
         return [], -1, -1
     else:
         return response_json.get("named_entities")
-        
-
+    
 
 def send_failed_message(job_id: str, message: str, producer: KafkaProducer) -> None:
     """
@@ -166,18 +185,33 @@ def run_local(example: str) -> None:
     response = requests.get(example)
     json_value = json.loads(response.content).get("data")
     digital_object = json_value.get("attributes")
-    habitat = digital_object.get("ods:hasEvents")[0].get("dwc:habitat")
-    locality = digital_object.get("ods:hasEvents")[0].get("ods:hasLocation").get("dwc:locality")
-    additional_info_annotations = (
-                run_ontology_extraction(habitat, locality)
-            )
+    habitat = digital_object.get(ods_has_events)[0].get("dwc:habitat")
+    locality = digital_object.get(ods_has_events)[0].get("ods:hasLocation").get(dwc_locality)      
+    if habitat or locality:
+        additional_info_annotations = (
+            run_ontology_extraction(habitat, locality)
+                )
+        if len(additional_info_annotations[0]) == 0:
+            annotations = map_empty_result_annotation(
+                    digital_object, "No habitat ontologies are extracted by ontoGPT"
+                )
+            event = map_to_annotation_event(annotations, str(uuid.uuid4()))
+            logging.info("Created annotations: " + json.dumps(event))   
 
-    annotations = map_result_to_annotation(
-        digital_object, additional_info_annotations
-    )
-
-    event = map_to_annotation_event(annotations, str(uuid.uuid4()))
-    logging.info("Created annotations: " + json.dumps(event))
+        else:
+            annotations = map_result_to_annotation(
+                    digital_object, additional_info_annotations
+                )
+            event = map_to_annotation_event(annotations, str(uuid.uuid4()))
+            logging.info("Created annotations: " + json.dumps(event))     
+    else:
+        annotations = map_empty_result_annotation(
+                    digital_object, "No habitat or locality information is found in digital specimen"
+                )
+        event = map_to_annotation_event(annotations, str(uuid.uuid4()))
+        
+        logging.info("Created annotations: " + json.dumps(event))   
+   
 
 
 if __name__ == "__main__":

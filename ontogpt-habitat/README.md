@@ -12,5 +12,5 @@ The following environment variables must be set for the service to function corr
 - `KAFKA_CONSUMER_HOST`  
 - `KAFKA_PRODUCER_HOST`  
 - `KAFKA_PRODUCER_TOPIC`  
-- `PLANT_ORGAN_SEGMENTATION_USER`  
-- `PLANT_ORGAN_SEGMENTATION_PASSWORD`  
+- `HABITAT_ONTOGPT_USER`  
+- `HABITAT_ONTOGPT_PASSWORD`  
