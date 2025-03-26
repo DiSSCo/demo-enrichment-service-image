@@ -3,7 +3,7 @@ import logging
 import os
 import uuid
 import requests
-from typing import Tuple, Any, Dict, List
+from typing import Any, Dict, List
 
 from shared import shared
 from kafka import KafkaConsumer, KafkaProducer
