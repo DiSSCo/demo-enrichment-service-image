@@ -120,7 +120,7 @@ def map_result_to_annotation(
         annotation = shared.map_to_annotation_str_val(
             ods_agent,
             timestamp,
-            oa_value,
+            json.dumps(oa_value),
             oa_selector,
             digital_object[shared.ODS_ID],
             digital_object[shared.ODS_TYPE],
