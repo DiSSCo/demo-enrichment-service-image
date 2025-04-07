@@ -12,9 +12,12 @@ import shared
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 OA_BODY = "oa:hasBody"
 DWC_LOCALITY = "dwc:locality"
+ODS_HAS_EVENTS = "ods:hasEvents"
+ODS_HAS_LOCATION = "ods:hasLocation"
 OA_VALUE = "oa:value"
-LOCATION_PATH = "$['ods:hasEvents'][*]['ods:hasLocation']"
+LOCATION_PATH = f"$['{ODS_HAS_EVENTS}'][*]['{ODS_HAS_LOCATION}']"
 USER_AGENT = "Distributed System of Scientific Collections"
+
 
 def start_kafka() -> None:
     """
@@ -68,8 +71,25 @@ def map_to_annotation_event(
     :return: Returns a formatted annotation Record which includes the Job ID
     """
     timestamp = shared.timestamp_now()
-    if results is None:
-        annotations = list()
+    if not results:
+        dcterms_ref = (
+            ""
+            if specimen_data.get(ODS_HAS_EVENTS)[0].get(ODS_HAS_LOCATION) is None
+            else (
+                build_query_string(
+                    specimen_data.get(ODS_HAS_EVENTS)[0].get(ODS_HAS_LOCATION), 0
+                )
+            )[0]
+        )
+        annotations = [
+            shared.map_to_empty_annotation(
+                timestamp,
+                "No georeferencing information could be deduced from specimen",
+                specimen_data,
+                ODS_HAS_EVENTS,
+                dcterms_ref,
+            )
+        ]
     else:
         ods_agent = shared.get_agent()
         annotations = list(
@@ -146,7 +166,7 @@ def map_result_to_annotation(
         result,
         specimen_data,
         timestamp,
-        f"$['ods:hasEvents'][{result['occurrence_index']}]['ods:hasLocation']['ods:hasGeoreference']",
+        f"$['{ODS_HAS_EVENTS}'][{result['occurrence_index']}]['{ODS_HAS_LOCATION}']['ods:hasGeoreference']",
         batching,
         ods_agent,
     )
@@ -210,12 +230,12 @@ def run_georeference(specimen_data: Dict) -> Tuple[List[Dict[str, Any]], List[Di
     :return: Returns a list of all the results. This could be multiple as we can have more than one occurrence
     per specimen. Also returns the batch metadata.
     """
-    events = specimen_data.get("ods:hasEvents")
+    events = specimen_data.get(ODS_HAS_EVENTS)
     result_list = list()
     batch_metadata = []
     for index, event in enumerate(events):
-        if event.get("ods:hasLocation") is not None:
-            location = event.get("ods:hasLocation")
+        if event.get(ODS_HAS_LOCATION) is not None:
+            location = event.get(ODS_HAS_LOCATION)
             query_string, batch_metadata_unit = build_query_string(location, index)
             headers = {"User-Agent": USER_AGENT}
             response = requests.get(query_string, headers=headers)
@@ -381,14 +401,16 @@ def reduce_event_for_printing(annotation_event: dict) -> str:
 
 def reduce_annotation_size_for_printing(annotation: dict) -> dict:
     printed_annotation = annotation
-    printed_annotation[OA_BODY][OA_VALUE] = list(
-        map(
-            lambda v: v[:200] + "..." + v[len(v) - 200 :], annotation[OA_BODY][OA_VALUE]
+    if len(printed_annotation[OA_BODY][OA_VALUE]) > 400:
+        printed_annotation[OA_BODY][OA_VALUE] = list(
+            map(
+                lambda v: v[:200] + "..." + v[len(v) - 200 :],
+                annotation[OA_BODY][OA_VALUE],
+            )
         )
-    )
     return printed_annotation
 
 
 if __name__ == "__main__":
-    start_kafka()
-    #run_local('https://dev.dissco.tech/api/digital-specimen/v1/TEST/D3B-3K8-EF9')
+    # start_kafka()
+    run_local("https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/1ZR-S9H-LGW")
