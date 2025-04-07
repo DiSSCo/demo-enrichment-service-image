@@ -390,27 +390,26 @@ def run_local(example: str):
 
 def reduce_event_for_printing(annotation_event: dict) -> str:
     printed_event = annotation_event
-    printed_event["annotations"] = list(
-        map(
-            lambda a: reduce_annotation_size_for_printing(a),
-            annotation_event["annotations"],
+    printed_event["annotations"] = [
+        (
+            reduce_annotation_size_for_printing(annotation)
+            if len(annotation[OA_BODY][OA_VALUE]) > 100
+            else annotation
         )
-    )
-    return json.dumps(printed_event, indent=2)
+        for annotation in annotation_event["annotations"]
+    ]
 
 
 def reduce_annotation_size_for_printing(annotation: dict) -> dict:
     printed_annotation = annotation
-    if len(printed_annotation[OA_BODY][OA_VALUE]) > 400:
-        printed_annotation[OA_BODY][OA_VALUE] = list(
-            map(
-                lambda v: v[:200] + "..." + v[len(v) - 200 :],
-                annotation[OA_BODY][OA_VALUE],
-            )
+    printed_annotation[OA_BODY][OA_VALUE] = list(
+        map(
+            lambda v: v[:50] + "..." + v[len(v) - 50 :], annotation[OA_BODY][OA_VALUE]
         )
+    )
     return printed_annotation
 
 
 if __name__ == "__main__":
-    # start_kafka()
-    run_local("https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/1ZR-S9H-LGW")
+    start_kafka()
+    # run_local("https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/1ZR-S9H-LGW")
