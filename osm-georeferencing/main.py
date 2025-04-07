@@ -216,7 +216,7 @@ def publish_annotation_event(
     :return: Will not return anything
     """
     logging.info(
-        "Publishing annotation: " + reduce_event_for_printing(annotation_event)
+        f"Publishing annotation: {reduce_event_for_printing(annotation_event)}"
     )
     producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation_event)
 
@@ -389,15 +389,14 @@ def run_local(example: str):
 
 
 def reduce_event_for_printing(annotation_event: dict) -> str:
-    printed_event = annotation_event
-    printed_event["annotations"] = [
+    return json.dumps([
         (
             reduce_annotation_size_for_printing(annotation)
             if len(annotation[OA_BODY][OA_VALUE]) > 100
             else annotation
         )
         for annotation in annotation_event["annotations"]
-    ]
+    ])
 
 
 def reduce_annotation_size_for_printing(annotation: dict) -> dict:
