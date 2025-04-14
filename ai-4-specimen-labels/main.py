@@ -1,7 +1,8 @@
 import json
 import logging
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
+from requests.auth import HTTPBasicAuth
 
 import requests
 from kafka import KafkaConsumer, KafkaProducer
@@ -16,10 +17,10 @@ OA_VALUE = "oa:value"
 LOCATION_PATH = f"$['{ODS_HAS_EVENTS}'][*]['{ODS_HAS_LOCATION}']"
 USER_AGENT = "Distributed System of Scientific Collections"
 
-
 """
 This is a template for a simple MAS that calls an API and sends a list of annotations back to DiSSCo. 
 """
+
 
 def start_kafka() -> None:
     """
@@ -54,14 +55,15 @@ def start_kafka() -> None:
             send_failed_message(json_value.get("jobId"), str(e), producer)
 
 
-def build_query_string(digital_object: Dict[str, Any]) -> str:
+def build_query_string(digital_object: Dict[str, Any]) -> Tuple[str, List[str]]:
     """
-    Builds the query based on the digital object. Fill in your API call here
+    Builds the query for n8n endpoint
     :param digital_object: Target of the annotation
-    :return: query string to some example API
+    :return: query string to some example API, list of access URIs
     """
+    access_uris = [digital_object.get("ac:accessURI")]
     # Use your API here
-    return f"https://example.api.com/search?value={digital_object.get('some parameter of interest')}"
+    return f"https://n8n.svc.gbif.no/webhook/9fa39dd6-63ea-4ed8-b4e1-904051e8a41a", access_uris
 
 
 def publish_annotation_event(
@@ -77,36 +79,80 @@ def publish_annotation_event(
     producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation_event)
 
 
-def build_annotations(digital_object: Dict[str, Any]) -> List[Dict[str, Any]]:
+def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Given a target object, computes a result and maps the result to an openDS annotation
-    :param digital_object: the target object of the annotation
+    :param digital_media: the target object of the annotation
     :return: List of annotations
     """
     # Your query here
-    query_string = build_query_string(digital_object)
+    query_string, uris = build_query_string(digital_media)
+
     timestamp = shared.timestamp_now()
     # Run API call and compute value(s) of the annotation
-    response = run_api_call(query_string)
-
+    response = run_api_call(query_string, uris)
     if not response:
         # If the API call does not return a result, that information should still be captured in an annotation
         return [shared.map_to_empty_annotation(
             timestamp,
-            "No results found",
-            digital_object[shared.ODS_ID],
-            digital_object[shared.ODS_TYPE],
-            query_string,
+            "Unable to read specimen label",
+            digital_media[shared.ODS_ID],
+            digital_media[shared.ODS_TYPE],
+            query_string
         )]
+    specimen = get_specimen(digital_media)
+    taxon_identification, json_path = get_taxon_identification(specimen)
+    annotations = list()
+
+    for field in response['data']:
+        if field in taxon_identification.keys():
+            unchanged = response['data'][field] == taxon_identification[field]
+            if unchanged:
+                logging.debug(f"No new information for {field}")
+                annotations.append(shared.map_to_annotation_str_val(
+                    shared.get_agent(),
+                    timestamp,
+                    "Existing information aligns with AI reading",
+                    shared.build_term_selector(json_path),
+                    specimen[shared.ODS_ID],
+                    specimen[shared.ODS_TYPE],
+                    f"query_string&{response['version']}",
+                    "oa:assessing"
+                ))
+            else:
+                logging.info("change!")
 
     # todo for field in value make annotation
-    annotations = list()
     return annotations
 
 
-def run_api_call(query_string: str) -> List[str]:
-    try :
-        response = requests.get(query_string)
+def get_specimen(digital_media: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Takes media object and returns related specimen (max 1)
+    :param digital_media: Media object to get related specimen
+    """
+    entity_relationships = digital_media.get('ods:hasEntityRelationships')
+    for entity_relationship in entity_relationships:
+        if entity_relationship.get('dwc:relationshipOfResource') == "hasDigitalSpecimen":
+            specimen_doi = entity_relationship.get('dwc:relatedResourceID').replace("https://doi.org/", "")
+            break
+    return json.loads(requests.get(f"{os.environ.get('DISSCO_API_SPECIMEN')}/{specimen_doi}").content).get('data').get('attributes')
+
+
+def get_taxon_identification(digital_specimen: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
+    for id_idx, identification in enumerate(digital_specimen.get("ods:hasIdentifications")):
+        for tax_idx, taxonIdentification in enumerate(identification.get("ods:hasTaxonIdentifications")):
+            if taxonIdentification.get("dwc:taxonomicStatus") == "ACCEPTED":
+                return taxonIdentification, f"$['ods:hasIdentifications'][{id_idx}]['ods:hasTaxonIdentifications'][{tax_idx}]"
+    return {}, ""
+
+
+
+def run_api_call(query_string: str, uris: List[str]) -> Dict[str, Any]:
+    try:
+        auth = HTTPBasicAuth(os.environ.get("API_USER"), os.environ.get("API_PASSWORD"))
+        response = requests.post(query_string, json={
+            "uris": uris}, auth=auth)
         response.raise_for_status()
         response_json = json.loads(response.content)
     except requests.RequestException as e:
@@ -115,11 +161,7 @@ def run_api_call(query_string: str) -> List[str]:
     '''
     It is up to the MAS developer to determine the best format for the value of the annotation.
     '''
-    oa_value = response_json['resultValue']
-    # todo process value
-
-    return oa_value
-
+    return response_json
 
 
 def send_failed_message(job_id: str, message: str, producer: KafkaProducer) -> None:
@@ -137,27 +179,27 @@ def send_failed_message(job_id: str, message: str, producer: KafkaProducer) -> N
     producer.send("mas-failed", mas_failed)
 
 
-def run_local(specimen_id: str):
+def run_local(media_id: str):
     """
     Runs script locally. Demonstrates using a specimen target
-    :param specimen_id: A specimen ID from DiSSCo Sandbox Environment https://sandbox.dissco.tech/search
+    :param media_id: A media ID from DiSSCo Sandbox Environment https://sandbox.dissco.tech/search
     Example: SANDBOX/KMP-FZ6-S2K
     :return: Return nothing but will log the result
     """
-    digital_specimen = (
+    digital_media = (
         requests.get(
-            f"https://sandbox.dissco.tech/api/digital-specimen/v1/{specimen_id}"
+            f"https://sandbox.dissco.tech/api/digital-media/v1/{media_id}"
         )
         .json()
         .get("data")
         .get("attributes")
     )
 
-    specimen_annotations = build_annotations(digital_specimen)
+    specimen_annotations = build_annotations(digital_media)
     event = {specimen_annotations, "Some job ID"}
     logging.info(f"created annotation event: {json.dumps(event)}")
 
 
 if __name__ == '__main__':
     # start_kafka()
-    run_local("SANDBOX/4B5-3NT-PYS")
+    run_local("SANDBOX/LFE-4MF-LCD")
