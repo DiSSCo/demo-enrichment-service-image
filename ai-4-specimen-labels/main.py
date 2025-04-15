@@ -29,29 +29,29 @@ Restrictions:
 """
 
 dwc_mapping = {
-    "dwc:catalogNumber": "[physicalSpecimenID] or [Identifier]dcterms:identifier",
-    "dwc:recordNumber": "[physicalSpecimenID] or [Identifier]dcterms:identifier",
+    "dwc:catalogNumber": "['Identifier'][*]['dcterms:identifier']",
+    "dwc:recordNumber": "['Identifier'][*]['dcterms:identifier']",
 
-    "dwc:year": "$['ods:hasEvents'][*]",
-    "dwc:month": "$[Events]",
-    "dwc:day": "[Events]",
+    "dwc:year": "$['ods:hasEvents'][*]['dwc:year']",
+    "dwc:month": "$['ods:hasEvents'][*]['dwc:month']",
+    "dwc:day": "$['ods:hasEvents'][*]['dwc:day']",
 
-    "dwc:dateIdentified": "[Identifications]",
-    "dwc:verbatimIdentification": "[Identifications]",
+    "dwc:dateIdentified": "['ods:hasIdentifications'][*]['dwc:dateIdentified']",
+    "dwc:verbatimIdentification": "['ods:hasIdentifications'][*]['dwc:verbatimIdentification']",
 
-    "dwc:scientificName": "[Identifications][TaxonIdentifications]",
+    "dwc:scientificName": "['ods:hasIdentifications'][*]['ods:hasTaxonIdentifications'][*]['dwc:scientificName']",
 
-    "dwc:decimalLatitude": "[Events][Location]Georeference",
-    "dwc:decimalLongitude": "[Events][Location]Georeference",
-    "dwc:locality": "[Events][Location]",
-    "dwc:minimumElevationInMeters": "[Events][Location]",
-    "dwc:maximumElevationInMeters": "[Events][Location]",
-    "dwc:verbatimElevation": "[Events][Location]",
-    "dwc:country": "[Events][Location]",
-    "dwc:countryCode": "[Events][Location]",
+    "dwc:decimalLatitude": "['ods:hasEvents'][*]['ods:hasLocation']['ods:hasGeoreference']['dwc:decimalLatitude']",
+    "dwc:decimalLongitude": "['ods:hasEvents'][*]['ods:hasLocation']['ods:hasGeoreference']['dwc:decimalLongitude']",
+    "dwc:locality": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:locality']",
+    "dwc:minimumElevationInMeters": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:minimumElevationInMeters']",
+    "dwc:maximumElevationInMeters": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:maximumElevationInMeters']",
+    "dwc:verbatimElevation": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:verbatimElevation']",
+    "dwc:country": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:country']",
+    "dwc:countryCode": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:countryCode']",
 
-    "dwc:recordedBy": "[Identifications][Agent], [ods:hasRoles] contains \"recorder\"",
-    "dwc:identifiedBy": "[Identifications][Agents], [ods:hasRoles] contains \"identifier\""
+    "dwc:recordedBy": "['ods:hasIdentifications'][*]['ods:hasAgents'][*]['schema:name']",
+    "dwc:identifiedBy": "['ods:hasIdentifications'][*]['ods:hasAgents'][*]['schema:name']"
 }
 
 
