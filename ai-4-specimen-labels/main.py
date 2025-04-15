@@ -54,6 +54,18 @@ dwc_mapping = {
 }
 
 
+def find_matches(specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any], filter_value: str=None):
+    # Get paths
+    # For each path, find value at field in specimen
+    # If no match: annotation is new
+    # If one match: path is equal to path
+    # If multiple matches:
+        # for each field, fuzzy match against value in results at that field path
+        # closest match becomes our annotation target
+
+
+
+
 def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) -> List[str]:
     """
     Gets json path of desired field (and optional value)
