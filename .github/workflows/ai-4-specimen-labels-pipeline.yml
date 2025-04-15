@@ -4,7 +4,7 @@ on:
     branches:
       - main
     paths:
-      - 'ai-for-specimen-labels/**'
+      - 'ai-4-specimen-labels/**'
       - 'shared/**'
   pull_request:
     types: [opened, synchronize, reopened]
