@@ -54,11 +54,12 @@ dwc_mapping = {
 }
 
 
-def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) -> str:
+def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) -> List[str]:
     """
     Gets json path of desired field (and optional value)
     Returns path in block notation format by splitting on dots and adding square brackets
     Field path should be in block notation
+    Returns: json path in block notation and
     """
     path_expr = parse(field_path)
     if value: # Apply filter if requested
@@ -66,21 +67,27 @@ def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) ->
     matches = path_expr.find(specimen)
     if matches:
         return to_block_notation(matches)
-    return ""
+    return list()
 
-def to_block_notation(matches: Any) -> str:
+
+# Given a set of values, fuzzy match
+
+def to_block_notation(matches: Any) -> List[str]:
     # Convert the first match to block notation string
-    path = str(matches[0].full_path)
-    # Split on dots and format each part
-    parts = path.split('.')
-    formatted_parts = []
-    for part in parts:
-        if not part.startswith('['):
-            # Remove any single quotes before wrapping in single quotes
-            part = part.strip("'")
-            part = f"['{part}']"
-        formatted_parts.append(part)
-    return ''.join(formatted_parts)
+    paths = list()
+    for match in matches:
+        path = str[match.full_path]
+        # Split on dots and format each part
+        parts = path.split('.')
+        formatted_parts = []
+        for part in parts:
+            if not part.startswith('['):
+                # Remove any single quotes before wrapping in single quotes
+                part = part.strip("'")
+                part = f"['{part}']"
+            formatted_parts.append(part)
+        paths.append(''.join(formatted_parts))
+    return paths
 
 
 def start_kafka() -> None:
