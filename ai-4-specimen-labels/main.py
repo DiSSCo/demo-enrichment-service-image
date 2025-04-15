@@ -61,28 +61,26 @@ def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) ->
     Field path should be in block notation
     """
     path_expr = parse(field_path)
+    if value: # Apply filter if requested
+        path_expr.filter(lambda p: p!=value, specimen)
     matches = path_expr.find(specimen)
     if matches:
-        # Convert the first match to block notation string
-        path = str(matches[0].full_path)
-        # Split on dots and format each part
-        parts = path.split('.')
-        formatted_parts = []
-        for part in parts:
-            if not part.startswith('['):
-                # Remove any single quotes before wrapping in single quotes
-                part = part.strip("'")
-                part = f"['{part}']"
-            formatted_parts.append(part)
-        return ''.join(formatted_parts)
+        return to_block_notation(matches)
     return ""
 
-    """
-    if value:
-        path_expr.filter(lambda p: value)
-    """
-
-
+def to_block_notation(matches: Any) -> str:
+    # Convert the first match to block notation string
+    path = str(matches[0].full_path)
+    # Split on dots and format each part
+    parts = path.split('.')
+    formatted_parts = []
+    for part in parts:
+        if not part.startswith('['):
+            # Remove any single quotes before wrapping in single quotes
+            part = part.strip("'")
+            part = f"['{part}']"
+        formatted_parts.append(part)
+    return ''.join(formatted_parts)
 
 
 def start_kafka() -> None:
