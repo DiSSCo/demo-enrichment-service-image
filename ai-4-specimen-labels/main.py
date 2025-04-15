@@ -251,7 +251,7 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
         else:
             logging.debug(f"New information for {field}")
             value = response["data"][field]
-            match_path = dwc_mapping[field]
+            match_path = dwc_mapping[field].replace("[*]", "[0]")
             motivation = "ods:adding"
         annotations.append(
             shared.map_to_annotation_str_val(
