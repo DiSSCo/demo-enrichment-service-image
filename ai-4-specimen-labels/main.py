@@ -30,16 +30,12 @@ Restrictions:
 dwc_mapping = {
     "dwc:catalogNumber": "[physicalSpecimenID] or [Identifier]dcterms:identifier",
     "dwc:recordNumber": "[physicalSpecimenID] or [Identifier]dcterms:identifier",
-
     "dwc:year": "$['ods:hasEvents'][*]",
     "dwc:month": "$[Events]",
     "dwc:day": "[Events]",
-
     "dwc:dateIdentified": "[Identifications]",
     "dwc:verbatimIdentification": "[Identifications]",
-
     "dwc:scientificName": "[Identifications][TaxonIdentifications]",
-
     "dwc:decimalLatitude": "[Events][Location]Georeference",
     "dwc:decimalLongitude": "[Events][Location]Georeference",
     "dwc:locality": "[Events][Location]",
@@ -48,14 +44,14 @@ dwc_mapping = {
     "dwc:verbatimElevation": "[Events][Location]",
     "dwc:country": "[Events][Location]",
     "dwc:countryCode": "[Events][Location]",
-
-    "dwc:recordedBy": "[Identifications][Agent], [ods:hasRoles] contains \"recorder\"",
-    "dwc:identifiedBy": "[Identifications][Agents], [ods:hasRoles] contains \"identifier\""
+    "dwc:recordedBy": '[Identifications][Agent], [ods:hasRoles] contains "recorder"',
+    "dwc:identifiedBy": '[Identifications][Agents], [ods:hasRoles] contains "identifier"',
 }
 
 
-def find_matches(specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any],
-                 filter_value: str = None):
+def find_matches(
+    specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any], filter_value: str = None
+):
     # Get paths
     # For each path, find value at field in specimen
     # If no match: annotation is new
@@ -84,21 +80,22 @@ def get_json_path(specimen: Dict[str, Any], field_path: str, value: str = None) 
 
 # Given a set of values, fuzzy match
 
+
 def to_block_notation(matches: Any) -> List[str]:
     # Convert the first match to block notation string
     paths = list()
     for match in matches:
         path = str[match.full_path]
         # Split on dots and format each part
-        parts = path.split('.')
+        parts = path.split(".")
         formatted_parts = []
         for part in parts:
-            if not part.startswith('['):
+            if not part.startswith("["):
                 # Remove any single quotes before wrapping in single quotes
                 part = part.strip("'")
                 part = f"['{part}']"
             formatted_parts.append(part)
-        paths.append(''.join(formatted_parts))
+        paths.append("".join(formatted_parts))
     return paths
 
 
@@ -185,16 +182,18 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
     specimen_type = specimen[shared.ODS_TYPE]
     taxon_identification, json_path = get_taxon_identification(specimen)
     annotations = list()
-    return [shared.map_to_annotation_str_val(
-        shared.get_agent(),
-        timestamp,
-        json.dumps(response['data']),
-        shared.build_term_selector("$"),
-        specimen_id,
-        specimen_type,
-        f"query_string&version={response['metadata']['version']}",
-        "oa:commenting",
-    )]
+    return [
+        shared.map_to_annotation_str_val(
+            shared.get_agent(),
+            timestamp,
+            json.dumps(response["data"]),
+            shared.build_term_selector("$"),
+            specimen_id,
+            specimen_type,
+            f"query_string&version={response['metadata']['version']}",
+            "oa:commenting",
+        )
+    ]
     """
 
     for field in response["data"]:
