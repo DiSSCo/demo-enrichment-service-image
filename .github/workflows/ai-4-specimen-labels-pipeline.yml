@@ -9,7 +9,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - 'ai-for-specimen-labels/**'
+      - 'ai-4-specimen-labels/**'
       - 'shared/**'
 jobs:
   build:
@@ -28,7 +28,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: public.ecr.aws/dissco/ai-for-specimen-labels
+          images: public.ecr.aws/dissco/ai-4-specimen-labels
           tags: |
             type=sha
             type=raw,value=latest
@@ -36,7 +36,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          file: ai-for-specimen-labels/Dockerfile
+          file: ai-4-specimen-labels/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
