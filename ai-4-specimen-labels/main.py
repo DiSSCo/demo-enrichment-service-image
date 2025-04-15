@@ -240,7 +240,7 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
             response["data"]
         )
         if match_path: 
-            if response["data"][field] == match_value:
+            if str(response["data"][field]) == str(match_value):
                 logging.debug(f"No new information for {field}")
                 value = "Existing information aligns with AI processing"
                 motivation = "oa:assessing"
@@ -257,7 +257,7 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
             shared.map_to_annotation_str_val(
                 shared.get_agent(),
                 timestamp,
-                value,
+                str(value),
                 shared.build_term_selector(match_path),
                 specimen_id,
                 specimen_type,
