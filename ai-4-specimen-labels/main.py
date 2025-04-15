@@ -8,6 +8,7 @@ from jsonpath_ng import parse
 import requests
 from kafka import KafkaConsumer, KafkaProducer
 import shared
+from fuzzywuzzy import fuzz
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 OA_BODY = "oa:hasBody"
@@ -28,41 +29,87 @@ Restrictions:
 """
 
 dwc_mapping = {
-    "dwc:catalogNumber": "[physicalSpecimenID] or [Identifier]dcterms:identifier",
-    "dwc:recordNumber": "[physicalSpecimenID] or [Identifier]dcterms:identifier",
-    "dwc:year": "$['ods:hasEvents'][*]",
-    "dwc:month": "$[Events]",
-    "dwc:day": "[Events]",
-    "dwc:dateIdentified": "[Identifications]",
-    "dwc:verbatimIdentification": "[Identifications]",
-    "dwc:scientificName": "[Identifications][TaxonIdentifications]",
-    "dwc:decimalLatitude": "[Events][Location]Georeference",
-    "dwc:decimalLongitude": "[Events][Location]Georeference",
-    "dwc:locality": "[Events][Location]",
-    "dwc:minimumElevationInMeters": "[Events][Location]",
-    "dwc:maximumElevationInMeters": "[Events][Location]",
-    "dwc:verbatimElevation": "[Events][Location]",
-    "dwc:country": "[Events][Location]",
-    "dwc:countryCode": "[Events][Location]",
-    "dwc:recordedBy": '[Identifications][Agent], [ods:hasRoles] contains "recorder"',
-    "dwc:identifiedBy": '[Identifications][Agents], [ods:hasRoles] contains "identifier"',
+    "dwc:catalogNumber": "['Identifier'][*]['dcterms:identifier']",
+    "dwc:recordNumber": "['Identifier'][*]['dcterms:identifier']",
+
+    "dwc:year": "$['ods:hasEvents'][*]['dwc:year']",
+    "dwc:month": "$['ods:hasEvents'][*]['dwc:month']",
+    "dwc:day": "$['ods:hasEvents'][*]['dwc:day']",
+
+    "dwc:dateIdentified": "['ods:hasIdentifications'][*]['dwc:dateIdentified']",
+    "dwc:verbatimIdentification": "['ods:hasIdentifications'][*]['dwc:verbatimIdentification']",
+
+    "dwc:scientificName": "['ods:hasIdentifications'][*]['ods:hasTaxonIdentifications'][*]['dwc:scientificName']",
+
+    "dwc:decimalLatitude": "['ods:hasEvents'][*]['ods:hasLocation']['ods:hasGeoreference']['dwc:decimalLatitude']",
+    "dwc:decimalLongitude": "['ods:hasEvents'][*]['ods:hasLocation']['ods:hasGeoreference']['dwc:decimalLongitude']",
+    "dwc:locality": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:locality']",
+    "dwc:minimumElevationInMeters": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:minimumElevationInMeters']",
+    "dwc:maximumElevationInMeters": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:maximumElevationInMeters']",
+    "dwc:verbatimElevation": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:verbatimElevation']",
+    "dwc:country": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:country']",
+    "dwc:countryCode": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:countryCode']",
+
+    "dwc:recordedBy": "['ods:hasIdentifications'][*]['ods:hasAgents'][*]['schema:name']",
+    "dwc:identifiedBy": "['ods:hasIdentifications'][*]['ods:hasAgents'][*]['schema:name']"
 }
 
 
-def find_matches(
-    specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any], filter_value: str = None
-):
-    # Get paths
-    # For each path, find value at field in specimen
-    # If no match: annotation is new
-    # If one match: path is equal to path
-    # If multiple matches:
-    # for each field, fuzzy match against value in results at that field path
-    # closest match becomes our annotation target
-    return
+def find_match(specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any], filter_value: str=None, similarity_threshold: int=50) -> Tuple[str, str]:
+    """
+    Find matches between specimen data and results, handling different matching scenarios.
+    
+    Args:
+        specimen: The specimen data dictionary
+        field_of_interest: The field to match on
+        field_path: The JSON path to the field
+        results: The results dictionary containing values to match against
+        filter_value: Optional value to filter matches
+        similarity_threshold: Minimum similarity score required for a match (default: 80)
+    
+    Returns:
+        List of matching paths and their corresponding values
+    """
+    # Get all possible paths for the field
+    paths = get_json_path(specimen, field_path, filter_value)
+    
+    if not paths:
+        # No matches found - annotation is new
+        return (None, None)
+    
+    if len(paths) == 1:
+        # Single match - return the path and value
+        return (paths[0], results.get(field_of_interest))
+    
+    # Multiple matches - use fuzzy matching
+    best_match = None
+    best_score = 0
+    result_value = results.get(field_of_interest)
+    
+    for path in paths:
+        # Get the value at the current path
+        path_expr = parse(path)
+        path_value = path_expr.find(specimen)[0].value
+        if isinstance(path_value, str) and isinstance(result_value, str):
+            # Use fuzzy string matching for strings
+            # Try both ratio and partial_ratio to handle different matching scenarios
+            similarity = max(
+                fuzz.ratio(path_value.lower(), result_value.lower()),
+                fuzz.partial_ratio(path_value.lower(), result_value.lower())
+            )
+            # Only update best match if this is better than current best
+            if similarity > best_score and similarity >= similarity_threshold:  # Use parameterized threshold
+                best_score = similarity
+                best_match = (path, result_value)
+        elif path_value == result_value:  # For non-string values, use exact comparison
+            # Exact matches always win
+            best_match = (path, result_value)
+            break  # No need to check further if we found an exact match
+    
+    return best_match if best_match else (None, None)
 
 
-def get_json_path(specimen: Dict[str, Any], field_path: str, value: str = None) -> List[str]:
+def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) -> List[str]:
     """
     Gets json path of desired field (and optional value)
     Returns path in block notation format by splitting on dots and adding square brackets
@@ -70,8 +117,8 @@ def get_json_path(specimen: Dict[str, Any], field_path: str, value: str = None) 
     Returns: json path in block notation and
     """
     path_expr = parse(field_path)
-    if value:  # Apply filter if requested
-        path_expr.filter(lambda p: p != value, specimen)
+    if value: # Apply filter if requested
+        path_expr.filter(lambda p: p!=value, specimen)
     matches = path_expr.find(specimen)
     if matches:
         return to_block_notation(matches)
@@ -80,22 +127,21 @@ def get_json_path(specimen: Dict[str, Any], field_path: str, value: str = None) 
 
 # Given a set of values, fuzzy match
 
-
 def to_block_notation(matches: Any) -> List[str]:
     # Convert the first match to block notation string
     paths = list()
     for match in matches:
-        path = str[match.full_path]
+        path = str(match.full_path)
         # Split on dots and format each part
-        parts = path.split(".")
+        parts = path.split('.')
         formatted_parts = []
         for part in parts:
-            if not part.startswith("["):
+            if not part.startswith('['):
                 # Remove any single quotes before wrapping in single quotes
                 part = part.strip("'")
                 part = f"['{part}']"
             formatted_parts.append(part)
-        paths.append("".join(formatted_parts))
+        paths.append(''.join(formatted_parts))
     return paths
 
 
@@ -182,23 +228,19 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
     specimen_type = specimen[shared.ODS_TYPE]
     taxon_identification, json_path = get_taxon_identification(specimen)
     annotations = list()
-    return [
-        shared.map_to_annotation_str_val(
-            shared.get_agent(),
-            timestamp,
-            json.dumps(response["data"]),
-            shared.build_term_selector("$"),
-            specimen_id,
-            specimen_type,
-            f"query_string&version={response['metadata']['version']}",
-            "oa:commenting",
-        )
-    ]
-    """
+    
+    
 
     for field in response["data"]:
-        if field in taxon_identification.keys():  # todo check against locality
-            if response["data"][field] == taxon_identification[field]:
+        # Find any existing matches in the specimen data
+        match_path, match_value = find_match(
+            specimen,
+            field,
+            dwc_mapping[field],
+            response["data"]
+        )
+        if match_path: 
+            if str(response["data"][field]) == str(match_value):
                 logging.debug(f"No new information for {field}")
                 value = "Existing information aligns with AI processing"
                 motivation = "oa:assessing"
@@ -209,13 +251,14 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
         else:
             logging.debug(f"New information for {field}")
             value = response["data"][field]
+            match_path = dwc_mapping[field]
             motivation = "ods:adding"
         annotations.append(
             shared.map_to_annotation_str_val(
                 shared.get_agent(),
                 timestamp,
-                value,
-                shared.build_term_selector(json_path),
+                str(value),
+                shared.build_term_selector(match_path),
                 specimen_id,
                 specimen_type,
                 f"query_string&version={response['metadata']['version']}",
@@ -223,9 +266,18 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
             )
         )
         
+    # return [ shared.map_to_annotation_str_val(
+    #             shared.get_agent(),
+    #             timestamp,
+    #             json.dumps(response['data']),
+    #             shared.build_term_selector("$"),
+    #             specimen_id,
+    #             specimen_type,
+    #             f"query_string&version={response['metadata']['version']}",
+    #             "oa:commenting",
+    #         )]
     return annotations
-    """
-
+    
 
 def get_specimen(digital_media: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -253,6 +305,7 @@ def get_taxon_identification(digital_specimen: Dict[str, Any]) -> Tuple[Dict[str
                     f"$['ods:hasIdentifications'][{id_idx}]['ods:hasTaxonIdentifications'][{tax_idx}]",
                 )
     return {}, ""
+
 
 
 def run_api_call(query_string: str, uris: List[str]) -> Dict[str, Any]:
@@ -298,5 +351,5 @@ def run_local(media_id: str):
 
 
 if __name__ == "__main__":
-    # start_kafka()
+    #start_kafka()
     run_local("SANDBOX/LFE-4MF-LCD")
