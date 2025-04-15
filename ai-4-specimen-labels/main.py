@@ -4,7 +4,7 @@ import os
 from typing import Dict, Any, List, Tuple
 from requests.auth import HTTPBasicAuth
 
-from jsonpath_ng import jsonpath, parse
+from jsonpath_ng import parse
 import requests
 from kafka import KafkaConsumer, KafkaProducer
 import shared
@@ -62,6 +62,7 @@ def find_matches(specimen: Dict[str, Any], field_of_interest: str, field_path: s
     # If multiple matches:
         # for each field, fuzzy match against value in results at that field path
         # closest match becomes our annotation target
+    return
 
 
 
@@ -185,6 +186,17 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
     specimen_type = specimen[shared.ODS_TYPE]
     taxon_identification, json_path = get_taxon_identification(specimen)
     annotations = list()
+    return [ shared.map_to_annotation_str_val(
+                shared.get_agent(),
+                timestamp,
+                json.dumps(response['data']),
+                shared.build_term_selector("$"),
+                specimen_id,
+                specimen_type,
+                f"query_string&version={response['metadata']['version']}",
+                "oa:commenting",
+            )]
+    """
 
     for field in response["data"]:
         if field in taxon_identification.keys():  # todo check against locality
@@ -212,8 +224,9 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
                 motivation,
             )
         )
+        
     return annotations
-
+    """
 
 def get_specimen(digital_media: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -247,15 +260,12 @@ def get_taxon_identification(digital_specimen: Dict[str, Any]) -> Tuple[Dict[str
 def run_api_call(query_string: str, uris: List[str]) -> Dict[str, Any]:
     try:
         auth = HTTPBasicAuth(os.environ.get("API_USER"), os.environ.get("API_PASSWORD"))
-        response = requests.post(query_string, json={"uris": uris}, auth=auth)
+        response = requests.post(query_string, json={"uris": uris}, auth=auth, timeout=60)
         response.raise_for_status()
         response_json = json.loads(response.content)
     except requests.RequestException as e:
         logging.error(f"API call failed: {e}")
         raise requests.RequestException
-    """
-    It is up to the MAS developer to determine the best format for the value of the annotation.
-    """
     return response_json
 
 
@@ -284,20 +294,11 @@ def run_local(media_id: str):
         .get("data")
         .get("attributes")
     )
-
     specimen_annotations = build_annotations(digital_media)
     event = {"annotations": specimen_annotations, "jobId": "Some job ID"}
     logging.info(f"created annotation event: {json.dumps(event)}")
 
 
 if __name__ == "__main__":
-
-    digital_specimen = (
-        requests.get("https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/3L8-AS3-E1T")
-        .json()
-        .get("data")
-        .get("attributes")
-    )
-    print(get_json_path(digital_specimen, "['ods:hasEvents'][*]['dwc:eventDate']"))
-
-    #run_local("SANDBOX/LFE-4MF-LCD")
+    #start_kafka()
+    run_local("SANDBOX/LFE-4MF-LCD")

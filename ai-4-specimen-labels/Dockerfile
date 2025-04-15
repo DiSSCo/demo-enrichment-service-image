@@ -1,5 +1,5 @@
 # set base image (host OS)
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # set the working directory in the container
 WORKDIR /code
@@ -15,7 +15,7 @@ RUN pip install -r requirements.txt
 
 # copy the content of the local src directory to the working directory
 # Set this value to the correct directory name
-COPY ${directory_name}/main.py .
+COPY ai-4-specimen-labels/main.py .
 
 # copy shared directory
 COPY shared/ shared/
