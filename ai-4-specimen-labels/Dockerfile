@@ -8,7 +8,7 @@ WORKDIR /code
 RUN adduser --disabled-password --gecos '' --system --uid 1001 python && chown -R python /code
 
 # copy the dependencies file to the working directory
-COPY osm-georeferencing/requirements.txt .
+COPY ai-4-specimen-labels/requirements.txt .
 
 # install dependencies
 RUN pip install -r requirements.txt
