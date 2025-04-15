@@ -55,7 +55,7 @@ dwc_mapping = {
 }
 
 
-def find_matches(specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any], filter_value: str=None, similarity_threshold: int=50):
+def find_match(specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any], filter_value: str=None, similarity_threshold: int=50) -> Tuple[str, str]:
     """
     Find matches between specimen data and results, handling different matching scenarios.
     
@@ -75,11 +75,11 @@ def find_matches(specimen: Dict[str, Any], field_of_interest: str, field_path: s
     
     if not paths:
         # No matches found - annotation is new
-        return []
+        return (None, None)
     
     if len(paths) == 1:
         # Single match - return the path and value
-        return [(paths[0], results.get(field_of_interest))]
+        return (paths[0], results.get(field_of_interest))
     
     # Multiple matches - use fuzzy matching
     best_match = None
@@ -106,7 +106,7 @@ def find_matches(specimen: Dict[str, Any], field_of_interest: str, field_path: s
             best_match = (path, result_value)
             break  # No need to check further if we found an exact match
     
-    return [best_match] if best_match else []
+    return best_match if best_match else (None, None)
 
 
 def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) -> List[str]:
@@ -228,21 +228,19 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
     specimen_type = specimen[shared.ODS_TYPE]
     taxon_identification, json_path = get_taxon_identification(specimen)
     annotations = list()
-    return [ shared.map_to_annotation_str_val(
-                shared.get_agent(),
-                timestamp,
-                json.dumps(response['data']),
-                shared.build_term_selector("$"),
-                specimen_id,
-                specimen_type,
-                f"query_string&version={response['metadata']['version']}",
-                "oa:commenting",
-            )]
-    """
+    
+    
 
     for field in response["data"]:
-        if field in taxon_identification.keys():  # todo check against locality
-            if response["data"][field] == taxon_identification[field]:
+        # Find any existing matches in the specimen data
+        match_path, match_value = find_match(
+            specimen,
+            field,
+            dwc_mapping[field],
+            response["data"]
+        )
+        if match_path: 
+            if response["data"][field] == match_value:
                 logging.debug(f"No new information for {field}")
                 value = "Existing information aligns with AI processing"
                 motivation = "oa:assessing"
@@ -253,13 +251,14 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
         else:
             logging.debug(f"New information for {field}")
             value = response["data"][field]
+            match_path = dwc_mapping[field]
             motivation = "ods:adding"
         annotations.append(
             shared.map_to_annotation_str_val(
                 shared.get_agent(),
                 timestamp,
                 value,
-                shared.build_term_selector(json_path),
+                shared.build_term_selector(match_path),
                 specimen_id,
                 specimen_type,
                 f"query_string&version={response['metadata']['version']}",
@@ -267,8 +266,18 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
             )
         )
         
+    # return [ shared.map_to_annotation_str_val(
+    #             shared.get_agent(),
+    #             timestamp,
+    #             json.dumps(response['data']),
+    #             shared.build_term_selector("$"),
+    #             specimen_id,
+    #             specimen_type,
+    #             f"query_string&version={response['metadata']['version']}",
+    #             "oa:commenting",
+    #         )]
     return annotations
-    """
+    
 
 def get_specimen(digital_media: Dict[str, Any]) -> Dict[str, Any]:
     """
