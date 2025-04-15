@@ -54,15 +54,28 @@ dwc_mapping = {
 }
 
 
-def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) -> List[str]:
+def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) -> str:
     """
-    Gets json paths of desired field (and optional value)
-    Returns list of paths to fuzzy match against
+    Gets json path of desired field (and optional value)
+    Returns path in block notation format by splitting on dots and adding square brackets
     Field path should be in block notation
     """
     path_expr = parse(field_path)
-    paths = [str(match.full_path) for match in path_expr.find(specimen)]
-    return paths
+    matches = path_expr.find(specimen)
+    if matches:
+        # Convert the first match to block notation string
+        path = str(matches[0].full_path)
+        # Split on dots and format each part
+        parts = path.split('.')
+        formatted_parts = []
+        for part in parts:
+            if not part.startswith('['):
+                # Remove any single quotes before wrapping in single quotes
+                part = part.strip("'")
+                part = f"['{part}']"
+            formatted_parts.append(part)
+        return ''.join(formatted_parts)
+    return ""
 
     """
     if value:
