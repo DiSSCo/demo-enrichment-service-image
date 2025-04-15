@@ -8,6 +8,7 @@ from jsonpath_ng import jsonpath, parse
 import requests
 from kafka import KafkaConsumer, KafkaProducer
 import shared
+from fuzzywuzzy import fuzz
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 OA_BODY = "oa:hasBody"
@@ -54,16 +55,58 @@ dwc_mapping = {
 }
 
 
-def find_matches(specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any], filter_value: str=None):
-    # Get paths
-    # For each path, find value at field in specimen
-    # If no match: annotation is new
-    # If one match: path is equal to path
-    # If multiple matches:
-        # for each field, fuzzy match against value in results at that field path
-        # closest match becomes our annotation target
-
-
+def find_matches(specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any], filter_value: str=None, similarity_threshold: int=50):
+    """
+    Find matches between specimen data and results, handling different matching scenarios.
+    
+    Args:
+        specimen: The specimen data dictionary
+        field_of_interest: The field to match on
+        field_path: The JSON path to the field
+        results: The results dictionary containing values to match against
+        filter_value: Optional value to filter matches
+        similarity_threshold: Minimum similarity score required for a match (default: 80)
+    
+    Returns:
+        List of matching paths and their corresponding values
+    """
+    # Get all possible paths for the field
+    paths = get_json_path(specimen, field_path, filter_value)
+    
+    if not paths:
+        # No matches found - annotation is new
+        return []
+    
+    if len(paths) == 1:
+        # Single match - return the path and value
+        return [(paths[0], results.get(field_of_interest))]
+    
+    # Multiple matches - use fuzzy matching
+    best_match = None
+    best_score = 0
+    result_value = results.get(field_of_interest)
+    
+    for path in paths:
+        # Get the value at the current path
+        path_expr = parse(path)
+        path_value = path_expr.find(specimen)[0].value
+        if isinstance(path_value, str) and isinstance(result_value, str):
+            # Use fuzzy string matching for strings
+            # Try both ratio and partial_ratio to handle different matching scenarios
+            similarity = max(
+                fuzz.ratio(path_value.lower(), result_value.lower()),
+                fuzz.partial_ratio(path_value.lower(), result_value.lower())
+            )
+            # Only update best match if this is better than current best
+            if similarity > best_score and similarity >= similarity_threshold:  # Use parameterized threshold
+                best_score = similarity
+                best_match = (path, result_value)
+        elif path_value == result_value:  # For non-string values, use exact comparison
+            # Exact matches always win
+            best_match = (path, result_value)
+            break  # No need to check further if we found an exact match
+    
+    return [best_match] if best_match else []
 
 
 def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) -> List[str]:
@@ -88,7 +131,7 @@ def to_block_notation(matches: Any) -> List[str]:
     # Convert the first match to block notation string
     paths = list()
     for match in matches:
-        path = str[match.full_path]
+        path = str(match.full_path)
         # Split on dots and format each part
         parts = path.split('.')
         formatted_parts = []
