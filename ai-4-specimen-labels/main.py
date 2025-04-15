@@ -54,20 +54,19 @@ dwc_mapping = {
 }
 
 
-def find_matches(specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any], filter_value: str=None):
+def find_matches(specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any],
+                 filter_value: str = None):
     # Get paths
     # For each path, find value at field in specimen
     # If no match: annotation is new
     # If one match: path is equal to path
     # If multiple matches:
-        # for each field, fuzzy match against value in results at that field path
-        # closest match becomes our annotation target
+    # for each field, fuzzy match against value in results at that field path
+    # closest match becomes our annotation target
     return
 
 
-
-
-def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) -> List[str]:
+def get_json_path(specimen: Dict[str, Any], field_path: str, value: str = None) -> List[str]:
     """
     Gets json path of desired field (and optional value)
     Returns path in block notation format by splitting on dots and adding square brackets
@@ -75,8 +74,8 @@ def get_json_path(specimen: Dict[str, Any], field_path: str, value: str=None) ->
     Returns: json path in block notation and
     """
     path_expr = parse(field_path)
-    if value: # Apply filter if requested
-        path_expr.filter(lambda p: p!=value, specimen)
+    if value:  # Apply filter if requested
+        path_expr.filter(lambda p: p != value, specimen)
     matches = path_expr.find(specimen)
     if matches:
         return to_block_notation(matches)
@@ -186,16 +185,16 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
     specimen_type = specimen[shared.ODS_TYPE]
     taxon_identification, json_path = get_taxon_identification(specimen)
     annotations = list()
-    return [ shared.map_to_annotation_str_val(
-                shared.get_agent(),
-                timestamp,
-                json.dumps(response['data']),
-                shared.build_term_selector("$"),
-                specimen_id,
-                specimen_type,
-                f"query_string&version={response['metadata']['version']}",
-                "oa:commenting",
-            )]
+    return [shared.map_to_annotation_str_val(
+        shared.get_agent(),
+        timestamp,
+        json.dumps(response['data']),
+        shared.build_term_selector("$"),
+        specimen_id,
+        specimen_type,
+        f"query_string&version={response['metadata']['version']}",
+        "oa:commenting",
+    )]
     """
 
     for field in response["data"]:
@@ -228,6 +227,7 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
     return annotations
     """
 
+
 def get_specimen(digital_media: Dict[str, Any]) -> Dict[str, Any]:
     """
     Takes media object and returns related specimen (max 1)
@@ -254,7 +254,6 @@ def get_taxon_identification(digital_specimen: Dict[str, Any]) -> Tuple[Dict[str
                     f"$['ods:hasIdentifications'][{id_idx}]['ods:hasTaxonIdentifications'][{tax_idx}]",
                 )
     return {}, ""
-
 
 
 def run_api_call(query_string: str, uris: List[str]) -> Dict[str, Any]:
@@ -300,5 +299,5 @@ def run_local(media_id: str):
 
 
 if __name__ == "__main__":
-    #start_kafka()
+    # start_kafka()
     run_local("SANDBOX/LFE-4MF-LCD")
