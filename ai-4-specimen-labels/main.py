@@ -351,5 +351,5 @@ def run_local(media_id: str):
 
 
 if __name__ == "__main__":
-    #start_kafka()
-    run_local("SANDBOX/LFE-4MF-LCD")
+    start_kafka()
+    #run_local("SANDBOX/LFE-4MF-LCD")
