@@ -58,7 +58,7 @@ dwc_mapping = {
 def find_match(specimen: Dict[str, Any], field_of_interest: str, field_path: str, results: Dict[str, Any], filter_value: str=None, similarity_threshold: int=50) -> Tuple[str, str]:
     """
     Find matches between specimen data and results, handling different matching scenarios.
-    
+
     Args:
         specimen: The specimen data dictionary
         field_of_interest: The field to match on
@@ -66,26 +66,26 @@ def find_match(specimen: Dict[str, Any], field_of_interest: str, field_path: str
         results: The results dictionary containing values to match against
         filter_value: Optional value to filter matches
         similarity_threshold: Minimum similarity score required for a match (default: 80)
-    
+
     Returns:
         List of matching paths and their corresponding values
     """
     # Get all possible paths for the field
     paths = get_json_path(specimen, field_path, filter_value)
-    
+
     if not paths:
         # No matches found - annotation is new
         return (None, None)
-    
+
     if len(paths) == 1:
         # Single match - return the path and value
         return (paths[0], results.get(field_of_interest))
-    
+
     # Multiple matches - use fuzzy matching
     best_match = None
     best_score = 0
     result_value = results.get(field_of_interest)
-    
+
     for path in paths:
         # Get the value at the current path
         path_expr = parse(path)
@@ -105,7 +105,7 @@ def find_match(specimen: Dict[str, Any], field_of_interest: str, field_path: str
             # Exact matches always win
             best_match = (path, result_value)
             break  # No need to check further if we found an exact match
-    
+
     return best_match if best_match else (None, None)
 
 
@@ -228,8 +228,8 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
     specimen_type = specimen[shared.ODS_TYPE]
     taxon_identification, json_path = get_taxon_identification(specimen)
     annotations = list()
-    
-    
+
+
 
     for field in response["data"]:
         # Find any existing matches in the specimen data
@@ -239,7 +239,7 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
             dwc_mapping[field],
             response["data"]
         )
-        if match_path: 
+        if match_path:
             if str(response["data"][field]) == str(match_value):
                 logging.debug(f"No new information for {field}")
                 value = "Existing information aligns with AI processing"
@@ -277,7 +277,7 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
     #             "oa:commenting",
     #         )]
     return annotations
-    
+
 
 def get_specimen(digital_media: Dict[str, Any]) -> Dict[str, Any]:
     """
