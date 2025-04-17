@@ -261,7 +261,7 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
                 shared.build_term_selector(match_path),
                 specimen_id,
                 specimen_type,
-                f"query_string&version={response['metadata']['version']}",
+                f"{query_string}&version={response['metadata']['version']}",
                 motivation,
             )
         )
