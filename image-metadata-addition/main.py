@@ -22,12 +22,14 @@ DCTERMS_FORMAT = "dcterms:format"
 def run_rabbitmq() -> None:
     """
     Start a RabbitMQ consumer and process the messages by unpacking the image.
-    When done it will republish the object, so it can be validated and storage by the processing service
+    When done, it will publish an annotation to annotation processing service
     """
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
             os.environ.get("RABBITMQ_HOST"),
-            credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USER"), os.environ.get("RABBITMQ_PASSWORD")),
+            credentials=pika.PlainCredentials(
+                os.environ.get("RABBITMQ_USER"),
+                os.environ.get("RABBITMQ_PASSWORD")),
         )
     )
     channel = connection.channel()
