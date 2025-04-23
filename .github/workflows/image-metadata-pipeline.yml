@@ -15,7 +15,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: astral-sh/ruff-action@v3
       - name: Login to Public ECR
         if: github.event_name != 'pull_request'
