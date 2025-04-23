@@ -30,7 +30,7 @@ def mark_job_as_running(job_id: str):
     Calls DiSSCo's RUNNING endpoint to inform the system that the message has
     been received by the MAS. Doing so will update the status of the job to
     "RUNNING" for any observing users.
-    :param job_id: the job id from the kafka message
+    :param job_id: the job id from the message
     """
     query_string = f"{os.environ.get('RUNNING_ENDPOINT')}/{MAS_ID}/{job_id}/running"
     requests.get(query_string)
