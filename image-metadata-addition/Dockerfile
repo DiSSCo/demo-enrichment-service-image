@@ -1,14 +1,11 @@
 # set base image (host OS)
-FROM python:3.8-alpine
+FROM python:3.13-slim
 
 # set the working directory in the container
 WORKDIR /code
 
 # Create new user with UID
 RUN adduser --disabled-password --gecos '' --system --uid 1001 python && chown -R python /code
-
-# Set user to newly created user
-USER 1001
 
 # copy the dependencies file to the working directory
 COPY image-metadata-addition/requirements.txt .
@@ -21,6 +18,9 @@ COPY image-metadata-addition/main.py .
 
 # copy shared directory
 COPY shared/ shared/
+
+# Set user to newly created user
+USER 1001
 
 # command to run on container start
 CMD [ "python", "main.py" ]

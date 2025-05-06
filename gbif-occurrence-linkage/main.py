@@ -2,49 +2,59 @@ import json
 import logging
 import os
 import uuid
-from typing import Dict
 
-import requests
-from kafka import KafkaConsumer, KafkaProducer
+import pika
+import requests as requests
+from typing import Dict
+from pika.amqp_object import Method, Properties
+from pika.adapters.blocking_connection import BlockingChannel
+
 import shared
+from main import send_failed_message
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
 
-def start_kafka() -> None:
+def run_rabbitmq() -> None:
     """
-    Start a kafka listener and process the messages by unpacking the image.
-    When done it will republish the object, so it can be validated and storage by the processing service
+    Start a RabbitMQ consumer and process the messages by unpacking the image.
+    When done, it will publish an annotation to annotation processing service
     """
-    consumer = KafkaConsumer(
-        os.environ.get("KAFKA_CONSUMER_TOPIC"),
-        group_id=os.environ.get("KAFKA_CONSUMER_GROUP"),
-        bootstrap_servers=[os.environ.get("KAFKA_CONSUMER_HOST")],
-        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-        enable_auto_commit=True,
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            os.environ.get("RABBITMQ_HOST"),
+            credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USER"), os.environ.get("RABBITMQ_PASSWORD")),
+        )
     )
-    producer = KafkaProducer(
-        bootstrap_servers=[os.environ.get("KAFKA_PRODUCER_HOST")],
-        value_serializer=lambda m: json.dumps(m).encode("utf-8"),
-    )
-    for msg in consumer:
-        try:
-            logging.info("Received message: " + str(msg.value))
-            json_value = msg.value
-            shared.mark_job_as_running(json_value.get("jobId"))
-            specimen_data = json_value.get("object")
-            result = run_api_call(specimen_data)
-            annotation_event = map_to_annotation_event(
-                specimen_data, result, json_value.get("jobId")
-            )
-            publish_annotation_event(annotation_event, producer)
-        except Exception as e:
-            logging.exception(e)
+    channel = connection.channel()
+    channel.basic_consume(queue=os.environ.get("RABBITMQ_QUEUE"), on_message_callback=process_message, auto_ack=True)
+    channel.start_consuming()
 
 
-def map_to_annotation_event(
-    specimen_data: Dict, result: Dict[str, str], job_id: str
-) -> dict:
+def process_message(channel: BlockingChannel, method: Method, properties: Properties, body: bytes) -> None:
+    """
+    Callback function to process the message from RabbitMQ. This method will be called for each message received.
+    We will first convert it to JSON and extract the accessURI.
+    Then we run Pillow to extract the image metadata and create an annotation.
+    We publish this annotation through the channel on a RabbitMQ exchange.
+    :param channel: The RabbitMQ channel, which we will use to publish the resulting annotation
+    :param method: The method used to send the message, not currently used
+    :param properties: Properties of the message, not currently used
+    :param body: The message body in bytes
+    :return:
+    """
+    try:
+        json_value = json.loads(body.decode("utf-8"))
+        shared.mark_job_as_running(json_value.get("jobId"))
+        specimen_data = json_value.get("object")
+        result = run_api_call(specimen_data)
+        annotation_event = map_to_annotation_event(specimen_data, result, json_value.get("jobId"))
+        publish_annotation_event(annotation_event, channel)
+    except Exception as e:
+        send_failed_message(json_value.get("jobId"), str(e), channel)
+
+
+def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id: str) -> dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -70,7 +80,7 @@ def map_to_annotation_event(
     oa_value = shared.map_to_entity_relationship(
         "hasGbifID",
         result.get("gbifID"),
-        f'https://www.gbif.org/occurrence/{result.get("gbifID")}',
+        f"https://www.gbif.org/occurrence/{result.get('gbifID')}",
         timestamp,
         ods_agent,
     )
@@ -88,15 +98,19 @@ def map_to_annotation_event(
     return {"jobId": job_id, "annotations": [annotation]}
 
 
-def publish_annotation_event(annotation: Dict, producer: KafkaProducer) -> None:
+def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
     """
     Send the annotation to the Kafka topic
-    :param annotation: The formatted annotationRecord
-    :param producer: The initiated Kafka producer
+    :param annotation_event: The formatted annotation event
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
     """
-    logging.info("Publishing annotation: " + str(annotation))
-    producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation)
+    logging.info("Publishing annotation: " + str(annotation_event))
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
+        body=json.dumps(annotation_event).encode("utf-8"),
+    )
 
 
 def run_api_call(specimen_data: Dict) -> Dict[str, str]:
@@ -112,15 +126,11 @@ def run_api_call(specimen_data: Dict) -> Dict[str, str]:
         f"&basisOfRecord={specimen_data.get('dwc:basisOfRecord')}"
     )
     if specimen_data.get("catalogNumber") is not None:
-        query_string = (
-            query_string + f"&catalogNumber={identifiers.get('catalogNumber')}"
-        )
+        query_string = query_string + f"&catalogNumber={identifiers.get('catalogNumber')}"
     response = requests.get(query_string)
     response_json = json.loads(response.content)
     if response_json.get("count") == 1:
-        logging.info(
-            "Successfully retrieved a single result from GBIF based on the identifiers"
-        )
+        logging.info("Successfully retrieved a single result from GBIF based on the identifiers")
         return {
             "queryString": query_string,
             "gbifID": response_json.get("results")[0].get("gbifID"),
@@ -156,7 +166,7 @@ def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:
 
 def run_local(example: str) -> None:
     """
-    Run the script locally. Can be called by replacing the kafka call with this  a method call in the main method.
+    Run the script locally. Can be called by replacing the kafka call with this method call in the main method.
     Will call the DiSSCo API to retrieve the specimen data.
     A record ID will be created but can only be used for testing.
     :param example: The full URL of the Digital Specimen to the API (for example
@@ -171,5 +181,5 @@ def run_local(example: str) -> None:
 
 
 if __name__ == "__main__":
-    start_kafka()
-    #run_local("https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/A7D-9PL-3YP")
+    run_rabbitmq()
+    # run_local("https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/A7D-9PL-3YP")
