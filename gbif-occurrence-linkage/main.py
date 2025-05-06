@@ -10,6 +10,7 @@ from pika.amqp_object import Method, Properties
 from pika.adapters.blocking_connection import BlockingChannel
 
 import shared
+from main import send_failed_message
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
@@ -22,9 +23,7 @@ def run_rabbitmq() -> None:
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
             os.environ.get("RABBITMQ_HOST"),
-            credentials=pika.PlainCredentials(
-                os.environ.get("RABBITMQ_USER"),
-                os.environ.get("RABBITMQ_PASSWORD")),
+            credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USER"), os.environ.get("RABBITMQ_PASSWORD")),
         )
     )
     channel = connection.channel()
@@ -52,7 +51,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         annotation_event = map_to_annotation_event(specimen_data, result, json_value.get("jobId"))
         publish_annotation_event(annotation_event, channel)
     except Exception as e:
-        logging.exception(e)
+        send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
 def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id: str) -> dict:
@@ -81,7 +80,7 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id:
     oa_value = shared.map_to_entity_relationship(
         "hasGbifID",
         result.get("gbifID"),
-        f'https://www.gbif.org/occurrence/{result.get("gbifID")}',
+        f"https://www.gbif.org/occurrence/{result.get('gbifID')}",
         timestamp,
         ods_agent,
     )
