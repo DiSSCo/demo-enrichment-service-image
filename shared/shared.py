@@ -3,6 +3,7 @@ from typing import Dict, Any
 import json
 import os
 import requests
+from enum import Enum
 
 ODS_TYPE = "ods:fdoType"
 AT_TYPE = "@type"
@@ -12,6 +13,14 @@ ER_PATH = "$['ods:hasEntityRelationships']"
 
 MAS_ID = os.environ.get("MAS_ID")
 MAS_NAME = os.environ.get("MAS_NAME")
+
+class Motivation(Enum):
+    ADDING = "ods:adding"
+    ASSESSING = "oa:assessing"
+    EDITING = "oa:editing"
+    DELETING = "ods:deleting"
+    COMMENTING = "oa:commenting"
+
 
 
 def timestamp_now() -> str:
