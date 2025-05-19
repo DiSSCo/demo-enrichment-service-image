@@ -111,7 +111,7 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
     query_string, uris = build_query_string(digital_media)
 
     timestamp = shared.timestamp_now()
-    # Run API call and compute value(s) of the
+    # Run API call and compute value(s) of the annotation
     response = run_api_call(query_string, uris)
     if not response:
         # If the API call does not return a result, that information should still be captured in an annotation
@@ -186,7 +186,7 @@ def find_fuzzy_match(specimen: Dict[str, Any], paths: List[str], value: str) -> 
     not an "editing" but an "assessing" motivation.
     :param specimen: the specimen
     :param paths: the paths of potential matches in the specimen
-    :param value: the from the AI model we're checking against
+    :param value: the value from the AI model we're checking against
     :return: best path to annotate, motivation
     """
     # Multiple matches - use fuzzy matching
@@ -234,7 +234,7 @@ def get_json_path(specimen: Dict[str, Any], field: str, do_filter: bool) -> List
     Gets json path of desired field (and optional value)
     Returns path in block notation format by splitting on dots and adding square brackets
     Field path should be in block notation
-    Returns: json path in block notation and
+    Returns: json path in block notation
     """
     if field in FILTER_TERMS and do_filter:
         obj = prune_specimen(specimen, FILTER_TERMS[field])
@@ -295,10 +295,12 @@ def prune_object(object_copy: Dict[str, Any], filter_terms: Dict[str, Any]) -> D
     return object_copy
 
 
-# Given a set of values, fuzzy match
-
-
 def to_block_notation(matches: Any) -> List[str]:
+    """
+    Converts a list of matches to strings in JSON path block notation (see DWC_MAPPING for examples)
+    :param matches: list of matches from our JSON path parser
+    :return: list of strings formatted in block notation
+    """
     # Convert the first match to block notation string
     paths = list()
     for match in matches:
@@ -399,4 +401,4 @@ def run_local(media_id: str):
 
 if __name__ == "__main__":
     start_kafka()
-    #run_local("SANDBOX/LFE-4MF-LCD")
+    # run_local("SANDBOX/LFE-4MF-LCD")
