@@ -10,7 +10,6 @@ from pika.amqp_object import Method, Properties
 from pika.adapters.blocking_connection import BlockingChannel
 
 import shared
-from main import send_failed_message
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
@@ -52,6 +51,23 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         publish_annotation_event(annotation_event, channel)
     except Exception as e:
         send_failed_message(json_value.get("jobId"), str(e), channel)
+
+
+def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
+    """
+    Send a message to the RabbitMQ queue indicating that the job has failed
+    :param job_id: The job ID of the MAS
+    :param message: The error message to be sent
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
+    :return: Will not return anything
+    """
+    logging.error(f"Job {job_id} failed with error: {message}")
+    mas_failed = {"jobId": job_id, "errorMessage": message}
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
+        body=json.dumps(mas_failed).encode("utf-8"),
+    )
 
 
 def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id: str) -> dict:
