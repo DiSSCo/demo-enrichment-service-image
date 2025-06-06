@@ -5,9 +5,11 @@ import re
 from typing import Dict, Any, List, Tuple
 from requests.auth import HTTPBasicAuth
 
+import pika
 from jsonpath_ng import parse
 import requests
-from kafka import KafkaConsumer, KafkaProducer
+from pika.amqp_object import Method, Properties
+from pika.adapters.blocking_connection import BlockingChannel
 import shared
 from fuzzywuzzy import fuzz
 import copy
@@ -68,37 +70,45 @@ FILTER_TERMS = {
 SIMILARITY_THRESHOLD = 50
 
 
-def start_kafka() -> None:
+def run_rabbitmq() -> None:
     """
-    Start a kafka listener and process the messages by unpacking the image.
-    When done it will republish the object, so it can be validated and storage by the processing service
+    Start a RabbitMQ consumer and process the messages by unpacking the image.
+    When done, it will publish an annotation to annotation processing service
     """
-    consumer = KafkaConsumer(
-        os.environ.get("KAFKA_CONSUMER_TOPIC"),
-        group_id=os.environ.get("KAFKA_CONSUMER_GROUP"),
-        bootstrap_servers=[os.environ.get("KAFKA_CONSUMER_HOST")],
-        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-        enable_auto_commit=True,
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            os.environ.get("RABBITMQ_HOST"),
+            credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USER"), os.environ.get("RABBITMQ_PASSWORD")),
+        )
     )
-    producer = KafkaProducer(
-        bootstrap_servers=[os.environ.get("KAFKA_PRODUCER_HOST")],
-        value_serializer=lambda m: json.dumps(m).encode("utf-8"),
-    )
-    for msg in consumer:
-        logging.info(f"Received message: {str(msg.value)}")
-        json_value = msg.value
+    channel = connection.channel()
+    channel.basic_consume(queue=os.environ.get("RABBITMQ_QUEUE"), on_message_callback=process_message, auto_ack=True)
+    channel.start_consuming()
+
+
+def process_message(channel: BlockingChannel, method: Method, properties: Properties, body: bytes) -> None:
+    """
+    Callback function to process the message from RabbitMQ. This method will be called for each message received.
+    We publish this annotation through the channel on a RabbitMQ exchange.
+    :param channel: The RabbitMQ channel, which we will use to publish the resulting annotation
+    :param method: The method used to send the message, not currently used
+    :param properties: Properties of the message, not currently used
+    :param body: The message body in bytes
+    :return:
+    """
+    json_value = json.loads(body.decode("utf-8"))
+    try:
         # Indicates to DiSSCo the message has been received by the mas and the job is running.
         # DiSSCo then informs the user of this development
-        shared.mark_job_as_running(job_id=json_value.get("jobId"))
+        # shared.mark_job_as_running(job_id=json_value.get("jobId"))
         digital_object = json_value.get("object")
-        try:
-            annotations = build_annotations(digital_object)
-            event = {"annotations": annotations, "jobId": json_value.get("jobId")}
-            logging.info(f"Publishing annotation event: {json.dumps(event)}")
-            publish_annotation_event(event, producer)
-        except Exception as e:
-            logging.error(f"Failed to publish annotation event: {e}")
-            send_failed_message(json_value.get("jobId"), str(e), producer)
+        annotations = build_annotations(digital_object)
+        event = {"annotations": annotations, "jobId": json_value.get("jobId")}
+        logging.info(f"Publishing annotation event: {json.dumps(event)}")
+        publish_annotation_event(event, channel)
+    except Exception as e:
+        logging.error(f"Failed to publish annotation event: {e}")
+        # send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
 def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -329,15 +339,19 @@ def build_query_string(digital_object: Dict[str, Any]) -> Tuple[str, List[str]]:
     return "https://n8n.svc.gbif.no/webhook/9fa39dd6-63ea-4ed8-b4e1-904051e8a41a", access_uris
 
 
-def publish_annotation_event(annotation_event: Dict[str, Any], producer: KafkaProducer) -> None:
+def publish_annotation_event(annotation_event: Dict[str, Any], channel: BlockingChannel) -> None:
     """
     Send the annotation to the Kafka topic
-    :param annotation_event: The formatted list of annotations
-    :param producer: The initiated Kafka producer
+    :param annotation_event: The formatted annotation event
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
     """
-    logging.info(f"Publishing annotation: {str(annotation_event)}")
-    producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation_event)
+    logging.info("Publishing annotation: " + str(annotation_event))
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
+        body=json.dumps(annotation_event).encode("utf-8"),
+    )
 
 
 def get_specimen(digital_media: Dict[str, Any]) -> Dict[str, Any]:
@@ -369,16 +383,20 @@ def run_api_call(query_string: str, uris: List[str]) -> Dict[str, Any]:
     return response_json
 
 
-def send_failed_message(job_id: str, message: str, producer: KafkaProducer) -> None:
+def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
     """
     Sends a failure message to the mas failure topic, mas-failed
     :param job_id: The id of the job
     :param message: The exception message
     :param producer: The Kafka producer
     """
-
+    logging.error(f"Job {job_id} failed with error: {message}")
     mas_failed = {"jobId": job_id, "errorMessage": message}
-    producer.send("mas-failed", mas_failed)
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
+        body=json.dumps(mas_failed).encode("utf-8"),
+    )
 
 
 def run_local(media_id: str):
@@ -400,5 +418,5 @@ def run_local(media_id: str):
 
 
 if __name__ == "__main__":
-    start_kafka()
+    run_rabbitmq()
     # run_local("SANDBOX/LFE-4MF-LCD")

@@ -3,78 +3,86 @@ import logging
 import os
 import uuid
 import requests
-from typing import Tuple, Any, Dict, List
-from kafka import KafkaConsumer, KafkaProducer
+import pika
 import shared
+from typing import Tuple, Any, Dict, List
+from pika.amqp_object import Method, Properties
+from pika.adapters.blocking_connection import BlockingChannel
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
 
-def start_kafka() -> None:
+def run_rabbitmq() -> None:
     """
-    Start a kafka listener and process the messages by unpacking the image.
-    When done it will republish the object, so it can be validated and stored by the processing service.
-    :param predictor: The predictor which will be used to run the plant organ segmentation
-
+    Start a RabbitMQ consumer and process the messages by unpacking the image.
+    When done, it will publish an annotation to annotation processing service
     """
-    consumer = KafkaConsumer(
-        os.environ.get("KAFKA_CONSUMER_TOPIC"),
-        group_id=os.environ.get("KAFKA_CONSUMER_GROUP"),
-        bootstrap_servers=[os.environ.get("KAFKA_CONSUMER_HOST")],
-        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-        enable_auto_commit=True,
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            os.environ.get("RABBITMQ_HOST"),
+            credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USER"), os.environ.get("RABBITMQ_PASSWORD")),
+        )
     )
+    channel = connection.channel()
+    channel.basic_consume(queue=os.environ.get("RABBITMQ_QUEUE"), on_message_callback=process_message, auto_ack=True)
+    channel.start_consuming()
 
-    producer = KafkaProducer(
-        bootstrap_servers=[os.environ.get("KAFKA_PRODUCER_HOST")],
-        value_serializer=lambda m: json.dumps(m).encode("utf-8"),
-    )
 
-    for msg in consumer:
-        logging.info(f"Received message: {str(msg.value)}")
-        json_value = msg.value
-        try:
-            shared.mark_job_as_running(job_id=json_value.get("jobId"))
-            digital_object = json_value.get("object")
-            image_uri = digital_object.get("ac:accessURI")
-            additional_info_annotations, image_height, image_width = run_leafmachine(image_uri)
+def process_message(channel: BlockingChannel, method: Method, properties: Properties, body: bytes) -> None:
+    """
+    Callback function to process the message from RabbitMQ. This method will be called for each message received.
+    We publish this annotation through the channel on a RabbitMQ exchange.
+    :param channel: The RabbitMQ channel, which we will use to publish the resulting annotation
+    :param method: The method used to send the message, not currently used
+    :param properties: Properties of the message, not currently used
+    :param body: The message body in bytes
+    :return:
+    """
+    json_value = json.loads(body.decode("utf-8"))
+    try:
+        shared.mark_job_as_running(job_id=json_value.get("jobId"))
+        digital_object = json_value.get("object")
+        image_uri = digital_object.get("ac:accessURI")
+        additional_info_annotations, image_height, image_width = run_leafmachine(image_uri)
 
-            # Publish an annotation comment if no plant components were found
-            if len(additional_info_annotations) == 0:
-                logging.info(f"No results for this herbarium sheet: {image_uri} - jobId: {json_value['jobId']}")
-                annotation = map_result_to_empty_annotation(
-                    digital_object, image_height=image_height, image_width=image_width
-                )
+        # Publish an annotation comment if no plant components were found
+        if len(additional_info_annotations) == 0:
+            logging.info(f"No results for this herbarium sheet: {image_uri} - jobId: {json_value['jobId']}")
+            annotation = map_result_to_empty_annotation(
+                digital_object, image_height=image_height, image_width=image_width
+            )
 
-                annotation_event = map_to_annotation_event([annotation], json_value["jobId"])
-            # Publish the annotations if plant components were found
-            else:
-                annotations = map_result_to_annotation(
-                    digital_object, additional_info_annotations, image_height=image_height, image_width=image_width
-                )
-                annotation_event = map_to_annotation_event(annotations, json_value["jobId"])
+            annotation_event = map_to_annotation_event([annotation], json_value["jobId"])
+        # Publish the annotations if plant components were found
+        else:
+            annotations = map_result_to_annotation(
+                digital_object, additional_info_annotations, image_height=image_height, image_width=image_width
+            )
+            annotation_event = map_to_annotation_event(annotations, json_value["jobId"])
 
-            logging.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
-            publish_annotation_event(annotation_event, producer)
-
-        except Exception as e:
-            logging.error(f"Failed to publish annotation event: {e}")
-            send_failed_message(json_value["jobId"], str(e), producer)
+        logging.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
+        publish_annotation_event(annotation_event, channel)
+    except Exception as e:
+        send_failed_message(json_value["jobId"], str(e), channel)
 
 
 def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
     return {"annotations": annotations, "jobId": job_id}
 
 
-def publish_annotation_event(annotation_event: Dict[str, Any], producer: KafkaProducer) -> None:
+def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
     """
-    Send the annotation to the Kafka topic.
-    :param annotation_event: The formatted list of annotations
-    :param producer: The initiated Kafka producer
+    Send the annotation to the Kafka topic
+    :param annotation_event: The formatted annotation event
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
     """
-    logging.info(f"Publishing annotation: {str(annotation_event)}")
-    producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation_event)
+    logging.info("Publishing annotation: " + str(annotation_event))
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
+        body=json.dumps(annotation_event).encode("utf-8"),
+    )
 
 
 def map_result_to_annotation(
@@ -168,16 +176,21 @@ def run_leafmachine(image_uri: str, model_name: str = "leafpriority") -> Tuple[L
     return annotations_list, img_height, img_width
 
 
-def send_failed_message(job_id: str, message: str, producer: KafkaProducer) -> None:
+def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
     """
-    Sends a failure message to the mas failure topic, mas-failed
-    :param job_id: The id of the job
-    :param message: The exception message
-    :param producer: The Kafka producer
+    Send a message to the RabbitMQ queue indicating that the job has failed
+    :param job_id: The job ID of the MAS
+    :param message: The error message to be sent
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
+    :return: Will not return anything
     """
-
+    logging.error(f"Job {job_id} failed with error: {message}")
     mas_failed = {"jobId": job_id, "errorMessage": message}
-    producer.send("mas-failed", mas_failed)
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
+        body=json.dumps(mas_failed).encode("utf-8"),
+    )
 
 
 def run_local(example: str) -> None:
@@ -215,4 +228,4 @@ if __name__ == "__main__":
     # Local testing
     # specimen_url = "https://sandbox.dissco.tech/api/digital-media/v1/SANDBOX/TC9-7ER-QVP"
     # run_local(specimen_url)
-    start_kafka()
+    run_rabbitmq()
