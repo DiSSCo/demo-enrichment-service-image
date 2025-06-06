@@ -33,8 +33,6 @@ def run_rabbitmq() -> None:
 def process_message(channel: BlockingChannel, method: Method, properties: Properties, body: bytes) -> None:
     """
     Callback function to process the message from RabbitMQ. This method will be called for each message received.
-    We will first convert it to JSON and extract the accessURI.
-    Then we run Pillow to extract the image metadata and create an annotation.
     We publish this annotation through the channel on a RabbitMQ exchange.
     :param channel: The RabbitMQ channel, which we will use to publish the resulting annotation
     :param method: The method used to send the message, not currently used
@@ -42,8 +40,8 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
     :param body: The message body in bytes
     :return:
     """
+    json_value = json.loads(body.decode("utf-8"))
     try:
-        json_value = json.loads(body.decode("utf-8"))
         shared.mark_job_as_running(json_value.get("jobId"))
         specimen_data = json_value.get("object")
         result = run_api_call(specimen_data)

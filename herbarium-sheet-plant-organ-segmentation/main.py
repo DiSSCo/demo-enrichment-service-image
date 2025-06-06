@@ -22,9 +22,7 @@ def run_rabbitmq() -> None:
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
             os.environ.get("RABBITMQ_HOST"),
-            credentials=pika.PlainCredentials(
-                os.environ.get("RABBITMQ_USER"),
-                os.environ.get("RABBITMQ_PASSWORD")),
+            credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USER"), os.environ.get("RABBITMQ_PASSWORD")),
         )
     )
     channel = connection.channel()
@@ -35,8 +33,6 @@ def run_rabbitmq() -> None:
 def process_message(channel: BlockingChannel, method: Method, properties: Properties, body: bytes) -> None:
     """
     Callback function to process the message from RabbitMQ. This method will be called for each message received.
-    We will first convert it to JSON and extract the accessURI.
-    Then we run Pillow to extract the image metadata and create an annotation.
     We publish this annotation through the channel on a RabbitMQ exchange.
     :param channel: The RabbitMQ channel, which we will use to publish the resulting annotation
     :param method: The method used to send the message, not currently used
@@ -175,7 +171,7 @@ def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> 
 
     mas_failed = {"jobId": job_id, "errorMessage": message}
     channel.basic_publish(
-        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-failed-exchange"),
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
         routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-failed"),
         body=json.dumps(mas_failed).encode("utf-8"),
     )

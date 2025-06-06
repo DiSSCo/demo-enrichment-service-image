@@ -4,7 +4,9 @@ import os
 from typing import Dict, Any, List
 
 import requests
-from kafka import KafkaConsumer, KafkaProducer
+import pika
+from pika.amqp_object import Method, Properties
+from pika.adapters.blocking_connection import BlockingChannel
 import shared
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
@@ -21,37 +23,43 @@ USER_AGENT = "Distributed System of Scientific Collections"
 This is a template for a simple MAS that calls an API and sends a list of annotations back to DiSSCo. 
 """
 
-def start_kafka() -> None:
+
+def run_rabbitmq() -> None:
     """
-    Start a kafka listener and process the messages by unpacking the image.
-    When done it will republish the object, so it can be validated and storage by the processing service
+    Start a RabbitMQ consumer and process the messages by unpacking the image.
+    When done, it will publish an annotation to annotation processing service
     """
-    consumer = KafkaConsumer(
-        os.environ.get("KAFKA_CONSUMER_TOPIC"),
-        group_id=os.environ.get("KAFKA_CONSUMER_GROUP"),
-        bootstrap_servers=[os.environ.get("KAFKA_CONSUMER_HOST")],
-        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-        enable_auto_commit=True,
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            os.environ.get("RABBITMQ_HOST"),
+            credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USER"), os.environ.get("RABBITMQ_PASSWORD")),
+        )
     )
-    producer = KafkaProducer(
-        bootstrap_servers=[os.environ.get("KAFKA_PRODUCER_HOST")],
-        value_serializer=lambda m: json.dumps(m).encode("utf-8"),
-    )
-    for msg in consumer:
-        logging.info(f"Received message: {str(msg.value)}")
-        json_value = msg.value
-        # Indicates to DiSSCo the message has been received by the mas and the job is running.
-        # DiSSCo then informs the user of this development
+    channel = connection.channel()
+    channel.basic_consume(queue=os.environ.get("RABBITMQ_QUEUE"), on_message_callback=process_message, auto_ack=True)
+    channel.start_consuming()
+
+
+def process_message(channel: BlockingChannel, method: Method, properties: Properties, body: bytes) -> None:
+    """
+    Callback function to process the message from RabbitMQ. This method will be called for each message received.
+    We publish this annotation through the channel on a RabbitMQ exchange.
+    :param channel: The RabbitMQ channel, which we will use to publish the resulting annotation
+    :param method: The method used to send the message, not currently used
+    :param properties: Properties of the message, not currently used
+    :param body: The message body in bytes
+    :return:
+    """
+    json_value = json.loads(body.decode("utf-8"))
+    try:
         shared.mark_job_as_running(job_id=json_value.get("jobId"))
         digital_object = json_value.get("object")
-        try:
-            annotations = build_annotations(digital_object)
-            event = {"annotations": annotations, "jobId": json_value.get("jobId")}
-            logging.info(f"Publishing annotation event: {json.dumps(event)}")
-            publish_annotation_event(event, producer)
-        except Exception as e:
-            logging.error(f"Failed to publish annotation event: {e}")
-            send_failed_message(json_value.get("jobId"), str(e), producer)
+        annotations = build_annotations(digital_object)
+        event = {"annotations": annotations, "jobId": json_value.get("jobId")}
+        logging.info(f"Publishing annotation event: {json.dumps(event)}")
+        publish_annotation_event(event, channel)
+    except Exception as e:
+        send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
 def build_query_string(digital_object: Dict[str, Any]) -> str:
@@ -64,17 +72,19 @@ def build_query_string(digital_object: Dict[str, Any]) -> str:
     return f"https://example.api.com/search?value={digital_object.get('some parameter of interest')}"
 
 
-def publish_annotation_event(
-        annotation_event: Dict[str, Any], producer: KafkaProducer
-) -> None:
+def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
     """
     Send the annotation to the Kafka topic
-    :param annotation_event: The formatted list of annotations
-    :param producer: The initiated Kafka producer
+    :param annotation_event: The formatted annotation event
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
     """
-    logging.info(f"Publishing annotation: {str(annotation_event)}")
-    producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation_event)
+    logging.info("Publishing annotation: " + str(annotation_event))
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
+        body=json.dumps(annotation_event).encode("utf-8"),
+    )
 
 
 def build_annotations(digital_object: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -91,13 +101,15 @@ def build_annotations(digital_object: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     if not oa_values:
         # If the API call does not return a result, that information should still be captured in an annotation
-        return [shared.map_to_empty_annotation(
-            timestamp,
-            "No results found",
-            digital_object[shared.ODS_ID],
-            digital_object[shared.ODS_TYPE],
-            query_string,
-        )]
+        return [
+            shared.map_to_empty_annotation(
+                timestamp,
+                "No results found",
+                digital_object[shared.ODS_ID],
+                digital_object[shared.ODS_TYPE],
+                query_string,
+            )
+        ]
 
     annotations = list()
     """
@@ -114,9 +126,7 @@ def build_annotations(digital_object: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
 
     selector_assertion = shared.build_class_selector("$['ods:hasAssertions'][0]")
-    selector_entity_relationship = shared.build_class_selector(
-        "$['ods:hasEntityRelationships'][0]"
-    )
+    selector_entity_relationship = shared.build_class_selector("$['ods:hasEntityRelationships'][0]")
     selector_term = shared.build_term_selector("$['ods:topicDomain']")
 
     # Make an annotation for each oa:value produced
@@ -129,7 +139,7 @@ def build_annotations(digital_object: Dict[str, Any]) -> List[Dict[str, Any]]:
             digital_object[shared.ODS_ID],
             digital_object[shared.ODS_ID],
             query_string,
-            "ods:adding"
+            "ods:adding",
         )
     )
     annotations.append(
@@ -141,7 +151,7 @@ def build_annotations(digital_object: Dict[str, Any]) -> List[Dict[str, Any]]:
             digital_object[shared.ODS_ID],
             digital_object[shared.ODS_ID],
             query_string,
-            "ods:adding"
+            "ods:adding",
         )
     )
     annotations.append(
@@ -153,7 +163,7 @@ def build_annotations(digital_object: Dict[str, Any]) -> List[Dict[str, Any]]:
             digital_object[shared.ODS_ID],
             digital_object[shared.ODS_ID],
             query_string,
-            "ods:commenting"
+            "ods:commenting",
         )
     )
     return annotations
@@ -198,7 +208,8 @@ def run_api_call(timestamp: str, query_string: str) -> List[str]:
             "hasRelatedResourceIdentifier",
             response_json["resourceID"],
             "https://example.com/relatedResourceId",
-            timestamp, shared.get_agent()
+            timestamp,
+            shared.get_agent(),
         )
     )
     # Return something else - such as the raw response - if the response can not be structured in another wa
@@ -210,19 +221,21 @@ def run_api_call(timestamp: str, query_string: str) -> List[str]:
     return [assertion, entity_relationship, json.dumps(response_json)]
 
 
-def send_failed_message(job_id: str, message: str, producer: KafkaProducer) -> None:
+def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
     """
-    Sends a failure message to the mas failure topic, mas-failed
-    :param job_id: The id of the job
-    :param message: The exception message
-    :param producer: The Kafka producer
+    Send a message to the RabbitMQ queue indicating that the job has failed
+    :param job_id: The job ID of the MAS
+    :param message: The error message to be sent
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
+    :return: Will not return anything
     """
-
-    mas_failed = {
-        "jobId": job_id,
-        "errorMessage": message
-    }
-    producer.send("mas-failed", mas_failed)
+    logging.error(f"Job {job_id} failed with error: {message}")
+    mas_failed = {"jobId": job_id, "errorMessage": message}
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
+        body=json.dumps(mas_failed).encode("utf-8"),
+    )
 
 
 def run_local(specimen_id: str):
@@ -233,9 +246,7 @@ def run_local(specimen_id: str):
     :return: Return nothing but will log the result
     """
     digital_specimen = (
-        requests.get(
-            f"https://sandbox.dissco.tech/api/digital-specimen/v1/{specimen_id}"
-        )
+        requests.get(f"https://sandbox.dissco.tech/api/digital-specimen/v1/{specimen_id}")
         .json()
         .get("data")
         .get("attributes")
@@ -246,6 +257,6 @@ def run_local(specimen_id: str):
     logging.info(f"created annotation event: {json.dumps(event)}")
 
 
-if __name__ == '__main__':
-    # start_kafka()
+if __name__ == "__main__":
+    # run_rabbitmq()
     run_local("SANDBOX/4B5-3NT-PYS")
