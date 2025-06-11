@@ -5,44 +5,52 @@ import uuid
 from typing import Dict, List, Any, Tuple
 
 import requests
-from kafka import KafkaConsumer, KafkaProducer
+import pika
 import shared
+from pika.amqp_object import Method, Properties
+from pika.adapters.blocking_connection import BlockingChannel
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
 HAS_LOCATION = "ods:hasLocation"
 
 
-def start_kafka() -> None:
+def run_rabbitmq() -> None:
     """
-    Start a kafka listener and process the messages by unpacking the image.
-    When done it will republish the object, so it can be validated and storage by the processing service
+    Start a RabbitMQ consumer and process the messages by unpacking the image.
+    When done, it will publish an annotation to annotation processing service
     """
-    consumer = KafkaConsumer(
-        os.environ.get("KAFKA_CONSUMER_TOPIC"),
-        group_id=os.environ.get("KAFKA_CONSUMER_GROUP"),
-        bootstrap_servers=[os.environ.get("KAFKA_CONSUMER_HOST")],
-        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-        enable_auto_commit=True,
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            os.environ.get("RABBITMQ_HOST"),
+            credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USER"), os.environ.get("RABBITMQ_PASSWORD")),
+        )
     )
-    producer = KafkaProducer(
-        bootstrap_servers=[os.environ.get("KAFKA_PRODUCER_HOST")],
-        value_serializer=lambda m: json.dumps(m).encode("utf-8"),
-    )
-    for msg in consumer:
-        try:
-            logging.info("Received message: " + str(msg.value))
-            json_value = msg.value
-            shared.mark_job_as_running(json_value.get("jobId"))
-            specimen_data = json_value.get("object")
-            batching_requested = json_value["batchingRequested"]
-            result, batch_metadata = run_georeference(specimen_data, batching_requested)
-            mas_job_record = map_to_annotation_event(
-                specimen_data, result, json_value.get("jobId"), batch_metadata
-            )
-            send_updated_opends(mas_job_record, producer)
-        except Exception as e:
-            logging.exception(e)
+    channel = connection.channel()
+    channel.basic_consume(queue=os.environ.get("RABBITMQ_QUEUE"), on_message_callback=process_message, auto_ack=True)
+    channel.start_consuming()
+
+
+def process_message(channel: BlockingChannel, method: Method, properties: Properties, body: bytes) -> None:
+    """
+    Callback function to process the message from RabbitMQ. This method will be called for each message received.
+    We publish this annotation through the channel on a RabbitMQ exchange.
+    :param channel: The RabbitMQ channel, which we will use to publish the resulting annotation
+    :param method: The method used to send the message, not currently used
+    :param properties: Properties of the message, not currently used
+    :param body: The message body in bytes
+    :return:
+    """
+    json_value = json.loads(body.decode("utf-8"))
+    try:
+        shared.mark_job_as_running(json_value.get("jobId"))
+        specimen_data = json_value.get("object")
+        batching_requested = json_value["batchingRequested"]
+        result, batch_metadata = run_georeference(specimen_data, batching_requested)
+        mas_job_record = map_to_annotation_event(specimen_data, result, json_value.get("jobId"), batch_metadata)
+        publish_annotation_event(mas_job_record, channel)
+    except Exception as e:
+        send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
 def map_to_annotation_event(
@@ -56,7 +64,7 @@ def map_to_annotation_event(
     :param batch_metadata: Information about the computation, if requested
     :param specimen_data: The JSON value of the Digital Specimen
     :param results: A list of results that contain the queryString and the geoCASe identifier
-    :param job_id: The job ID of the MAS
+    :param job_id: The job ID of the message
     :return: Returns a formatted annotation Record which includes the Job ID
     """
     timestamp = shared.timestamp_now()
@@ -217,15 +225,36 @@ def wrap_oa_value(
     return annotation
 
 
-def send_updated_opends(annotation: Dict, producer: KafkaProducer) -> None:
+def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
     """
     Send the annotation to the Kafka topic
-    :param annotation: The formatted annotationRecord
-    :param producer: The initiated Kafka producer
+    :param annotation_event: The formatted annotation event
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
     """
-    logging.info("Publishing annotation: " + str(annotation))
-    producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation)
+    logging.info("Publishing annotation: " + str(annotation_event))
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
+        body=json.dumps(annotation_event).encode("utf-8"),
+    )
+
+
+def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
+    """
+    Send a message to the RabbitMQ queue indicating that the job has failed
+    :param job_id: The job ID of the message
+    :param message: The error message to be sent
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
+    :return: Will not return anything
+    """
+    logging.error(f"Job {job_id} failed with error: {message}")
+    mas_failed = {"jobId": job_id, "errorMessage": message}
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
+        body=json.dumps(mas_failed).encode("utf-8"),
+    )
 
 
 def run_georeference(
@@ -241,30 +270,20 @@ def run_georeference(
     result_list = list()
     batch_metadata = list()
     for index, event in enumerate(events):
-        if (
-            event.get(HAS_LOCATION) is not None
-            and event.get(HAS_LOCATION).get("dwc:locality")
-        ) is not None:
+        if event.get(HAS_LOCATION) is not None and event.get(HAS_LOCATION).get("dwc:locality") is not None:
             location = event.get(HAS_LOCATION)
-            querystring = (
-                f"https://api.mindat.org/localities/?txt={location.get('dwc:locality')}"
-            )
+            querystring = f"https://api.mindat.org/localities/?txt={location.get('dwc:locality')}"
             response = requests.get(
                 querystring,
                 headers={"Authorization": "Token " + os.environ.get("API_KEY")},
             )
-            logging.info(
-                "Response from mindat status code: " + str(response.status_code)
-            )
-            logging.info("Response from mindat" + str(response.content))
+            logging.info("Response from mindat status code: %s", response.status_code)
+            logging.info("Response from mindat %s", response.content)
             response_json = json.loads(response.content)
             if not response_json:
                 logging.info("No results for this locality where found: " + querystring)
             else:
-                logging.info(
-                    "Highest hit is: "
-                    + json.dumps(response_json.get("results")[0], indent=2)
-                )
+                logging.info("Highest hit is: " + json.dumps(response_json.get("results")[0], indent=2))
                 result_list.append(
                     {
                         "queryString": querystring,
@@ -273,9 +292,7 @@ def run_georeference(
                     }
                 )
                 if batching_requested:
-                    batch_metadata.append(
-                        build_batch_metadata(event[HAS_LOCATION]["dwc:locality"], index)
-                    )
+                    batch_metadata.append(build_batch_metadata(event[HAS_LOCATION]["dwc:locality"], index))
     return result_list, batch_metadata
 
 
@@ -291,12 +308,10 @@ def run_local(example: str):
     response = requests.get(example)
     specimen_data = json.loads(response.content).get("data").get("attributes")
     result, batch_metadata = run_georeference(specimen_data, True)
-    annotation_event = map_to_annotation_event(
-        specimen_data, result, str(uuid.uuid4()), batch_metadata
-    )
+    annotation_event = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()), batch_metadata)
     logging.info("Created annotations: " + json.dumps(annotation_event, indent=2))
 
 
 if __name__ == "__main__":
-    # start_kafka()
-    run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/RPK-51F-ZY6")
+    run_rabbitmq()
+    # run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/RPK-51F-ZY6")

@@ -33,8 +33,6 @@ def run_rabbitmq() -> None:
 def process_message(channel: BlockingChannel, method: Method, properties: Properties, body: bytes) -> None:
     """
     Callback function to process the message from RabbitMQ. This method will be called for each message received.
-    We will first convert it to JSON and extract the accessURI.
-    Then we run Pillow to extract the image metadata and create an annotation.
     We publish this annotation through the channel on a RabbitMQ exchange.
     :param channel: The RabbitMQ channel, which we will use to publish the resulting annotation
     :param method: The method used to send the message, not currently used
@@ -42,8 +40,8 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
     :param body: The message body in bytes
     :return:
     """
+    json_value = json.loads(body.decode("utf-8"))
     try:
-        json_value = json.loads(body.decode("utf-8"))
         shared.mark_job_as_running(json_value.get("jobId"))
         specimen_data = json_value.get("object")
         result = run_api_call(specimen_data)
@@ -56,7 +54,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
 def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
     """
     Send a message to the RabbitMQ queue indicating that the job has failed
-    :param job_id: The job ID of the MAS
+    :param job_id: The job ID of the message
     :param message: The error message to be sent
     :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
     :return: Will not return anything
@@ -75,7 +73,7 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id:
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
     :param result: The result which contains either the GBIF ID or an error message
-    :param job_id: The job ID of the MAS
+    :param job_id: The job ID of the message
     :return: Returns a formatted annotation Record which includes the Job ID
     """
     timestamp = shared.timestamp_now()

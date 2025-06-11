@@ -2,12 +2,14 @@ import json
 import logging
 import os
 import uuid
-from typing import Dict, Any, List, Union, Tuple
+from typing import Dict, Any, List, Tuple
 
+import pika
 import requests
-from kafka import KafkaConsumer, KafkaProducer
 from shapely import from_geojson
 import shared
+from pika.amqp_object import Method, Properties
+from pika.adapters.blocking_connection import BlockingChannel
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 OA_BODY = "oa:hasBody"
@@ -19,39 +21,48 @@ LOCATION_PATH = f"$['{ODS_HAS_EVENTS}'][*]['{ODS_HAS_LOCATION}']"
 USER_AGENT = "Distributed System of Scientific Collections"
 
 
-def start_kafka() -> None:
+def run_rabbitmq() -> None:
     """
-    Start a kafka listener and process the messages by unpacking the image.
-    When done it will republish the object, so it can be validated and storage by the processing service
+    Start a RabbitMQ consumer and process the messages by unpacking the image.
+    When done, it will publish an annotation to annotation processing service
     """
-    consumer = KafkaConsumer(
-        os.environ.get("KAFKA_CONSUMER_TOPIC"),
-        group_id=os.environ.get("KAFKA_CONSUMER_GROUP"),
-        bootstrap_servers=[os.environ.get("KAFKA_CONSUMER_HOST")],
-        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-        enable_auto_commit=True,
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            os.environ.get("RABBITMQ_HOST"),
+            credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USER"), os.environ.get("RABBITMQ_PASSWORD")),
+        )
     )
-    producer = KafkaProducer(
-        bootstrap_servers=[os.environ.get("KAFKA_PRODUCER_HOST")],
-        value_serializer=lambda m: json.dumps(m).encode("utf-8"),
-    )
-    for msg in consumer:
-        try:
-            logging.info("Received message: " + str(msg.value))
-            json_value = msg.value
-            shared.mark_job_as_running(json_value.get("jobId"))
-            specimen_data = json_value.get("object")
-            result, batch_metadata = run_georeference(specimen_data)
-            annotation_event = map_to_annotation_event(
-                specimen_data,
-                result,
-                json_value.get("jobId"),
-                json_value.get("batchingRequested"),
-                batch_metadata,
-            )
-            publish_annotation_event(annotation_event, producer)
-        except Exception as e:
-            logging.error(e)
+    channel = connection.channel()
+    channel.basic_consume(queue=os.environ.get("RABBITMQ_QUEUE"), on_message_callback=process_message, auto_ack=True)
+    channel.start_consuming()
+
+
+def process_message(channel: BlockingChannel, method: Method, properties: Properties, body: bytes) -> None:
+    """
+    Callback function to process the message from RabbitMQ.
+    This method will be called for each message received.
+    We publish this annotation through the channel on a RabbitMQ exchange.
+    :param channel: The RabbitMQ channel, which we will use to publish the resulting annotation
+    :param method: The method used to send the message, not currently used
+    :param properties: Properties of the message, not currently used
+    :param body: The message body in bytes
+    :return:
+    """
+    json_value = json.loads(body.decode("utf-8"))
+    try:
+        shared.mark_job_as_running(json_value.get("jobId"))
+        specimen_data = json_value.get("object")
+        result, batch_metadata = run_georeference(specimen_data)
+        annotation_event = map_to_annotation_event(
+            specimen_data,
+            result,
+            json_value.get("jobId"),
+            json_value.get("batchingRequested"),
+            batch_metadata,
+        )
+        publish_annotation_event(annotation_event, channel)
+    except Exception as e:
+        send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
 def map_to_annotation_event(
@@ -65,7 +76,7 @@ def map_to_annotation_event(
     Map the result of the API call to a mas job record
     :param specimen_data: The JSON value of the Digital Specimen
     :param results: A list of results that contain the queryString and the geoCASe identifier
-    :param job_id: The job ID of the MAS
+    :param job_id: The job ID of the message
     :param batching: batch functionality was requested by scheduling user
     :param batch_metadata: metadata to facilitate batching downstream
     :return: Returns a formatted annotation Record which includes the Job ID
@@ -75,11 +86,7 @@ def map_to_annotation_event(
         dcterms_ref = (
             ""
             if specimen_data.get(ODS_HAS_EVENTS)[0].get(ODS_HAS_LOCATION) is None
-            else (
-                build_query_string(
-                    specimen_data.get(ODS_HAS_EVENTS)[0].get(ODS_HAS_LOCATION), 0
-                )
-            )[0]
+            else (build_query_string(specimen_data.get(ODS_HAS_EVENTS)[0].get(ODS_HAS_LOCATION), 0))[0]
         )
         annotations = [
             shared.map_to_empty_annotation(
@@ -94,9 +101,7 @@ def map_to_annotation_event(
         ods_agent = shared.get_agent()
         annotations = list(
             map(
-                lambda result: map_result_to_annotation(
-                    specimen_data, result, timestamp, batching, ods_agent
-                ),
+                lambda result: map_result_to_annotation(specimen_data, result, timestamp, batching, ods_agent),
                 results,
             )
         )
@@ -137,20 +142,14 @@ def map_result_to_annotation(
         "dwc:decimalLongitude": round(point_coordinate["coordinates"][0], 7),
         "dwc:geodeticDatum": "epsg:4326",
         "dwc:coordinateUncertaintyInMeters": (
-            None
-            if result["is_point"]
-            else result["geopick_result"]["coordinateUncertaintyInMeters"]
+            None if result["is_point"] else result["geopick_result"]["coordinateUncertaintyInMeters"]
         ),
         "dwc:pointRadiusSpatialFit": (
-            None
-            if result["is_point"]
-            else result["geopick_result"]["pointRadiusSpatialFit"]
+            None if result["is_point"] else result["geopick_result"]["pointRadiusSpatialFit"]
         ),
         "dwc:coordinatePrecision": 0.0000001,
         "dwc:footprintSRS": "epsg:4326",
-        "dwc:footprintWKT": from_geojson(
-            json.dumps(result.get("osm_result").get("geometry"))
-        ).wkt,
+        "dwc:footprintWKT": from_geojson(json.dumps(result.get("osm_result").get("geometry"))).wkt,
         "dwc:footprintSpatialFit": None if result["is_point"] else 1,
         "dwc:hasAgents": [ods_agent],
         "dwc:georeferencedDate": timestamp,
@@ -206,19 +205,36 @@ def wrap_oa_value(
     return annotation
 
 
-def publish_annotation_event(
-    annotation_event: Union[None, Dict], producer: KafkaProducer
-) -> None:
+def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
     """
     Send the annotation to the Kafka topic
-    :param annotation_event: The formatted annotationRecord
-    :param producer: The initiated Kafka producer
+    :param annotation_event: The formatted annotation event
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
     """
-    logging.info(
-        f"Publishing annotation: {reduce_event_for_printing(annotation_event)}"
+    logging.info("Publishing annotation: " + str(annotation_event))
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
+        body=json.dumps(annotation_event).encode("utf-8"),
     )
-    producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), annotation_event)
+
+
+def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
+    """
+    Send a message to the RabbitMQ queue indicating that the job has failed
+    :param job_id: The job ID of the message
+    :param message: The error message to be sent
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
+    :return: Will not return anything
+    """
+    logging.error(f"Job {job_id} failed with error: {message}")
+    mas_failed = {"jobId": job_id, "errorMessage": message}
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
+        body=json.dumps(mas_failed).encode("utf-8"),
+    )
 
 
 def run_georeference(specimen_data: Dict) -> Tuple[List[Dict[str, Any]], List[Dict]]:
@@ -242,9 +258,7 @@ def run_georeference(specimen_data: Dict) -> Tuple[List[Dict[str, Any]], List[Di
             response.raise_for_status()
             response_json = response.json()
             if len(response_json.get("features")) == 0:
-                logging.info(
-                    "No results for this locality where found: " + query_string
-                )
+                logging.info("No results for this locality where found: " + query_string)
             else:
                 batch_metadata.append(batch_metadata_unit)
                 first_feature = response_json.get("features")[0]
@@ -323,9 +337,9 @@ def get_supporting_info(field_name: str, location: Dict) -> Tuple[str, Dict]:
     if location.get(field_name) is None:
         return "", build_batch_metadata_search_param(field_name, "")
     else:
-        return "," + split_on_commas(
-            location.get(field_name)
-        ), build_batch_metadata_search_param(field_name, location.get(field_name))
+        return "," + split_on_commas(location.get(field_name)), build_batch_metadata_search_param(
+            field_name, location.get(field_name)
+        )
 
 
 def build_batch_metadata_search_param(field_name: str, field_val: str) -> Dict:
@@ -362,9 +376,7 @@ def get_geopick_auth():
         "password": os.environ.get("GEOPICK_PASSWORD"),
     }
     headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT}
-    response = requests.post(
-        "https://geopick.gbif.org/v1/authenticate", json=auth_info, headers=headers
-    )
+    response = requests.post("https://geopick.gbif.org/v1/authenticate", json=auth_info, headers=headers)
     response.raise_for_status()
     return {"Authorization": "Bearer " + response.json()["token"]}
 
@@ -382,33 +394,31 @@ def run_local(example: str):
     specimen = json.loads(response.content).get("data")
     specimen_data = specimen.get("attributes")
     result, batch_metadata = run_georeference(specimen_data)
-    annotation_event = map_to_annotation_event(
-        specimen_data, result, str(uuid.uuid4()), True, batch_metadata
-    )
+    annotation_event = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()), True, batch_metadata)
     logging.info("Created annotations: " + reduce_event_for_printing(annotation_event))
 
 
 def reduce_event_for_printing(annotation_event: dict) -> str:
-    return json.dumps([
-        (
-            reduce_annotation_size_for_printing(annotation)
-            if len(annotation[OA_BODY][OA_VALUE]) > 100
-            else annotation
-        )
-        for annotation in annotation_event["annotations"]
-    ])
+    return json.dumps(
+        [
+            (
+                reduce_annotation_size_for_printing(annotation)
+                if len(annotation[OA_BODY][OA_VALUE]) > 100
+                else annotation
+            )
+            for annotation in annotation_event["annotations"]
+        ]
+    )
 
 
 def reduce_annotation_size_for_printing(annotation: dict) -> dict:
     printed_annotation = annotation
     printed_annotation[OA_BODY][OA_VALUE] = list(
-        map(
-            lambda v: v[:50] + "..." + v[len(v) - 50 :], annotation[OA_BODY][OA_VALUE]
-        )
+        map(lambda v: v[:50] + "..." + v[len(v) - 50 :], annotation[OA_BODY][OA_VALUE])
     )
     return printed_annotation
 
 
 if __name__ == "__main__":
-    start_kafka()
+    run_rabbitmq()
     # run_local("https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/1ZR-S9H-LGW")
