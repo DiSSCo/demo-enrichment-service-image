@@ -76,7 +76,7 @@ def map_to_annotation_event(
     Map the result of the API call to a mas job record
     :param specimen_data: The JSON value of the Digital Specimen
     :param results: A list of results that contain the queryString and the geoCASe identifier
-    :param job_id: The job ID of the MAS
+    :param job_id: The job ID of the message
     :param batching: batch functionality was requested by scheduling user
     :param batch_metadata: metadata to facilitate batching downstream
     :return: Returns a formatted annotation Record which includes the Job ID
@@ -223,7 +223,7 @@ def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -
 def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
     """
     Send a message to the RabbitMQ queue indicating that the job has failed
-    :param job_id: The job ID of the MAS
+    :param job_id: The job ID of the message
     :param message: The error message to be sent
     :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
     :return: Will not return anything

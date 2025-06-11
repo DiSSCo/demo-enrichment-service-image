@@ -100,7 +100,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
     try:
         # Indicates to DiSSCo the message has been received by the mas and the job is running.
         # DiSSCo then informs the user of this development
-        # shared.mark_job_as_running(job_id=json_value.get("jobId"))
+        shared.mark_job_as_running(job_id=json_value.get("jobId"))
         digital_object = json_value.get("object")
         annotations = build_annotations(digital_object)
         event = {"annotations": annotations, "jobId": json_value.get("jobId")}
@@ -108,7 +108,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         publish_annotation_event(event, channel)
     except Exception as e:
         logging.error(f"Failed to publish annotation event: {e}")
-        # send_failed_message(json_value.get("jobId"), str(e), channel)
+        send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
 def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:

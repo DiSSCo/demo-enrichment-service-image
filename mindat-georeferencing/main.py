@@ -64,7 +64,7 @@ def map_to_annotation_event(
     :param batch_metadata: Information about the computation, if requested
     :param specimen_data: The JSON value of the Digital Specimen
     :param results: A list of results that contain the queryString and the geoCASe identifier
-    :param job_id: The job ID of the MAS
+    :param job_id: The job ID of the message
     :return: Returns a formatted annotation Record which includes the Job ID
     """
     timestamp = shared.timestamp_now()
@@ -243,7 +243,7 @@ def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -
 def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
     """
     Send a message to the RabbitMQ queue indicating that the job has failed
-    :param job_id: The job ID of the MAS
+    :param job_id: The job ID of the message
     :param message: The error message to be sent
     :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
     :return: Will not return anything
@@ -270,15 +270,15 @@ def run_georeference(
     result_list = list()
     batch_metadata = list()
     for index, event in enumerate(events):
-        if (event.get(HAS_LOCATION) is not None and event.get(HAS_LOCATION).get("dwc:locality")) is not None:
+        if event.get(HAS_LOCATION) is not None and event.get(HAS_LOCATION).get("dwc:locality") is not None:
             location = event.get(HAS_LOCATION)
             querystring = f"https://api.mindat.org/localities/?txt={location.get('dwc:locality')}"
             response = requests.get(
                 querystring,
                 headers={"Authorization": "Token " + os.environ.get("API_KEY")},
             )
-            logging.info("Response from mindat status code: " + str(response.status_code))
-            logging.info("Response from mindat" + str(response.content))
+            logging.info("Response from mindat status code: %s", response.status_code)
+            logging.info("Response from mindat %s", response.content)
             response_json = json.loads(response.content)
             if not response_json:
                 logging.info("No results for this locality where found: " + querystring)

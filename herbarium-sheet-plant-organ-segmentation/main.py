@@ -163,7 +163,7 @@ def run_plant_organ_segmentation(
 
 def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
     """
-    Sends a failure message to the mas failure topic, mas-failed
+    Sends a failure message to the mas failure topic, mas-annotation-failed
     :param job_id: The id of the job
     :param message: The exception message
     :param channel: The RabbitMQ channel, which we will use to publish the failed message
@@ -172,7 +172,7 @@ def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> 
     mas_failed = {"jobId": job_id, "errorMessage": message}
     channel.basic_publish(
         exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
-        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-failed"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
         body=json.dumps(mas_failed).encode("utf-8"),
     )
 

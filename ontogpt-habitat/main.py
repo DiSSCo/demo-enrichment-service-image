@@ -161,7 +161,7 @@ def run_ontology_extraction(habitat_text: str, location_text: str) -> List[Dict[
 def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
     """
     Send a message to the RabbitMQ queue indicating that the job has failed
-    :param job_id: The job ID of the MAS
+    :param job_id: The job ID of the message
     :param message: The error message to be sent
     :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
     :return: Will not return anything

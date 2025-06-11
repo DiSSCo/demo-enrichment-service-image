@@ -70,7 +70,12 @@ def map_result_to_annotation(
     digital_media: Dict,
     taxamorph_result: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """ """
+    """
+    Map the result of the API call to an annotation
+    :param digital_media: the digital media object containing the ODS ID and type
+    :param taxamorph_result: Result of the TaxaMorph API call
+    :return:
+    """
 
     timestamp = shared.timestamp_now()
     ods_agent = shared.get_agent()
@@ -125,7 +130,7 @@ def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -
 def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
     """
     Send a message to the RabbitMQ queue indicating that the job has failed
-    :param job_id: The job ID of the MAS
+    :param job_id: The job ID of the message
     :param message: The error message to be sent
     :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
     :return: Will not return anything
