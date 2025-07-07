@@ -17,6 +17,10 @@ import shared
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
 
+## Be aware that this code is deprecated and will be removed in the future.
+## It is kept for reference, the new code is in the `herbarium-sheet-plant-organ-segmentation` repository.
+
+
 def start_kafka(predictor: DefaultPredictor) -> None:
     """
     Start a kafka listener and process the messages by unpacking the image.
@@ -43,9 +47,7 @@ def start_kafka(predictor: DefaultPredictor) -> None:
             additional_info_annotations, width, height = run_object_detection(
                 digital_media.get("ac:accessURI"), predictor
             )
-            annotations = map_result_to_annotation(
-                digital_media, additional_info_annotations, width, height
-            )
+            annotations = map_result_to_annotation(digital_media, additional_info_annotations, width, height)
             event = map_to_annotation_event(annotations, json_value.get("jobId"))
             send_updated_opends(event, producer)
         except Exception as e:
@@ -104,9 +106,7 @@ def send_updated_opends(event: dict, producer: KafkaProducer) -> None:
     producer.send(os.environ.get("KAFKA_PRODUCER_TOPIC"), event)
 
 
-def run_object_detection(
-    image_uri: str, predictor: DefaultPredictor
-) -> Tuple[List[Dict[str, Any]], int, int]:
+def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[List[Dict[str, Any]], int, int]:
     """
     Checks if the Image url works and gathers metadata information from the image.
     :param image_uri: The image url from which we will gather metadata
@@ -158,21 +158,15 @@ def run_local(example: str) -> None:
     response = requests.get(example)
     json_value = json.loads(response.content).get("data")
     digital_media = json_value.get("attributes")
-    additional_info_annotations, width, height = run_object_detection(
-        digital_media.get("ac:accessURI"), predictor
-    )
-    annotations = map_result_to_annotation(
-        digital_media, additional_info_annotations, width, height
-    )
+    additional_info_annotations, width, height = run_object_detection(digital_media.get("ac:accessURI"), predictor)
+    annotations = map_result_to_annotation(digital_media, additional_info_annotations, width, height)
     event = map_to_annotation_event(annotations, str(uuid.uuid4()))
     logging.info("Created annotations: " + json.dumps(event))
 
 
 if __name__ == "__main__":
     cfg = get_cfg()
-    cfg.merge_from_file(
-        model_zoo.get_config_file("PascalVOC-Detection/faster_rcnn_R_50_FPN.yaml")
-    )
+    cfg.merge_from_file(model_zoo.get_config_file("PascalVOC-Detection/faster_rcnn_R_50_FPN.yaml"))
     cfg.merge_from_file("config/custom_model_config.yaml")
     cfg.freeze()
     predictor = DefaultPredictor(cfg)

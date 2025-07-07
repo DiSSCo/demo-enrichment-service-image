@@ -4,6 +4,8 @@ import json
 import os
 import requests
 from enum import Enum
+from pika.adapters.blocking_connection import BlockingChannel
+import logging
 
 ODS_TYPE = "ods:fdoType"
 AT_TYPE = "@type"
@@ -14,13 +16,15 @@ ER_PATH = "$['ods:hasEntityRelationships']"
 MAS_ID = os.environ.get("MAS_ID")
 MAS_NAME = os.environ.get("MAS_NAME")
 
+logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
+
+
 class Motivation(Enum):
     ADDING = "ods:adding"
     ASSESSING = "oa:assessing"
     EDITING = "oa:editing"
     DELETING = "ods:deleting"
     COMMENTING = "oa:commenting"
-
 
 
 def timestamp_now() -> str:
@@ -263,3 +267,19 @@ def build_entire_image_fragment_selector(width: int, height: int) -> Dict:
             "ac:heightFrac": height,
         },
     }
+
+
+def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
+    """
+    Sends a failure message to the mas failure topic, mas-failed
+    :param job_id: The id of the job
+    :param message: The exception message
+    :param channel: A RabbitMQ BlockingChannel to which we will publish the failure message
+    """
+    logging.error(f"Job {job_id} failed with error: {message}")
+    mas_failed = {"jobId": job_id, "errorMessage": message}
+    channel.basic_publish(
+        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
+        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
+        body=json.dumps(mas_failed).encode("utf-8"),
+    )

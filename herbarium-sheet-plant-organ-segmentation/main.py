@@ -53,10 +53,9 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
 
         logging.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
         publish_annotation_event(annotation_event, channel)
-
     except Exception as e:
         logging.error(f"Failed to publish annotation event: {e}")
-        send_failed_message(json_value["jobId"], str(e), channel)
+        shared.send_failed_message(json_value["jobId"], str(e), channel)
 
 
 def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
@@ -65,7 +64,7 @@ def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
 
 def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
     """
-    Send the annotation to the Kafka topic
+    Send the annotation to the RabbitMQ queue
     :param annotation_event: The formatted annotation event
     :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
@@ -161,25 +160,9 @@ def run_plant_organ_segmentation(
         return annotations_list, image_height, image_width
 
 
-def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
-    """
-    Sends a failure message to the mas failure topic, mas-annotation-failed
-    :param job_id: The id of the job
-    :param message: The exception message
-    :param channel: The RabbitMQ channel, which we will use to publish the failed message
-    """
-
-    mas_failed = {"jobId": job_id, "errorMessage": message}
-    channel.basic_publish(
-        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
-        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
-        body=json.dumps(mas_failed).encode("utf-8"),
-    )
-
-
 def run_local(example: str) -> None:
     """
-    Run the script locally. Can be called by replacing the kafka call with this  a method call in the main method.
+    Run the script locally. Can be called by replacing the rabbitmq consumer with this method call in the main method.
     Will call the DiSSCo API to retrieve the specimen data.
     A record ID will be created but can only be used for testing.
     :param example: The full URL of the Digital Specimen to the API (for example

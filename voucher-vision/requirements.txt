@@ -1,0 +1,6 @@
+pika==1.3.2
+pika-stubs==0.1.3
+vouchervision-go-client==0.1.40
+pandas
+Levenshtein==0.23.0
+python-Levenshtein==0.23.0

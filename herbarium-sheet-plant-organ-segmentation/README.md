@@ -1,7 +1,7 @@
 # Herbarium Sheet Plant Organ Segmentation Enrichment Service
 
 ## Description
-This service listens for Digital Specimens (DS) of herbarium sheets on a specified Kafka topic, processes the images by calling a plant organ segmentation API, and republishes the enriched annotation data to another Kafka topic. This setup enables real-time processing of herbarium sheet images using a pretrained model to detect and analyze plant organs, returning detailed information about the plant specimen.
+This service listens for Digital Specimens (DS) of herbarium sheets on a specified RabbitMQ queue, processes the images by calling a plant organ segmentation API, and republishes the enriched annotation data to another Kafka topic. This setup enables real-time processing of herbarium sheet images using a pretrained model to detect and analyze plant organs, returning detailed information about the plant specimen.
 
 ## Environment Variables
 

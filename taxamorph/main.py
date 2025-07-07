@@ -59,7 +59,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         event = map_to_annotation_event(annotations, json_value.get("jobId"))
         publish_annotation_event(event, channel)
     except Exception as e:
-        send_failed_message(json_value.get("jobId"), str(e), channel)
+        shared.send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
 def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
@@ -114,7 +114,7 @@ def map_result_to_annotation(
 
 def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
     """
-    Send the annotation to the Kafka topic
+    Send the annotation to the RabbitMQ queue
     :param annotation_event: The formatted annotation event
     :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
@@ -124,23 +124,6 @@ def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -
         exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
         routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
         body=json.dumps(annotation_event).encode("utf-8"),
-    )
-
-
-def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
-    """
-    Send a message to the RabbitMQ queue indicating that the job has failed
-    :param job_id: The job ID of the message
-    :param message: The error message to be sent
-    :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
-    :return: Will not return anything
-    """
-    logging.error(f"Job {job_id} failed with error: {message}")
-    mas_failed = {"jobId": job_id, "errorMessage": message}
-    channel.basic_publish(
-        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
-        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
-        body=json.dumps(mas_failed).encode("utf-8"),
     )
 
 

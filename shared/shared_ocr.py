@@ -1,20 +1,13 @@
-import json
 import logging
-import os
-import re
-from typing import Dict, Any, List, Tuple
-from requests.auth import HTTPBasicAuth
-
-import pika
-from jsonpath_ng import parse
 import requests
-from pika.amqp_object import Method, Properties
-from pika.adapters.blocking_connection import BlockingChannel
+import json
+import os
 import shared
+from typing import Dict, Any, List, Tuple
+import re
 from fuzzywuzzy import fuzz
+from jsonpath_ng import parse
 import copy
-
-import shared_ocr
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
@@ -23,27 +16,6 @@ Restrictions:
 - Max 1 event
 - Media associated with exactly one specimen
 """
-
-DWC_MAPPING = {
-    "dwc:catalogNumber": "['ods:hasIdentifiers'][*]['dcterms:identifier']",
-    "dwc:recordNumber": "['ods:hasIdentifiers'][*]['dcterms:identifier']",
-    "dwc:year": "$['ods:hasEvents'][*]['dwc:year']",
-    "dwc:month": "$['ods:hasEvents'][*]['dwc:month']",
-    "dwc:day": "$['ods:hasEvents'][*]['dwc:day']",
-    "dwc:dateIdentified": "['ods:hasIdentifications'][*]['dwc:dateIdentified']",
-    "dwc:verbatimIdentification": "['ods:hasIdentifications'][*]['dwc:verbatimIdentification']",
-    "dwc:scientificName": "['ods:hasIdentifications'][*]['ods:hasTaxonIdentifications'][*]['dwc:scientificName']",
-    "dwc:decimalLatitude": "['ods:hasEvents'][*]['ods:hasLocation']['ods:hasGeoreference']['dwc:decimalLatitude']",
-    "dwc:decimalLongitude": "['ods:hasEvents'][*]['ods:hasLocation']['ods:hasGeoreference']['dwc:decimalLongitude']",
-    "dwc:locality": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:locality']",
-    "dwc:minimumElevationInMeters": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:minimumElevationInMeters']",
-    "dwc:maximumElevationInMeters": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:maximumElevationInMeters']",
-    "dwc:verbatimElevation": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:verbatimElevation']",
-    "dwc:country": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:country']",
-    "dwc:countryCode": "['ods:hasEvents'][*]['ods:hasLocation']['dwc:countryCode']",
-    "dwc:recordedBy": "['ods:hasIdentifications'][*]['ods:hasAgents'][*]['schema:name']",
-    "dwc:identifiedBy": "['ods:hasIdentifications'][*]['ods:hasAgents'][*]['schema:name']",
-}
 
 FILTER_TERMS = {
     "dwc:catalogNumber": {
@@ -71,78 +43,50 @@ FILTER_TERMS = {
 SIMILARITY_THRESHOLD = 50
 
 
-def run_rabbitmq() -> None:
-    """
-    Start a RabbitMQ consumer and process the messages by unpacking the image.
-    When done, it will publish an annotation to annotation processing service
-    """
-    connection = pika.BlockingConnection(
-        pika.ConnectionParameters(
-            os.environ.get("RABBITMQ_HOST"),
-            credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USER"), os.environ.get("RABBITMQ_PASSWORD")),
-        )
-    )
-    channel = connection.channel()
-    channel.basic_consume(queue=os.environ.get("RABBITMQ_QUEUE"), on_message_callback=process_message, auto_ack=True)
-    channel.start_consuming()
-
-
-def process_message(channel: BlockingChannel, method: Method, properties: Properties, body: bytes) -> None:
-    """
-    Callback function to process the message from RabbitMQ. This method will be called for each message received.
-    We publish this annotation through the channel on a RabbitMQ exchange.
-    :param channel: The RabbitMQ channel, which we will use to publish the resulting annotation
-    :param method: The method used to send the message, not currently used
-    :param properties: Properties of the message, not currently used
-    :param body: The message body in bytes
-    :return:
-    """
-    json_value = json.loads(body.decode("utf-8"))
-    try:
-        # Indicates to DiSSCo the message has been received by the mas and the job is running.
-        # DiSSCo then informs the user of this development
-        job_id = json_value.get("jobId")
-        logging.info(f"Received job with jobId: {job_id}")
-        shared.mark_job_as_running(job_id=job_id)
-        digital_object = json_value.get("object")
-        annotations = build_annotations(digital_object)
-        event = {"annotations": annotations, "jobId": json_value.get("jobId")}
-        logging.info(f"Publishing annotation event: {json.dumps(event)}")
-        publish_annotation_event(event, channel)
-    except Exception as e:
-        logging.error(f"Failed to publish annotation event: {e}")
-        shared.send_failed_message(json_value.get("jobId"), str(e), channel)
-
-
-def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    Given a target object, computes a result and maps the result to an openDS annotation
-    :param digital_media: the target object of the annotation
-    :return: List of annotations
-    """
-    # Your query here
-    query_string, uris = build_query_string(digital_media)
-
-    timestamp = shared.timestamp_now()
-    # Run API call and compute value(s) of the annotation
-    response = run_api_call(query_string, uris)
-    if not response:
-        # If the API call does not return a result, that information should still be captured in an annotation
-        return [
-            shared.map_to_empty_annotation(
-                timestamp,
-                "Unable to read specimen label",
-                digital_media[shared.ODS_ID],
-                digital_media[shared.ODS_TYPE],
-                query_string,
+def map_ocr_response_to_annotations(
+    annotations, query_string, response, specimen, timestamp, dwc_mapping: Dict[str, str]
+) -> List[Dict[str, Any]]:
+    for field, response_value in response.items():
+        if response_value is None or response_value == "":
+            logging.debug(f"No value found for {field} in response: {response_value}")
+            continue
+        try:
+            # Find any existing matches in the specimen data
+            paths = get_json_path(specimen, field, True, dwc_mapping)
+            if len(paths) == 0:
+                logging.debug(f"New information for {field}")
+                match_path = dwc_mapping[field].replace("[*]", "[0]")
+                motivation = shared.Motivation.ADDING.value
+                value = response_value
+            elif len(paths) == 1:
+                logging.debug(f"Editing information for {field}")
+                match_path = paths[0]
+                value, motivation = compare_result_to_existing_info(specimen, match_path, response_value)
+            else:
+                match_path, motivation = find_fuzzy_match(specimen, paths, response_value)
+                logging.info(f"Multiple potential targets found. Fuzzy match needed. Best match found at {match_path}")
+                if not match_path:
+                    match_path = append_new_information(specimen, field, paths)
+                    motivation = shared.Motivation.ADDING.value
+                    value = response_value
+                else:
+                    value, motivation = compare_result_to_existing_info(specimen, match_path, response_value)
+            annotations.append(
+                shared.map_to_annotation_str_val(
+                    shared.get_agent(),
+                    timestamp,
+                    str(value),
+                    shared.build_term_selector(match_path),
+                    specimen[shared.ODS_ID],
+                    specimen[shared.ODS_TYPE],
+                    f"{query_string}",
+                    motivation,
+                )
             )
-        ]
-    specimen = shared_ocr.get_specimen_from_media(digital_media)
-    annotations = []
 
-    return shared.map_ocr_response_to_annotations(
-        annotations, query_string, response.get("data"), specimen, timestamp, DWC_MAPPING
-    )
+        except ValueError:
+            continue
+    return annotations
 
 
 def compare_result_to_existing_info(specimen: Dict[str, Any], path: str, result_value) -> Tuple[str, str]:
@@ -209,7 +153,7 @@ def append_new_information(specimen: Dict[str, Any], response_field, paths: List
     return re.sub("(\\d+)(?!.*\\d)", str(int(last_index) + 1), last_path)
 
 
-def get_json_path(specimen: Dict[str, Any], field: str, do_filter: bool) -> List[str]:
+def get_json_path(specimen: Dict[str, Any], field: str, do_filter: bool, dwc_mapping: Dict[str, str]) -> List[str]:
     """
     Gets json path of desired field (and optional value)
     Returns path in block notation format by splitting on dots and adding square brackets
@@ -220,7 +164,10 @@ def get_json_path(specimen: Dict[str, Any], field: str, do_filter: bool) -> List
         obj = prune_specimen(specimen, FILTER_TERMS[field])
     else:
         obj = specimen
-    field_path = DWC_MAPPING[field]
+    field_path = dwc_mapping.get(field)
+    if not field_path:
+        logging.error(f"Field {field} not found in DWC_MAPPING")
+        raise ValueError(f"Field {field} not found in DWC_MAPPING")
     path_expr = parse(field_path)
     matches = path_expr.find(obj)
     if matches:
@@ -298,62 +245,18 @@ def to_block_notation(matches: Any) -> List[str]:
     return paths
 
 
-def build_query_string(digital_object: Dict[str, Any]) -> Tuple[str, List[str]]:
+def get_specimen_from_media(digital_media: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Builds the query for n8n endpoint
-    :param digital_object: Target of the annotation
-    :return: query string to some example API, list of access URIs
+    Takes media object and returns related specimen (max 1)
+    :param digital_media: Media object to get related specimen
     """
-    access_uris = [digital_object.get("ac:accessURI")]
-    # Use your API here
-    return "https://n8n.svc.gbif.no/webhook/9fa39dd6-63ea-4ed8-b4e1-904051e8a41a", access_uris
-
-
-def publish_annotation_event(annotation_event: Dict[str, Any], channel: BlockingChannel) -> None:
-    """
-    Send the annotation to the RabbitMQ queue
-    :param annotation_event: The formatted annotation event
-    :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
-    :return: Will not return anything
-    """
-    logging.info("Publishing annotation: " + str(annotation_event))
-    channel.basic_publish(
-        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
-        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
-        body=json.dumps(annotation_event).encode("utf-8"),
-    )
-
-
-def run_api_call(query_string: str, uris: List[str]) -> Dict[str, Any]:
-    try:
-        auth = HTTPBasicAuth(os.environ.get("API_USER"), os.environ.get("API_PASSWORD"))
-        response = requests.post(query_string, json={"uris": uris}, auth=auth, timeout=60)
-        response.raise_for_status()
-        response_json = json.loads(response.content)
-    except requests.RequestException as e:
-        logging.error(f"API call failed: {e}")
-        raise requests.RequestException
-    return response_json
-
-
-def run_local(media_id: str):
-    """
-    Runs script locally. Demonstrates using a specimen target
-    :param media_id: A media ID from DiSSCo Sandbox Environment https://sandbox.dissco.tech/search
-    Example: SANDBOX/KMP-FZ6-S2K
-    :return: Return nothing but will log the result
-    """
-    digital_media = (
-        requests.get(f"https://sandbox.dissco.tech/api/digital-media/v1/{media_id}")
-        .json()
+    entity_relationships = digital_media.get("ods:hasEntityRelationships")
+    for entity_relationship in entity_relationships:
+        if entity_relationship.get("dwc:relationshipOfResource") == "hasDigitalSpecimen":
+            specimen_doi = entity_relationship.get("dwc:relatedResourceID").replace("https://doi.org/", "")
+            break
+    return (
+        json.loads(requests.get(f"{os.environ.get('DISSCO_API_SPECIMEN')}/{specimen_doi}").content)
         .get("data")
         .get("attributes")
     )
-    specimen_annotations = build_annotations(digital_media)
-    event = {"annotations": specimen_annotations, "jobId": "Some job ID"}
-    logging.info(f"created annotation event: {json.dumps(event)}")
-
-
-if __name__ == "__main__":
-    run_rabbitmq()
-    # run_local("SANDBOX/DTZ-A0R-TZ9")

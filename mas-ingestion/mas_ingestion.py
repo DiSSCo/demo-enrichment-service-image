@@ -23,6 +23,10 @@ IMAGE_METADATA_TAG = "sha-276a7fb"
 MINDAT_TAG = "sha-276a7fb"
 OSM_TAG = "sha-276a7fb"
 SENCK_TAG = "sha-276a7fb"
+SPLAT_TAG = "sha-276a7fb"
+LEAF_MACHINE_TAG = "sha-276a7fb"
+ONTOGPT_HABITAT = "sha-276a7fb"
+TAXAMORPH_TAG = "sha-276a7fb"
 LATEST = "latest"
 
 
@@ -59,6 +63,7 @@ def build_attributes(
     target_filter: Dict[str, Any],
     batching: bool,
     secrets=None,
+    env_vars=None,
 ) -> Dict[str, Any]:
     if secrets is None:
         secrets = []
@@ -75,12 +80,27 @@ def build_attributes(
                 "schema:programmingLanguage": "python",
                 "schema:license": "https://www.apache.org/licenses/LICENSE-2.0",
                 "ods:batchingPermitted": batching,
-                "ods:hasEnvironmentalVariables": [],
+                "ods:hasEnvironmentalVariables": env_vars,
                 "ods:hasSecretVariables": secrets,
             },
         }
     }
     return request
+
+
+def splat(is_acceptance: bool) -> Dict[str, Any]:
+    name = "SpLAT - Specimen Automatic Label Transcription"
+    description = "Uses GPT models to read specimen label and annotates relevant specimen. \n Models used: chatgpt-4o. \n Prompts used: \n 1) You are and expert biologist who specializes in describing preserved specimen. You have an eye for detail and are able to describe preserved specimens with a great detail. Your job now is to extract all the information from this image of a preserved specimen, and write a short description that would contain all the information available to you from the image. You never assume higher taxonomical levels of a species you see, except of Kingdom. You also transcribe word by word all that available relevant information you found on any labels you see. \n2) 'Your job is to standardize the User's report of a preserved specimen into JSON of Darwin core terms. Resulting JSON should have structure like this: {     'dwc:scientificName': 'Betula nana','dwc:locality': 'Oslo',... }'"
+    image = "public.ecr.aws/dissco/ai-4-specimen-labels"
+    tag = SPLAT_TAG if is_acceptance else LATEST
+    target_filter = {ODS_FDO_TYPE: [MEDIA_TYPE]}
+    batching = False
+    secrets = [
+        build_secret("API_USER", "ai4l-user"),
+        build_secret("API_PASSWORD", "ai4l-password"),
+    ]
+    envs = [{"schema:name": "DISSCO_API_SPECIMEN", "schema:value": "https://dev.dissco.tech/api/digital-specimen/v1"}]
+    return build_attributes(name, description, image, tag, target_filter, batching, secrets, envs)
 
 
 def bold(is_acceptance: bool) -> Dict[str, Any]:
@@ -94,9 +114,7 @@ def bold(is_acceptance: bool) -> Dict[str, Any]:
         build_secret("API_USER", "bold-api-user"),
         build_secret("API_PASSWORD", "bold-api-password"),
     ]
-    return build_attributes(
-        name, description, image, tag, target_filter, batching, secrets
-    )
+    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
 
 
 def ena(is_acceptance: bool) -> Dict[str, Any]:
@@ -110,9 +128,7 @@ def ena(is_acceptance: bool) -> Dict[str, Any]:
         ODS_FDO_TYPE: [SPECIMEN_TYPE],
     }
     batching = False
-    return build_attributes(
-        name, description, image, tag, target_filter, batching, None
-    )
+    return build_attributes(name, description, image, tag, target_filter, batching, None)
 
 
 def gbif(is_acceptance: bool) -> Dict[str, Any]:
@@ -126,9 +142,7 @@ def gbif(is_acceptance: bool) -> Dict[str, Any]:
         ODS_FDO_TYPE: [SPECIMEN_TYPE],
     }
     batching = False
-    return build_attributes(
-        name, description, image, tag, target_filter, batching, None
-    )
+    return build_attributes(name, description, image, tag, target_filter, batching, None)
 
 
 def geocase(is_acceptance: bool) -> Dict[str, Any]:
@@ -138,35 +152,39 @@ def geocase(is_acceptance: bool) -> Dict[str, Any]:
     tag = GEOCASE_TAG if is_acceptance else LATEST
     target_filter = {HAS_IDENTIFIER: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
     batching = False
-    return build_attributes(
-        name, description, image, tag, target_filter, batching, None
-    )
+    return build_attributes(name, description, image, tag, target_filter, batching, None)
 
 
 def plant_organ(is_acceptance: bool) -> Dict[str, Any]:
     name = "herbarium-sheet-plant-organ-detection"
-    description = (
-        "Uses machine learning classifier to identify plant organs on herbarium sheets"
-    )
+    description = "Uses machine learning classifier to identify plant organs on herbarium sheets"
     image = "public.ecr.aws/dissco/herbarium-sheet-plant-organ-detection"
     tag = PLANT_ORGAN_TAG if is_acceptance else LATEST
     target_filter = {AC_URI: ["*"], ODS_FDO_TYPE: [MEDIA_TYPE]}
     batching = False
-    return build_attributes(
-        name, description, image, tag, target_filter, batching, None
-    )
+    return build_attributes(name, description, image, tag, target_filter, batching, None)
 
 
 def image_metadata(is_acceptance: bool) -> Dict[str, Any]:
     name = "image-metadata-addition"
-    description = "Uses the Python Imaging Library to add additional image metadata (size, format, etc.) to digital media"
+    description = (
+        "Uses the Python Imaging Library to add additional image metadata (size, format, etc.) to digital media"
+    )
     image = "public.ecr.aws/dissco/image-metadata-addition"
     tag = IMAGE_METADATA_TAG if is_acceptance else LATEST
     target_filter = {AC_URI: ["*"], ODS_FDO_TYPE: [MEDIA_TYPE]}
     batching = False
-    return build_attributes(
-        name, description, image, tag, target_filter, batching, None
-    )
+    return build_attributes(name, description, image, tag, target_filter, batching, None)
+
+
+def leaf_machine(is_acceptance: bool) -> Dict[str, Any]:
+    name = "leafmachine-demo"
+    description = "This service is intended as a demo to test the integration of an internal API at Ghent University with the Disscover platform as a MAS. This service listens for Digital Specimens (DS) of herbarium sheets on a specified RabbitMQ topic, processes the images by running the LeafMachine2 model from an API, and republishes the enriched annotation data to another Rabbit topic. This setup enables real-time processing of herbarium sheet images using a pretrained model to detect and analyze plant organs, returning detailed information about the plant specimen."
+    image = "public.ecr.aws/dissco/leafmachine-demo"
+    tag = LEAF_MACHINE_TAG if is_acceptance else LATEST
+    target_filter = {ODS_FDO_TYPE: [MEDIA_TYPE]}
+    batching = False
+    return build_attributes(name, description, image, tag, target_filter, batching, None, None)
 
 
 def mindat(is_acceptance: bool) -> Dict[str, Any]:
@@ -177,9 +195,21 @@ def mindat(is_acceptance: bool) -> Dict[str, Any]:
     target_filter = {HAS_EVENT: ["*"], ODS_FDO_TYPE: [SPECIMEN_TYPE]}
     batching = True
     secrets = [build_secret("API_KEY", "mindat-api-key")]
-    return build_attributes(
-        name, description, image, tag, target_filter, batching, secrets
-    )
+    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
+
+
+def ontogpt_habit(is_acceptance: bool) -> Dict[str, Any]:
+    name = "OntoGPT"
+    description = "Processes the ontology extraction from habitat by calling a ontoGPT Habitat extraction API, and republishes the enriched annotation data to another RabbitMQ queue. This setup enables real-time processing of extracting ontologies from the free text and returns ontologies term."
+    image = "public.ecr.aws/dissco/ontogpt-habitat"
+    tag = ONTOGPT_HABITAT if is_acceptance else LATEST
+    target_filter = {ODS_FDO_TYPE: [SPECIMEN_TYPE]}
+    batching = False
+    secrets = [
+        build_secret("HABITAT_ONTOGPT_USER", "habitat-ontogpt-user"),
+        build_secret("HABITAT_ONTOGPT_PASSWORD", "habitat-ontogpt-password"),
+    ]
+    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
 
 
 def osm(is_acceptance: bool) -> Dict[str, Any]:
@@ -193,9 +223,7 @@ def osm(is_acceptance: bool) -> Dict[str, Any]:
         build_secret("GEOPICK_USER", "geopick-user"),
         build_secret("GEOPICK_PASSWORD", "geopick-password"),
     ]
-    return build_attributes(
-        name, description, image, tag, target_filter, batching, secrets
-    )
+    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
 
 
 def senck(is_acceptance) -> Dict[str, Any]:
@@ -207,13 +235,19 @@ def senck(is_acceptance) -> Dict[str, Any]:
     batching = True
     secrets = [
         build_secret("PLANT_ORGAN_SEGMENTATION_USER", "plant-organ-segmentation-user"),
-        build_secret(
-            "PLANT_ORGAN_SEGMENTATION_PASSWORD", "plant-organ-segmentation-password"
-        ),
+        build_secret("PLANT_ORGAN_SEGMENTATION_PASSWORD", "plant-organ-segmentation-password"),
     ]
-    return build_attributes(
-        name, description, image, tag, target_filter, batching, secrets
-    )
+    return build_attributes(name, description, image, tag, target_filter, batching, secrets)
+
+
+def taxamorph(is_acceptance) -> Dict[str, Any]:
+    name = "TaxaMorph"
+    description = "TaxaMorph is an AI-driven system developed to identify and annotate morphologically relevant areas within 2D specimen images. It supports annotation at multiple taxonomic levels, including family and genus, enabling detailed and precise morphological analyses. Utilizing various Class Activation Mapping (CAM) techniques, annotations are generated through pretrained TensorFlow Keras models that have been trained on diverse organisms across multiple taxonomic levels."
+    image = "public.ecr.aws/dissco/taxamorph"
+    tag = TAXAMORPH_TAG if is_acceptance else LATEST
+    target_filter = {AC_URI: ["*"], ODS_FDO_TYPE: [MEDIA_TYPE]}
+    batching = True
+    return build_attributes(name, description, image, tag, target_filter, batching)
 
 
 def get_token() -> str:
@@ -227,9 +261,9 @@ def get_token() -> str:
 def update(request_json: Dict[str, Any], mas_id: str, is_acceptance: bool) -> None:
     header = {"Authorization": "Bearer " + get_token()}
     url = (
-        f"https://orchestration.dissco.tech/api/v1/mas/{mas_id}"
+        f"https://orchestration.dissco.tech/api/mas/v1/{mas_id}"
         if is_acceptance
-        else f"https://dev-orchestration.dissco.tech/api/v1/mas/{mas_id}"
+        else f"https://dev-orchestration.dissco.tech/api/mas/v1/{mas_id}"
     )
     response = requests.patch(url=url, json=request_json, headers=header)
     response.raise_for_status()
@@ -239,9 +273,9 @@ def update(request_json: Dict[str, Any], mas_id: str, is_acceptance: bool) -> No
 def post(request_json: Dict[str, Any], is_acceptance: bool) -> None:
     header = {"Authorization": "Bearer " + get_token()}
     url = (
-        "https://orchestration.dissco.tech/api/v1/mas"
+        "https://orchestration.dissco.tech/api/mas/v1"
         if is_acceptance
-        else "https://dev-orchestration.dissco.tech/api/v1/mas"
+        else "https://dev-orchestration.dissco.tech/api/mas/v1"
     )
     response = requests.post(url=url, json=request_json, headers=header)
     response.raise_for_status()
@@ -249,5 +283,5 @@ def post(request_json: Dict[str, Any], is_acceptance: bool) -> None:
 
 
 if __name__ == "__main__":
-    update(plant_organ(False), PLANT_ORGAN_TEST, False)
-    update(plant_organ(True), PLANT_ORGAN_ACC, True)
+    update(taxamorph(False), "TEST/MQC-0RX-1JK", False)
+    # update(plant_organ(True), PLANT_ORGAN_ACC, True)
