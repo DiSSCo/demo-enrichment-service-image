@@ -97,7 +97,7 @@ def map_empty_result_annotation(digital_object: Dict, message: str):
         timestamp=shared.timestamp_now(),
         message=message,
         target_data=digital_object,
-        selector=shared.build_term_selector(dwc_locality),
+        selector=dwc_locality,
         dcterms_ref="https://github.com/RajapreethiRajendran/demo-enrichment-service-image",
     )
     return annotation

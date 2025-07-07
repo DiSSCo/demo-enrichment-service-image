@@ -227,7 +227,7 @@ def run_georeference(specimen_data: Dict) -> Tuple[List[Dict[str, Any]], List[Di
     per specimen. Also returns the batch metadata.
     """
     events = specimen_data.get(ODS_HAS_EVENTS)
-    result_list = list()
+    result_list = []
     batch_metadata = []
     for index, event in enumerate(events):
         if event.get(ODS_HAS_LOCATION) is not None:

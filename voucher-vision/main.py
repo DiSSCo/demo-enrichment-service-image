@@ -11,7 +11,7 @@ from client import process_image, ordereddict_to_json
 import shared
 import shared_ocr
 
-from RequestFailedException import RequestFailedException
+from shared.RequestFailedException import RequestFailedException
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
