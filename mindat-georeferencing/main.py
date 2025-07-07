@@ -80,23 +80,15 @@ def map_to_annotation_event(
             )
         )
     else:
-        annotations = list(
-            map(
-                lambda result: map_to_georeference_annotation(
-                    specimen_data, result, timestamp, batching_requested, ods_agent
-                ),
-                results,
-            )
-        )
+        annotations = [
+            map_to_georeference_annotation(specimen_data, result, timestamp, batching_requested, ods_agent)
+            for result in results
+        ]
         annotations.extend(
-            list(
-                map(
-                    lambda result: map_to_entity_relationship_annotation(
-                        specimen_data, result, timestamp, batching_requested, ods_agent
-                    ),
-                    results,
-                )
-            )
+            [
+                map_to_entity_relationship_annotation(specimen_data, result, timestamp, batching_requested, ods_agent)
+                for result in results
+            ]
         )
     annotation_event = {"jobId": job_id, "annotations": annotations}
     if batch_metadata:
@@ -250,8 +242,8 @@ def run_georeference(
     :return: List of the results including some metadata
     """
     events = specimen_data.get("ods:hasEvents")
-    result_list = list()
-    batch_metadata = list()
+    result_list = []
+    batch_metadata = []
     for index, event in enumerate(events):
         if event.get(HAS_LOCATION) is not None and event.get(HAS_LOCATION).get("dwc:locality") is not None:
             location = event.get(HAS_LOCATION)

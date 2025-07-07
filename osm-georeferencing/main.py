@@ -99,12 +99,9 @@ def map_to_annotation_event(
         ]
     else:
         ods_agent = shared.get_agent()
-        annotations = list(
-            map(
-                lambda result: map_result_to_annotation(specimen_data, result, timestamp, batching, ods_agent),
-                results,
-            )
-        )
+        annotations = [
+            map_result_to_annotation(specimen_data, result, timestamp, batching, ods_agent) for result in results
+        ]
     annotation_event = {"jobId": job_id, "annotations": annotations}
     if batching:
         annotation_event["batchMetadata"] = batch_metadata
@@ -396,9 +393,9 @@ def reduce_event_for_printing(annotation_event: dict) -> str:
 
 def reduce_annotation_size_for_printing(annotation: dict) -> dict:
     printed_annotation = annotation
-    printed_annotation[OA_BODY][OA_VALUE] = list(
-        map(lambda v: v[:50] + "..." + v[len(v) - 50 :], annotation[OA_BODY][OA_VALUE])
-    )
+    printed_annotation[OA_BODY][OA_VALUE] = [
+        value[:50] + "..." + value[len(value) - 50 :] for value in annotation[OA_BODY][OA_VALUE]
+    ]
     return printed_annotation
 
 

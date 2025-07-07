@@ -101,7 +101,7 @@ def map_result_to_annotation(
     """
     timestamp = shared.timestamp_now()
     ods_agent = shared.get_agent()
-    annotations = list()
+    annotations = []
 
     for annotation in additional_info_annotations:
         oa_value = annotation

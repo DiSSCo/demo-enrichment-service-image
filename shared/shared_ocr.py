@@ -66,7 +66,7 @@ def map_ocr_response_to_annotations(
                 match_path, motivation = find_fuzzy_match(specimen, paths, response_value)
                 logging.info(f"Multiple potential targets found. Fuzzy match needed. Best match found at {match_path}")
                 if not match_path:
-                    match_path = append_new_information(specimen, field, paths)
+                    match_path = append_new_information(specimen, field, paths, dwc_mapping)
                     motivation = shared.Motivation.ADDING.value
                     value = response_value
                 else:
@@ -145,9 +145,11 @@ def get_value_at_path(path: str, specimen: Dict[str, Any]) -> str:
     return path_expr.find(specimen)[0].value
 
 
-def append_new_information(specimen: Dict[str, Any], response_field, paths: List[str]) -> str:
+def append_new_information(
+    specimen: Dict[str, Any], response_field, paths: List[str], dwc_mapping: Dict[str, str]
+) -> str:
     if response_field in FILTER_TERMS:
-        paths = get_json_path(specimen, response_field, False)
+        paths = get_json_path(specimen, response_field, False, dwc_mapping)
     last_path = paths[-1]
     last_index = re.search(r"(\d+)(?!.*\d)", last_path).group(1)
     return re.sub("(\\d+)(?!.*\\d)", str(int(last_index) + 1), last_path)

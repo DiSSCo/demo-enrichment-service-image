@@ -72,7 +72,7 @@ def map_result_to_annotation(
     :param height: the height of the image, used to calculate the ROI
     :return: Returns a list of annotations (one per ROI), can be empty
     """
-    annotations = list()
+    annotations = []
     timestamp = shared.timestamp_now()
     ods_agent = shared.get_agent()
 
@@ -119,7 +119,7 @@ def run_object_detection(image_uri: str, predictor: DefaultPredictor) -> Tuple[L
         width, height = img.size
         predictions = predictor(np.array(img))
         instances = predictions["instances"]
-        result = list()
+        result = []
 
         class_names = ["leaf", "flower", "fruit", "seed", "stem", "root"]
         """

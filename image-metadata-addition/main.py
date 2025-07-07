@@ -97,7 +97,7 @@ def create_annotation(
     :param timestamp: formatted date time
     :return: List of annotations
     """
-    annotations = list()
+    annotations = []
     ods_agent = shared.get_agent()
     oa_selector = shared.build_class_selector("$['ods:hasAssertions']")
 
@@ -150,7 +150,7 @@ def get_image_measurements(image_uri: str, timestamp: str) -> Tuple[List[Dict[st
     :return: Returns a Dict of assertions about the image and any additional information
     """
     ods_agent = shared.get_agent()
-    assertions = list()
+    assertions = []
     assertions.append(build_assertion(timestamp, ods_agent, "ac:variant", "acvariant:v008", None))
     img_format = ""
     try:

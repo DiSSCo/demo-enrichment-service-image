@@ -71,12 +71,7 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
         ]
     else:
         ods_agent = shared.get_agent()
-        annotations = list(
-            map(
-                lambda result: map_result_to_annotation(specimen_data, result, timestamp, ods_agent),
-                results,
-            )
-        )
+        annotations = [map_result_to_annotation(specimen_data, result, timestamp, ods_agent) for result in results]
     return {"jobId": job_id, "annotations": annotations}
 
 
@@ -138,15 +133,13 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
         response_json = json.loads(response.content)
         hits = response_json.get("response").get("numFound")
         if hits <= 5:
-            return list(
-                map(
-                    lambda result: {
-                        "queryString": query_string,
-                        "geocaseId": result["geocase_id"],
-                    },
-                    response_json.get("response").get("docs"),
-                )
-            )
+            return [
+                {
+                    "queryString": query_string,
+                    "geocaseId": result["geocase_id"],
+                }
+                for result in response_json.get("response").get("docs")
+            ]
         else:
             logging.info(f"Too many hits ({hits}) were found for specimen: {specimen_data[shared.ODS_ID]}")
             return [

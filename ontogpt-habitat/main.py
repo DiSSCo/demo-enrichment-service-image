@@ -111,7 +111,7 @@ def map_result_to_annotation(digital_object: Dict, additional_info_annotations: 
     """
     timestamp = shared.timestamp_now()
     ods_agent = shared.get_agent()
-    annotations = list()
+    annotations = []
 
     for annotation in additional_info_annotations:
         oa_value = {"id": annotation.get("id"), "label": annotation.get("label")}

@@ -29,6 +29,7 @@ ONTOGPT_HABITAT = "sha-276a7fb"
 TAXAMORPH_TAG = "sha-276a7fb"
 LATEST = "latest"
 
+SCHEMA_NAME = "schema:name"
 
 # IDs
 BOLD_TEST = "TEST/96Y-41B-PP"
@@ -52,7 +53,7 @@ SENCK_ACC = "SANDBOX/F28-90S-SQX"
 
 
 def build_secret(name: str, secret_key_ref: str) -> Dict[str, str]:
-    return {"schema:name": name, "ods:secretKeyRef": secret_key_ref}
+    return {SCHEMA_NAME: name, "ods:secretKeyRef": secret_key_ref}
 
 
 def build_attributes(
@@ -71,7 +72,7 @@ def build_attributes(
         "data": {
             "type": "ods:MachineAnnotationService",
             "attributes": {
-                "schema:name": name,
+                SCHEMA_NAME: name,
                 "schema:description": description,
                 "ods:containerImage": image,
                 "ods:containerTag": tag,
@@ -99,7 +100,7 @@ def splat(is_acceptance: bool) -> Dict[str, Any]:
         build_secret("API_USER", "ai4l-user"),
         build_secret("API_PASSWORD", "ai4l-password"),
     ]
-    envs = [{"schema:name": "DISSCO_API_SPECIMEN", "schema:value": "https://dev.dissco.tech/api/digital-specimen/v1"}]
+    envs = [{SCHEMA_NAME: "DISSCO_API_SPECIMEN", "schema:value": "https://dev.dissco.tech/api/digital-specimen/v1"}]
     return build_attributes(name, description, image, tag, target_filter, batching, secrets, envs)
 
 

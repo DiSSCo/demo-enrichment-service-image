@@ -61,14 +61,9 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
     """
     timestamp = shared.timestamp_now()
     if results is None:
-        annotations = list()
+        annotations = []
     else:
-        annotations = list(
-            map(
-                lambda result: map_result_to_annotation(specimen_data, result, timestamp),
-                results,
-            )
-        )
+        annotations = [map_result_to_annotation(specimen_data, result, timestamp) for result in results]
     annotation_event = {"jobId": job_id, "annotations": annotations}
     return annotation_event
 
@@ -128,12 +123,7 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
 
     # Get one or more specimen IDs. Considering that this will be a GET request this can't
     # be enormous - but perhaps 100 IDs is fine as a batch size.
-    identifiers = list(
-        map(
-            lambda identifier: identifier.get("dcterms:identifier"),
-            specimen_data.get("ods:hasIdentifiers"),
-        )
-    )
+    identifiers = [identifier.get("dcterms:identifier") for identifier in specimen_data.get("ods:hasIdentifiers")]
     # BOLD's API has a concept of 'scope' (here: 'ids') and 'subscope' (here: 'sampleid'),
     # where the value is the third part of a triple. All triples are joined with commas.
     query_value = ",".join([f"ids:sampleid:{id}" for id in identifiers])
@@ -170,15 +160,13 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     # Parse the response to get the records
     records = response.json()["data"]
 
-    return list(
-        map(
-            lambda record: {
-                "queryString": query_string,
-                "processid": record["processid"],
-            },
-            records,
-        )
-    )
+    return [
+        {
+            "queryString": query_string,
+            "processid": record["processid"],
+        }
+        for record in records
+    ]
 
 
 def run_local(example: str) -> None:

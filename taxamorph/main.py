@@ -81,7 +81,7 @@ def map_result_to_annotation(
     ods_agent = shared.get_agent()
 
     if taxamorph_result:
-        annotations = list()
+        annotations = []
 
         for result in taxamorph_result:
             oa_value = shared.map_to_entity_relationship(

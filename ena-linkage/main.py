@@ -67,12 +67,7 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
             shared.map_to_empty_annotation(timestamp, "No results found for ENA", specimen_data, shared.ER_PATH)
         ]
     else:
-        annotations = list(
-            map(
-                lambda result: map_result_to_annotation(specimen_data, result, timestamp),
-                results,
-            )
-        )
+        annotations = [map_result_to_annotation(specimen_data, result, timestamp) for result in results]
     mas_job_record = {"jobId": job_id, "annotations": annotations}
     return mas_job_record
 
@@ -158,16 +153,11 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     :param specimen_data: The JSON data of the Digital Specimen
     :return:  A list of results that contain the queryString and the geoCASe identifier
     """
-    identifiers = list(
-        map(
-            lambda identifier: identifier.get("dcterms:identifierValue"),
-            specimen_data.get("ods:hasIdentifiers"),
-        )
-    )
+    identifiers = [identifier.get("dcterms:identifierValue") for identifier in specimen_data.get("ods:hasIdentifiers")]
     sequence_query = build_query_string(identifiers, "sequence")
     response = requests.get(sequence_query)
     response_json = json.loads(response.content)
-    result_list = list()
+    result_list = []
     if len(response_json) > 0:
         check_result(response_json, result_list, sequence_query, specimen_data)
         return result_list
@@ -180,7 +170,7 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
             return result_list
         else:
             logging.info(f"No relevant identifiers found for specimen: {specimen_data['dcterms:identifier']}")
-            return list()
+            return []
 
 
 def check_result(
