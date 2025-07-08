@@ -12,6 +12,6 @@ The following environment variables must be set for the service to function corr
 - `RABBITMQ_HOST`  
 - `RABBITMQ_QUEUE`  
 - `RABBITMQ_ROUTING_KEY`  -> defaults to `mas-annotation`
-- `RABBITMQ_EXCHANGE`  -> defaults to `habitat-enrichment-exchange`
+- `RABBITMQ_EXCHANGE`  -> defaults to `mas-annotation-exchange`
 - `HABITAT_ONTOGPT_USER`  
 - `HABITAT_ONTOGPT_PASSWORD`  

@@ -29,7 +29,7 @@ The incoming message will be in the following format:
 ```
 {
     "object": { ... },
-    "jobID": "8a325743-bf32-49c7-b3a1-89e738c37dfc",
+    "jobId": "8a325743-bf32-49c7-b3a1-89e738c37dfc",
     "batchingRequested": true
 }
 ```

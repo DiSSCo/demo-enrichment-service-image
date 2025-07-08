@@ -252,7 +252,7 @@ def get_specimen_from_media(digital_media: Dict[str, Any]) -> Dict[str, Any]:
     Takes media object and returns related specimen (max 1)
     :param digital_media: Media object to get related specimen
     """
-    entity_relationships = digital_media.get("ods:hasEntityRelationships")
+    entity_relationships = digital_media.get("ods:hasEntityRelationships", [])
     for entity_relationship in entity_relationships:
         if entity_relationship.get("dwc:relationshipOfResource") == "hasDigitalSpecimen":
             specimen_doi = entity_relationship.get("dwc:relatedResourceID").replace("https://doi.org/", "")

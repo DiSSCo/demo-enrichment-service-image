@@ -76,7 +76,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         shared.mark_job_as_running(job_id=job_id)
         digital_object = json_value.get("object")
         annotations = build_annotations(digital_object)
-        event = {"annotations": annotations, "jobId": json_value.get("jobId")}
+        event = {"annotations": annotations, "jobId": job_id}
         logging.info(f"Publishing annotation event: {json.dumps(event)}")
         publish_annotation_event(event, channel)
     except Exception as e:
@@ -90,14 +90,11 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
     :param digital_media: the target object of the annotation
     :return: List of annotations
     """
-    # Your query here
     query_string, uri = build_query_string(digital_media)
 
     timestamp = shared.timestamp_now()
-    # Run API call and compute value(s) of the annotation
     dcterms_ref, response = run_api_call(query_string, uri)
     if not response:
-        # If the API call does not return a result, that information should still be captured in an annotation
         return [
             shared.map_to_empty_annotation(
                 timestamp,
@@ -115,12 +112,12 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def build_query_string(digital_object: Dict[str, Any]) -> Tuple[str, str]:
     """
-    Builds the query for n8n endpoint
+    Retrieves the api endpoint and access URI from the digital object.
     :param digital_object: Target of the annotation
-    :return: query string to some example API, list of access URIs
+    :return: query string to some example API, the access URI of the image to be processed
     """
     access_uri = digital_object.get("ac:accessURI")
-    return os.environ.get("API_ENDPOINT"), access_uri
+    return os.environ.get("API_ENDPOINT", "https://vouchervision-go-738307415303.us-central1.run.app/"), access_uri
 
 
 def publish_annotation_event(annotation_event: Dict[str, Any], channel: BlockingChannel) -> None:
