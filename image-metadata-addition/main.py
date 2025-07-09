@@ -27,9 +27,7 @@ def run_rabbitmq() -> None:
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
             os.environ.get("RABBITMQ_HOST"),
-            credentials=pika.PlainCredentials(
-                os.environ.get("RABBITMQ_USER"),
-                os.environ.get("RABBITMQ_PASSWORD")),
+            credentials=pika.PlainCredentials(os.environ.get("RABBITMQ_USER"), os.environ.get("RABBITMQ_PASSWORD")),
         )
     )
     channel = connection.channel()
@@ -50,12 +48,16 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
     :return:
     """
     json_value = json.loads(body.decode("utf-8"))
-    shared.mark_job_as_running(json_value.get("jobId"))
-    image_uri = json_value.get("object").get("ac:accessURI")
-    timestamp = shared.timestamp_now()
-    image_assertions, additional_info = get_image_measurements(image_uri, timestamp)
-    annotations = create_annotation(image_assertions, additional_info, json_value.get("object"), timestamp)
-    publish_annotation_event(map_to_annotation_event(annotations, json_value.get("jobId")), channel)
+    try:
+        shared.mark_job_as_running(json_value.get("jobId"))
+        image_uri = json_value.get("object").get("ac:accessURI")
+        timestamp = shared.timestamp_now()
+        image_assertions, additional_info = get_image_measurements(image_uri, timestamp)
+        annotations = create_annotation(image_assertions, additional_info, json_value.get("object"), timestamp)
+        publish_annotation_event(map_to_annotation_event(annotations, json_value.get("jobId")), channel)
+    except Exception as e:
+        logging.error(f"Failed to publish annotation event: {e}")
+        shared.send_failed_message(json_value["jobId"], str(e), channel)
 
 
 def run_local(example: str) -> None:
@@ -95,7 +97,7 @@ def create_annotation(
     :param timestamp: formatted date time
     :return: List of annotations
     """
-    annotations = list()
+    annotations = []
     ods_agent = shared.get_agent()
     oa_selector = shared.build_class_selector("$['ods:hasAssertions']")
 
@@ -127,7 +129,7 @@ def create_annotation(
 
 def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
     """
-    Send the annotation to the Kafka topic
+    Send the annotation to the RabbitMQ queue
     :param annotation_event: The formatted annotation event
     :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
@@ -148,7 +150,7 @@ def get_image_measurements(image_uri: str, timestamp: str) -> Tuple[List[Dict[st
     :return: Returns a Dict of assertions about the image and any additional information
     """
     ods_agent = shared.get_agent()
-    assertions = list()
+    assertions = []
     assertions.append(build_assertion(timestamp, ods_agent, "ac:variant", "acvariant:v008", None))
     img_format = ""
     try:

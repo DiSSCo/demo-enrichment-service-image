@@ -59,7 +59,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         logging.info(f"Publishing annotation event: {json.dumps(event)}")
         publish_annotation_event(event, channel)
     except Exception as e:
-        send_failed_message(json_value.get("jobId"), str(e), channel)
+        shared.send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
 def build_query_string(digital_object: Dict[str, Any]) -> str:
@@ -74,7 +74,7 @@ def build_query_string(digital_object: Dict[str, Any]) -> str:
 
 def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
     """
-    Send the annotation to the Kafka topic
+    Send the annotation to the RabbitMQ queue
     :param annotation_event: The formatted annotation event
     :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
@@ -111,7 +111,7 @@ def build_annotations(digital_object: Dict[str, Any]) -> List[Dict[str, Any]]:
             )
         ]
 
-    annotations = list()
+    annotations = []
     """
     It is up to the developer to determine the most appropriate selector. A Class 
     Selector is used if the annotation targets a whole class (or entire specimen), 
@@ -219,23 +219,6 @@ def run_api_call(timestamp: str, query_string: str) -> List[str]:
     One annotation can be created for each oa:value computed in this step
     """
     return [assertion, entity_relationship, json.dumps(response_json)]
-
-
-def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
-    """
-    Send a message to the RabbitMQ queue indicating that the job has failed
-    :param job_id: The job ID of the message
-    :param message: The error message to be sent
-    :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
-    :return: Will not return anything
-    """
-    logging.error(f"Job {job_id} failed with error: {message}")
-    mas_failed = {"jobId": job_id, "errorMessage": message}
-    channel.basic_publish(
-        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
-        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
-        body=json.dumps(mas_failed).encode("utf-8"),
-    )
 
 
 def run_local(specimen_id: str):

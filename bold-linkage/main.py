@@ -48,7 +48,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         mas_job_record = map_to_annotation_event(specimen_data, result, json_value.get("jobId"))
         publish_annotation_event(mas_job_record, channel)
     except Exception as e:
-        send_failed_message(json_value.get("jobId"), str(e), channel)
+        shared.send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
 def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], job_id: str) -> Dict:
@@ -61,14 +61,9 @@ def map_to_annotation_event(specimen_data: Dict, results: List[Dict[str, str]], 
     """
     timestamp = shared.timestamp_now()
     if results is None:
-        annotations = list()
+        annotations = []
     else:
-        annotations = list(
-            map(
-                lambda result: map_result_to_annotation(specimen_data, result, timestamp),
-                results,
-            )
-        )
+        annotations = [map_result_to_annotation(specimen_data, result, timestamp) for result in results]
     annotation_event = {"jobId": job_id, "annotations": annotations}
     return annotation_event
 
@@ -103,7 +98,7 @@ def map_result_to_annotation(specimen_data: Dict, result: Dict[str, str], timest
 
 def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
     """
-    Send the annotation to the Kafka topic
+    Send the annotation to the RabbitMQ queue
     :param annotation_event: The formatted annotation event
     :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
@@ -113,23 +108,6 @@ def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -
         exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
         routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
         body=json.dumps(annotation_event).encode("utf-8"),
-    )
-
-
-def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
-    """
-    Send a message to the RabbitMQ queue indicating that the job has failed
-    :param job_id: The job ID of the message
-    :param message: The error message to be sent
-    :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
-    :return: Will not return anything
-    """
-    logging.error(f"Job {job_id} failed with error: {message}")
-    mas_failed = {"jobId": job_id, "errorMessage": message}
-    channel.basic_publish(
-        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
-        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
-        body=json.dumps(mas_failed).encode("utf-8"),
     )
 
 
@@ -145,12 +123,7 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
 
     # Get one or more specimen IDs. Considering that this will be a GET request this can't
     # be enormous - but perhaps 100 IDs is fine as a batch size.
-    identifiers = list(
-        map(
-            lambda identifier: identifier.get("dcterms:identifier"),
-            specimen_data.get("ods:hasIdentifiers"),
-        )
-    )
+    identifiers = [identifier.get("dcterms:identifier") for identifier in specimen_data.get("ods:hasIdentifiers")]
     # BOLD's API has a concept of 'scope' (here: 'ids') and 'subscope' (here: 'sampleid'),
     # where the value is the third part of a triple. All triples are joined with commas.
     query_value = ",".join([f"ids:sampleid:{id}" for id in identifiers])
@@ -187,20 +160,18 @@ def run_api_call(specimen_data: Dict) -> List[Dict[str, str]]:
     # Parse the response to get the records
     records = response.json()["data"]
 
-    return list(
-        map(
-            lambda record: {
-                "queryString": query_string,
-                "processid": record["processid"],
-            },
-            records,
-        )
-    )
+    return [
+        {
+            "queryString": query_string,
+            "processid": record["processid"],
+        }
+        for record in records
+    ]
 
 
 def run_local(example: str) -> None:
     """
-    Run the script locally. Can be called by replacing the kafka call with this  a method call in the main method.
+    Run the script locally. Can be called by replacing the rabbitmq consumer with this method call in the main method.
     Will call the DiSSCo API to retrieve the specimen data.
     A record ID will be created but can only be used for testing.
     :param example: The full URL of the Digital Specimen to the API (for example

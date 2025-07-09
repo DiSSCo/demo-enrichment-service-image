@@ -70,7 +70,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
             logging.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
             publish_annotation_event(annotation_event, channel)
     except Exception as e:
-        send_failed_message(json_value["jobId"], str(e), channel)
+        shared.send_failed_message(json_value["jobId"], str(e), channel)
 
 
 def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
@@ -79,7 +79,7 @@ def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
 
 def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
     """
-    Send the annotation to the Kafka topic
+    Send the annotation to the RabbitMQ queue
     :param annotation_event: The formatted annotation event
     :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
@@ -97,7 +97,7 @@ def map_empty_result_annotation(digital_object: Dict, message: str):
         timestamp=shared.timestamp_now(),
         message=message,
         target_data=digital_object,
-        selector=shared.build_term_selector(dwc_locality),
+        selector=dwc_locality,
         dcterms_ref="https://github.com/RajapreethiRajendran/demo-enrichment-service-image",
     )
     return annotation
@@ -111,7 +111,7 @@ def map_result_to_annotation(digital_object: Dict, additional_info_annotations: 
     """
     timestamp = shared.timestamp_now()
     ods_agent = shared.get_agent()
-    annotations = list()
+    annotations = []
 
     for annotation in additional_info_annotations:
         oa_value = {"id": annotation.get("id"), "label": annotation.get("label")}
@@ -158,26 +158,9 @@ def run_ontology_extraction(habitat_text: str, location_text: str) -> List[Dict[
         return response_json.get("named_entities")
 
 
-def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
-    """
-    Send a message to the RabbitMQ queue indicating that the job has failed
-    :param job_id: The job ID of the message
-    :param message: The error message to be sent
-    :param channel: A RabbitMQ BlockingChannel to which we will publish the error message
-    :return: Will not return anything
-    """
-    logging.error(f"Job {job_id} failed with error: {message}")
-    mas_failed = {"jobId": job_id, "errorMessage": message}
-    channel.basic_publish(
-        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
-        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
-        body=json.dumps(mas_failed).encode("utf-8"),
-    )
-
-
 def run_local(example: str) -> None:
     """
-    Run the script locally. Can be called by replacing the kafka call with this  a method call in the main method.
+    Run the script locally. Can be called by replacing the rabbitmq consumer with this method call in the main method.
     Will call the DiSSCo API to retrieve the specimen data.
     A record ID will be created but can only be used for testing.
     :param example: The full URL of the Digital Specimen to the API (for example

@@ -19,9 +19,9 @@ testing, the developer should make a Pull Request on this repository with the ne
 
 The `shared` package contains code that will format resulting calculations to the openDS annotation model.
 
-## Kafka Message
+## RabbitMQ Message
 
-Messages are sent between DiSSCo and MASs using [Kafka](https://kafka.apache.org/), an asynchronous event messaging
+Messages are sent between DiSSCo and MASs using [RabbitMQ](https://www.rabbitmq.com/), an asynchronous event messaging
 platform.
 
 The incoming message will be in the following format:
@@ -29,7 +29,7 @@ The incoming message will be in the following format:
 ```
 {
     "object": { ... },
-    "jobID": "8a325743-bf32-49c7-b3a1-89e738c37dfc",
+    "jobId": "8a325743-bf32-49c7-b3a1-89e738c37dfc",
     "batchingRequested": true
 }
 ```

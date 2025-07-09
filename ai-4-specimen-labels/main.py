@@ -14,6 +14,7 @@ import shared
 from fuzzywuzzy import fuzz
 import copy
 
+import shared_ocr
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
@@ -100,7 +101,9 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
     try:
         # Indicates to DiSSCo the message has been received by the mas and the job is running.
         # DiSSCo then informs the user of this development
-        shared.mark_job_as_running(job_id=json_value.get("jobId"))
+        job_id = json_value.get("jobId")
+        logging.info(f"Received job with jobId: {job_id}")
+        shared.mark_job_as_running(job_id=job_id)
         digital_object = json_value.get("object")
         annotations = build_annotations(digital_object)
         event = {"annotations": annotations, "jobId": json_value.get("jobId")}
@@ -108,7 +111,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         publish_annotation_event(event, channel)
     except Exception as e:
         logging.error(f"Failed to publish annotation event: {e}")
-        send_failed_message(json_value.get("jobId"), str(e), channel)
+        shared.send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
 def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -134,45 +137,12 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
                 query_string,
             )
         ]
-    specimen = get_specimen(digital_media)
-    specimen_id = specimen[shared.ODS_ID]
-    specimen_type = specimen[shared.ODS_TYPE]
-    annotations = list()
+    specimen = shared_ocr.get_specimen_from_media(digital_media)
+    annotations = []
 
-    for field, response_value in response["data"].items():
-        # Find any existing matches in the specimen data
-        paths = get_json_path(specimen, field, True)
-        if len(paths) == 0:
-            logging.debug(f"New information for {field}")
-            match_path = DWC_MAPPING[field].replace("[*]", "[0]")
-            motivation = shared.Motivation.ADDING.value
-            value = response_value
-        elif len(paths) == 1:
-            logging.debug(f"Editing information for {field}")
-            match_path = paths[0]
-            value, motivation = compare_result_to_existing_info(specimen, match_path, response_value)
-        else:
-            match_path, motivation = find_fuzzy_match(specimen, paths, response_value)
-            logging.info(f"Multiple potential targets found. Fuzzy match needed. Best match found at {match_path}")
-            if not match_path:
-                match_path = append_new_information(specimen, field, paths)
-                motivation = shared.Motivation.ADDING.value
-                value = response_value
-            else:
-                value, motivation = compare_result_to_existing_info(specimen, match_path, response_value)
-        annotations.append(
-            shared.map_to_annotation_str_val(
-                shared.get_agent(),
-                timestamp,
-                str(value),
-                shared.build_term_selector(match_path),
-                specimen_id,
-                specimen_type,
-                f"{query_string}&version={response['metadata']['version']}",
-                motivation,
-            )
-        )
-    return annotations
+    return shared.map_ocr_response_to_annotations(
+        annotations, query_string, response.get("data"), specimen, timestamp, DWC_MAPPING
+    )
 
 
 def compare_result_to_existing_info(specimen: Dict[str, Any], path: str, result_value) -> Tuple[str, str]:
@@ -255,7 +225,7 @@ def get_json_path(specimen: Dict[str, Any], field: str, do_filter: bool) -> List
     matches = path_expr.find(obj)
     if matches:
         return to_block_notation(matches)
-    return list()
+    return []
 
 
 def prune_specimen(specimen: Dict[str, Any], filter_terms: Dict[str, Any]) -> Dict[str, Any]:
@@ -264,7 +234,7 @@ def prune_specimen(specimen: Dict[str, Any], filter_terms: Dict[str, Any]) -> Di
     we need to identify the correct agent first.
     This function creates a copy of the specimen and removes all non-relevant paths.
     :param specimen: specimen to filter
-    filter_terms: dictionary of filter terms, containing:
+    :param filter_terms: dictionary of filter terms, containing:
         filter_class: class to filter through, e.g. "ods:hasIdentifiers"
         target_field: field which determines if an item belongs in the filter_class, e.g. "dcterms:title"
         target_value: value to check in target_field, e.g. "dwc:catalogNumber"
@@ -287,7 +257,7 @@ def prune_object(object_copy: Dict[str, Any], filter_terms: Dict[str, Any]) -> D
     filter_terms: dictionary of filter terms
     returns: the filtered object, with non-relevant terms removed
     """
-    remove_these = list()
+    remove_these = []
     filter_class = object_copy.get(filter_terms.get("filter_class"))
     if not filter_class:
         return object_copy
@@ -312,7 +282,7 @@ def to_block_notation(matches: Any) -> List[str]:
     :return: list of strings formatted in block notation
     """
     # Convert the first match to block notation string
-    paths = list()
+    paths = []
     for match in matches:
         path = str(match.full_path)
         # Split on dots and format each part
@@ -341,7 +311,7 @@ def build_query_string(digital_object: Dict[str, Any]) -> Tuple[str, List[str]]:
 
 def publish_annotation_event(annotation_event: Dict[str, Any], channel: BlockingChannel) -> None:
     """
-    Send the annotation to the Kafka topic
+    Send the annotation to the RabbitMQ queue
     :param annotation_event: The formatted annotation event
     :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
@@ -351,23 +321,6 @@ def publish_annotation_event(annotation_event: Dict[str, Any], channel: Blocking
         exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
         routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
         body=json.dumps(annotation_event).encode("utf-8"),
-    )
-
-
-def get_specimen(digital_media: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Takes media object and returns related specimen (max 1)
-    :param digital_media: Media object to get related specimen
-    """
-    entity_relationships = digital_media.get("ods:hasEntityRelationships")
-    for entity_relationship in entity_relationships:
-        if entity_relationship.get("dwc:relationshipOfResource") == "hasDigitalSpecimen":
-            specimen_doi = entity_relationship.get("dwc:relatedResourceID").replace("https://doi.org/", "")
-            break
-    return (
-        json.loads(requests.get(f"{os.environ.get('DISSCO_API_SPECIMEN')}/{specimen_doi}").content)
-        .get("data")
-        .get("attributes")
     )
 
 
@@ -381,22 +334,6 @@ def run_api_call(query_string: str, uris: List[str]) -> Dict[str, Any]:
         logging.error(f"API call failed: {e}")
         raise requests.RequestException
     return response_json
-
-
-def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
-    """
-    Sends a failure message to the mas failure topic, mas-failed
-    :param job_id: The id of the job
-    :param message: The exception message
-    :param producer: The Kafka producer
-    """
-    logging.error(f"Job {job_id} failed with error: {message}")
-    mas_failed = {"jobId": job_id, "errorMessage": message}
-    channel.basic_publish(
-        exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-failed-exchange"),
-        routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation-failed"),
-        body=json.dumps(mas_failed).encode("utf-8"),
-    )
 
 
 def run_local(media_id: str):
@@ -419,4 +356,4 @@ def run_local(media_id: str):
 
 if __name__ == "__main__":
     run_rabbitmq()
-    # run_local("SANDBOX/LFE-4MF-LCD")
+    # run_local("SANDBOX/DTZ-A0R-TZ9")
