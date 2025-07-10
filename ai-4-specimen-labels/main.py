@@ -14,8 +14,6 @@ import shared
 from fuzzywuzzy import fuzz
 import copy
 
-import shared_ocr
-
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
 """
@@ -137,7 +135,7 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
                 query_string,
             )
         ]
-    specimen = shared_ocr.get_specimen_from_media(digital_media)
+    specimen = shared.get_specimen_from_media(digital_media)
     annotations = []
 
     return shared.map_ocr_response_to_annotations(
