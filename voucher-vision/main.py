@@ -9,7 +9,6 @@ from pika.amqp_object import Method, Properties
 from pika.adapters.blocking_connection import BlockingChannel
 from client import process_image, ordereddict_to_json
 import shared
-import shared_ocr
 
 from shared.RequestFailedException import RequestFailedException
 
@@ -104,7 +103,7 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
                 dcterms_ref,
             )
         ]
-    specimen = shared_ocr.get_specimen_from_media(digital_media)
+    specimen = shared.get_specimen_from_media(digital_media)
     annotations = []
 
     return shared.map_ocr_response_to_annotations(annotations, dcterms_ref, response, specimen, timestamp, DWC_MAPPING)
