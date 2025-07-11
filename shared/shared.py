@@ -271,7 +271,7 @@ def build_entire_image_fragment_selector(width: int, height: int) -> Dict:
 
 def send_failed_message(job_id: str, message: str, channel: BlockingChannel) -> None:
     """
-    Sends a failure message to the mas failure topic, mas-failed
+    Sends a failure message to the MAS failure topic, mas-failed
     :param job_id: The id of the job
     :param message: The exception message
     :param channel: A RabbitMQ BlockingChannel to which we will publish the failure message
