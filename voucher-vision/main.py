@@ -9,6 +9,7 @@ from pika.amqp_object import Method, Properties
 from pika.adapters.blocking_connection import BlockingChannel
 from client import process_image, ordereddict_to_json
 import shared
+import shared_ocr
 
 from shared.RequestFailedException import RequestFailedException
 
@@ -103,10 +104,12 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
                 dcterms_ref,
             )
         ]
-    specimen = shared.get_specimen_from_media(digital_media)
+    specimen = shared_ocr.get_specimen_from_media(digital_media)
     annotations = []
 
-    return shared.map_ocr_response_to_annotations(annotations, dcterms_ref, response, specimen, timestamp, DWC_MAPPING)
+    return shared_ocr.map_ocr_response_to_annotations(
+        annotations, dcterms_ref, response, specimen, timestamp, DWC_MAPPING
+    )
 
 
 def build_query_string(digital_object: Dict[str, Any]) -> Tuple[str, str]:
@@ -153,7 +156,7 @@ def run_api_call(query: str, access_uri: str) -> Tuple[str, Dict[str, Any]]:
         verbose=True,
         engines=engine,
         prompt=prompt,
-        auth_token=auth_token,
+        auth_token="DY8wlur1nX0hP1Geuab45e3PD8NXFxMQ",
     )
     if not result:
         raise RequestFailedException("No result returned from the API call")

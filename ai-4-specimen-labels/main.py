@@ -11,6 +11,7 @@ import requests
 from pika.amqp_object import Method, Properties
 from pika.adapters.blocking_connection import BlockingChannel
 import shared
+import shared_ocr
 from fuzzywuzzy import fuzz
 import copy
 
@@ -135,10 +136,10 @@ def build_annotations(digital_media: Dict[str, Any]) -> List[Dict[str, Any]]:
                 query_string,
             )
         ]
-    specimen = shared.get_specimen_from_media(digital_media)
+    specimen = shared_ocr.get_specimen_from_media(digital_media)
     annotations = []
 
-    return shared.map_ocr_response_to_annotations(
+    return shared_ocr.map_ocr_response_to_annotations(
         annotations, query_string, response.get("data"), specimen, timestamp, DWC_MAPPING
     )
 
