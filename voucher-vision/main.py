@@ -156,7 +156,7 @@ def run_api_call(query: str, access_uri: str) -> Tuple[str, Dict[str, Any]]:
         verbose=True,
         engines=engine,
         prompt=prompt,
-        auth_token="DY8wlur1nX0hP1Geuab45e3PD8NXFxMQ",
+        auth_token=auth_token,
     )
     if not result:
         raise RequestFailedException("No result returned from the API call")
