@@ -1,5 +1,6 @@
 from typing import Dict, Any
 import os
+
 import requests
 import logging
 import json
@@ -14,42 +15,52 @@ SPECIMEN_TYPE = "https://doi.org/21.T11148/894b1e6cad57e921764e"
 MEDIA_TYPE = "https://doi.org/21.T11148/bbad8c4e101e8af01115"
 
 # Tags (They're all the same now, but they may diverge)
-BOLD_TAG = "sha-276a7fb"
-ENA_TAG = "sha-276a7fb"
-GBIF_TAG = "sha-276a7fb"
-GEOCASE_TAG = "sha-276a7fb"
-PLANT_ORGAN_TAG = "sha-276a7fb"
-IMAGE_METADATA_TAG = "sha-276a7fb"
-MINDAT_TAG = "sha-276a7fb"
-OSM_TAG = "sha-276a7fb"
-SENCK_TAG = "sha-276a7fb"
-SPLAT_TAG = "sha-276a7fb"
-LEAF_MACHINE_TAG = "sha-276a7fb"
-ONTOGPT_HABITAT = "sha-276a7fb"
-TAXAMORPH_TAG = "sha-276a7fb"
+BOLD_TAG = "sha-1826021"
+ENA_TAG = "sha-1826021"
+GBIF_TAG = "sha-1826021"
+GEOCASE_TAG = "sha-1826021"
+PLANT_ORGAN_TAG = "sha-1826021"
+IMAGE_METADATA_TAG = "sha-1826021"
+MINDAT_TAG = "sha-1826021"
+OSM_TAG = "sha-1826021"
+SENCK_TAG = "sha-1826021"
+SPLAT_TAG = "sha-1826021"
+LEAF_MACHINE_TAG = "sha-1826021"
+ONTOGPT_HABITAT = "sha-1826021"
+TAXAMORPH_TAG = "sha-1826021"
+VOUCHER_VISION_TAG = "sha-1826021"
 LATEST = "latest"
 
 SCHEMA_NAME = "schema:name"
 
 # IDs
 BOLD_TEST = "TEST/96Y-41B-PP"
-BOLD_ACC = "SANDBOX/AVF-A5Y-CS2"
+
 ENA_TEST = "TEST/L2X-15Q-0WD"
 ENA_ACC = "SANDBOX/W28-AVC-QGR"
 GBIF_TEST = "TEST/X47-D32-7FW"
 GBIF_ACC = "SANDBOX/NBH-W1J-47G"
 GEOCASE_TEST = "TEST/ZK1-C7B-SCL"
 GEOCASE_ACC = "SANDBOX/LGQ-BP2-WY5"
-PLANT_ORGAN_TEST = "TEST/H9Q-0C0-WQS"
-PLANT_ORGAN_ACC = "SANDBOX/C54-G84-F1G"
+SENCK_TEST = "TEST/H9Q-0C0-WQS"
+SENCK_ACC = "SANDBOX/C54-G84-F1G"
 IMAGE_METADATA_TEST = "TEST/P5P-J2W-1C3"
 IMAGE_METADATA_ACC = "SANDBOX/6PC-RFT-HR9"
 MINDAT_TEST = "TEST/EAG-5JQ-NYK"
-MINDAT_ACC = "SANDBOX/2NQ-LNG-N6G"
+
 OSM_TEST = "TEST/F3D-878-LEV"
 OSM_ACC = "SANDBOX/B2H-JB4-T3H"
-SENCK_TEST = "TEST/V1Z-0JJ-GX7"
-SENCK_ACC = "SANDBOX/F28-90S-SQX"
+
+LEAF_MACHINE_TEST = "TEST/BV3-ZHQ-1HM"
+LEAF_MACHINE_ACC = "SANDBOX/R5N-WMM-EZ8"
+ONTOGPT_HABITAT_TEST = "TEST/X8N-JNW-3G3"
+ONTOGPT_HABITAT_ACC = "SANDBOX/R1J-WN7-A7G"
+TAXAMORPH_TEST = "TEST/MQC-0RX-1JK"
+TAXAMORPH_ACC = "SANDBOX/DDC-98J-NKN"
+SPLAT_TEST = "TEST/C98-H20-139"
+SPLAT_ACC = "SANDBOX/M6S-19Y-KST"
+VOUCHER_VISION_TEST = "TEST/N4H-MTD-VRZ"
+VOUCHER_VISION_ACC = "SANDBOX/3DH-48E-T5E"
 
 
 def build_secret(name: str, secret_key_ref: str) -> Dict[str, str]:
@@ -251,6 +262,20 @@ def taxamorph(is_acceptance) -> Dict[str, Any]:
     return build_attributes(name, description, image, tag, target_filter, batching)
 
 
+def voucher_vision(is_acceptance: bool) -> Dict[str, Any]:
+    name = "Voucher Vision - Specimen Label Transcription"
+    description = "Uses GPT models to read specimen label and annotates relevant specimen. See the voucher vision website for more information: https://leafmachine.org/vouchervisiongo/'"
+    image = "public.ecr.aws/dissco/voucher-vision"
+    tag = VOUCHER_VISION_TAG if is_acceptance else LATEST
+    target_filter = {ODS_FDO_TYPE: [MEDIA_TYPE]}
+    batching = False
+    secrets = [
+        build_secret("API_KEY", "voucher-vision-key"),
+    ]
+    envs = [{SCHEMA_NAME: "DISSCO_API_SPECIMEN", "schema:value": "https://sandbox.dissco.tech/api/digital-specimen/v1"}]
+    return build_attributes(name, description, image, tag, target_filter, batching, secrets, envs)
+
+
 def get_token() -> str:
     url = f"{os.environ.get('server')}auth/realms/{os.environ.get('realm')}/protocol/openid-connect/token"
     data = f"grant_type={os.environ.get('grantType')}&client_id={os.environ.get('clientId')}&client_secret={os.environ.get('clientSecret')}&scope=roles"
@@ -262,7 +287,7 @@ def get_token() -> str:
 def update(request_json: Dict[str, Any], mas_id: str, is_acceptance: bool) -> None:
     header = {"Authorization": "Bearer " + get_token()}
     url = (
-        f"https://orchestration.dissco.tech/api/mas/v1/{mas_id}"
+        f"https://acc.orchestration.dissco.tech/api/mas/v1/{mas_id}"
         if is_acceptance
         else f"https://dev-orchestration.dissco.tech/api/mas/v1/{mas_id}"
     )
@@ -274,7 +299,7 @@ def update(request_json: Dict[str, Any], mas_id: str, is_acceptance: bool) -> No
 def post(request_json: Dict[str, Any], is_acceptance: bool) -> None:
     header = {"Authorization": "Bearer " + get_token()}
     url = (
-        "https://orchestration.dissco.tech/api/mas/v1"
+        "https://acc.orchestration.dissco.tech/api/mas/v1"
         if is_acceptance
         else "https://dev-orchestration.dissco.tech/api/mas/v1"
     )
@@ -284,5 +309,6 @@ def post(request_json: Dict[str, Any], is_acceptance: bool) -> None:
 
 
 if __name__ == "__main__":
-    update(taxamorph(False), "TEST/MQC-0RX-1JK", False)
+    # post(voucher_vision(True), True)
+    update(senck(True), SENCK_ACC, True)
     # update(plant_organ(True), PLANT_ORGAN_ACC, True)
