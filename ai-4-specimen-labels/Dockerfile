@@ -19,6 +19,7 @@ COPY ai-4-specimen-labels/main.py .
 
 # copy shared directory
 COPY shared/ shared/
+COPY shared_ocr/ shared_ocr/
 
 # Set user to newly created user
 USER 1001
