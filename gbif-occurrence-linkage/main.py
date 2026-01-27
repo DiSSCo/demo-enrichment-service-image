@@ -117,12 +117,16 @@ def run_api_call(specimen_data: Dict) -> Dict[str, str]:
     :return: The result from the API, which contains either the GBIF ID or an error message
     """
     identifiers = get_identifiers_from_object(specimen_data)
-    query_string = (
-        f"https://api.gbif.org/v1/occurrence/search?occurrenceID="
-        f"{identifiers.get('occurrenceID')}"
-        f"&basisOfRecord={specimen_data.get('dwc:basisOfRecord')}"
-    )
-    if specimen_data.get("catalogNumber") is not None:
+    if not identifiers:
+        logging.info("No relevant identifiers found for specimen")
+        return {
+            "queryString": None,
+            "error_message": "Failed to make the match, no relevant identifiers for GBIF",
+        }
+    query_string = f"https://api.gbif.org/v1/occurrence/search?&basisOfRecord={specimen_data.get('dwc:basisOfRecord')}"
+    if "occurrenceID" in identifiers:
+        query_string += "&occurrenceID=" + identifiers.get("occurrenceID")
+    if "catalogNumber" in identifiers:
         query_string = query_string + f"&catalogNumber={identifiers.get('catalogNumber')}"
     response = requests.get(query_string)
     response_json = json.loads(response.content)
@@ -179,4 +183,4 @@ def run_local(example: str) -> None:
 
 if __name__ == "__main__":
     run_rabbitmq()
-    # run_local("https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/A7D-9PL-3YP")
+    # run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/QAQ-MFW-YSV")
