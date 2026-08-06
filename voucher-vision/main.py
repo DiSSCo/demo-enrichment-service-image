@@ -80,7 +80,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         logging.info(f"Publishing annotation event: {json.dumps(event)}")
         publish_annotation_event(event, channel)
     except Exception as e:
-        logging.error(f"Failed to publish annotation event: {e}")
+        logging.exception(f"Failed to publish annotation event: {e}")
         shared.send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
@@ -146,7 +146,7 @@ def run_api_call(query: str, access_uri: str) -> Tuple[str, Dict[str, Any]]:
     :return: A reference to the API call including the engine and prompt used, and the response from the API (but only the formatted JSON result)
     """
     auth_token = os.environ.get("API_KEY")  # Add auth token as an environment variable or secret
-    engine = ["gemini-2.0-flash"]
+    engine = ["gemini-3.1-flash-lite"]
     prompt = "SLTPvM_default_v2.yaml"
     result = process_image(
         fname=None,
