@@ -80,7 +80,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         logging.info(f"Publishing annotation event: {json.dumps(event)}")
         publish_annotation_event(event, channel)
     except Exception as e:
-        logging.error(f"Failed to publish annotation event: {e}")
+        logging.exception(f"Failed to publish annotation event: {e}")
         shared.send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
