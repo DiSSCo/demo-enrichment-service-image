@@ -1,0 +1,37 @@
+name: Build BDQ test MAS
+
+on:
+  push:
+    branches: [main, bdq-test]
+    paths:
+      - 'bdq-test/**'
+      - '.github/workflows/bdq-test-pipeline.yml'
+      - 'ruff.toml'
+  pull_request:
+    paths:
+      - 'bdq-test/**'
+      - '.github/workflows/bdq-test-pipeline.yml'
+      - 'ruff.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: check bdq-test
+      - name: Check formatting
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: format --check bdq-test
+      - name: Run offline checks
+        run: python -m unittest discover -s bdq-test -p 'test_*.py' -v
+      - name: Build container
+        run: docker build -f bdq-test/Dockerfile -t bdq-test .

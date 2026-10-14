@@ -1,0 +1,481 @@
+{
+  "jobId": "local-SANDBOX-ZJZ-NMY-GN8",
+  "batchingRequested": false,
+  "object": {
+    "@id": "https://doi.org/SANDBOX/ZJZ-NMY-GN8",
+    "@type": "ods:DigitalSpecimen",
+    "dcterms:identifier": "https://doi.org/SANDBOX/ZJZ-NMY-GN8",
+    "ods:version": 4,
+    "ods:status": "Active",
+    "dcterms:modified": "2021-05-05",
+    "dcterms:created": "2026-02-25T00:01:45.262Z",
+    "ods:fdoType": "https://doi.org/21.T11148/894b1e6cad57e921764e",
+    "ods:midsLevel": 1,
+    "ods:normalisedPhysicalSpecimenID": "http://www.botanicalcollections.be/specimen/BR0000024498869",
+    "ods:physicalSpecimenID": "http://www.botanicalcollections.be/specimen/BR0000024498869",
+    "ods:physicalSpecimenIDType": "Resolvable",
+    "ods:isKnownToContainMedia": true,
+    "ods:sourceSystemID": "https://hdl.handle.net/SANDBOX/B9Q-VB2-XNE",
+    "ods:sourceSystemName": "Meise Botanic Garden Herbarium (BR)",
+    "ods:livingOrPreserved": "Preserved",
+    "dcterms:license": "https://creativecommons.org/licenses/by/4.0/legalcode",
+    "dwc:basisOfRecord": "PreservedSpecimen",
+    "ods:organisationID": "https://ror.org/01h1jbk91",
+    "ods:organisationName": "Meise Botanic Garden",
+    "dwc:collectionID": "gbif:ih:irn:124997",
+    "ods:topicOrigin": "Natural",
+    "ods:topicDomain": "Life",
+    "ods:topicDiscipline": "Botany",
+    "ods:specimenName": "Chamaecyparis pisifera (Siebold & Zucc.) Endl.",
+    "dwc:preparations": "HerbariumSheet",
+    "dwc:datasetName": "Digitale Ontsluiting Erfgoedcollecties",
+    "ods:hasEntityRelationships": [
+      {
+        "@type": "ods:EntityRelationship",
+        "dwc:relationshipOfResource": "hasDigitalMedia",
+        "dwc:relatedResourceID": "https://doi.org/SANDBOX/MJJ-KE7-NGV",
+        "ods:relatedResourceURI": "https://doi.org/SANDBOX/MJJ-KE7-NGV",
+        "dwc:relationshipEstablishedDate": "2026-05-06T05:37:04.027Z",
+        "ods:hasAgents": [
+          {
+            "@id": "https://doi.org/10.5281/zenodo.14383054",
+            "@type": "schema:SoftwareApplication",
+            "schema:identifier": "https://doi.org/10.5281/zenodo.14383054",
+            "schema:name": "DiSSCo Digital Specimen Processing Service",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "processing-service"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "https://doi.org/10.5281/zenodo.14383054",
+                "@type": "ods:Identifier",
+                "dcterms:title": "DOI",
+                "dcterms:type": "DOI",
+                "dcterms:identifier": "https://doi.org/10.5281/zenodo.14383054",
+                "ods:isPartOfLabel": false,
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvableFDOCompliant",
+                "ods:identifierStatus": "Preferred"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "@type": "ods:EntityRelationship",
+        "dwc:relationshipOfResource": "hasDigitalMedia",
+        "dwc:relatedResourceID": "https://doi.org/SANDBOX/A56-QFQ-X3N",
+        "ods:relatedResourceURI": "https://doi.org/SANDBOX/A56-QFQ-X3N",
+        "dwc:relationshipEstablishedDate": "2026-05-06T05:37:04.027Z",
+        "ods:hasAgents": [
+          {
+            "@id": "https://doi.org/10.5281/zenodo.14383054",
+            "@type": "schema:SoftwareApplication",
+            "schema:identifier": "https://doi.org/10.5281/zenodo.14383054",
+            "schema:name": "DiSSCo Digital Specimen Processing Service",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "processing-service"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "https://doi.org/10.5281/zenodo.14383054",
+                "@type": "ods:Identifier",
+                "dcterms:title": "DOI",
+                "dcterms:type": "DOI",
+                "dcterms:identifier": "https://doi.org/10.5281/zenodo.14383054",
+                "ods:isPartOfLabel": false,
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvableFDOCompliant",
+                "ods:identifierStatus": "Preferred"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "@type": "ods:EntityRelationship",
+        "dwc:relationshipOfResource": "hasOrganisationID",
+        "dwc:relatedResourceID": "https://ror.org/01h1jbk91",
+        "ods:relatedResourceURI": "https://ror.org/01h1jbk91",
+        "dwc:relationshipEstablishedDate": "2026-02-23T10:19:10.904Z",
+        "ods:hasAgents": [
+          {
+            "@id": "https://doi.org/10.5281/zenodo.14379776",
+            "@type": "schema:SoftwareApplication",
+            "schema:identifier": "https://doi.org/10.5281/zenodo.14379776",
+            "schema:name": "DiSSCo Translator Service",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "data-translator"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "https://doi.org/10.5281/zenodo.14379776",
+                "@type": "ods:Identifier",
+                "dcterms:title": "DOI",
+                "dcterms:type": "DOI",
+                "dcterms:identifier": "https://doi.org/10.5281/zenodo.14379776",
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvableFDOCompliant",
+                "ods:identifierStatus": "Preferred"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "@type": "ods:EntityRelationship",
+        "dwc:relationshipOfResource": "hasSourceSystemID",
+        "dwc:relatedResourceID": "https://hdl.handle.net/SANDBOX/B9Q-VB2-XNE",
+        "ods:relatedResourceURI": "https://hdl.handle.net/SANDBOX/B9Q-VB2-XNE",
+        "dwc:relationshipEstablishedDate": "2026-02-23T10:19:10.904Z",
+        "ods:hasAgents": [
+          {
+            "@id": "https://doi.org/10.5281/zenodo.14379776",
+            "@type": "schema:SoftwareApplication",
+            "schema:identifier": "https://doi.org/10.5281/zenodo.14379776",
+            "schema:name": "DiSSCo Translator Service",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "data-translator"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "https://doi.org/10.5281/zenodo.14379776",
+                "@type": "ods:Identifier",
+                "dcterms:title": "DOI",
+                "dcterms:type": "DOI",
+                "dcterms:identifier": "https://doi.org/10.5281/zenodo.14379776",
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvableFDOCompliant",
+                "ods:identifierStatus": "Preferred"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "@type": "ods:EntityRelationship",
+        "dwc:relationshipOfResource": "hasFDOType",
+        "dwc:relatedResourceID": "https://doi.org/21.T11148/894b1e6cad57e921764e",
+        "ods:relatedResourceURI": "https://doi.org/21.T11148/894b1e6cad57e921764e",
+        "dwc:relationshipEstablishedDate": "2026-02-23T10:19:10.904Z",
+        "ods:hasAgents": [
+          {
+            "@id": "https://doi.org/10.5281/zenodo.14379776",
+            "@type": "schema:SoftwareApplication",
+            "schema:identifier": "https://doi.org/10.5281/zenodo.14379776",
+            "schema:name": "DiSSCo Translator Service",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "data-translator"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "https://doi.org/10.5281/zenodo.14379776",
+                "@type": "ods:Identifier",
+                "dcterms:title": "DOI",
+                "dcterms:type": "DOI",
+                "dcterms:identifier": "https://doi.org/10.5281/zenodo.14379776",
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvableFDOCompliant",
+                "ods:identifierStatus": "Preferred"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "@type": "ods:EntityRelationship",
+        "dwc:relationshipOfResource": "hasPhysicalIdentifier",
+        "dwc:relatedResourceID": "http://www.botanicalcollections.be/specimen/BR0000024498869",
+        "ods:relatedResourceURI": "http://www.botanicalcollections.be/specimen/BR0000024498869",
+        "dwc:relationshipEstablishedDate": "2026-02-23T10:19:10.904Z",
+        "ods:hasAgents": [
+          {
+            "@id": "https://doi.org/10.5281/zenodo.14379776",
+            "@type": "schema:SoftwareApplication",
+            "schema:identifier": "https://doi.org/10.5281/zenodo.14379776",
+            "schema:name": "DiSSCo Translator Service",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "data-translator"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "https://doi.org/10.5281/zenodo.14379776",
+                "@type": "ods:Identifier",
+                "dcterms:title": "DOI",
+                "dcterms:type": "DOI",
+                "dcterms:identifier": "https://doi.org/10.5281/zenodo.14379776",
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvableFDOCompliant",
+                "ods:identifierStatus": "Preferred"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "@type": "ods:EntityRelationship",
+        "dwc:relationshipOfResource": "hasLicense",
+        "dwc:relatedResourceID": "https://creativecommons.org/licenses/by/4.0/legalcode",
+        "ods:relatedResourceURI": "https://creativecommons.org/licenses/by/4.0/legalcode",
+        "dwc:relationshipEstablishedDate": "2026-05-02T01:15:49.346Z",
+        "ods:hasAgents": [
+          {
+            "@id": "https://doi.org/10.5281/zenodo.14379776",
+            "@type": "schema:SoftwareApplication",
+            "schema:identifier": "https://doi.org/10.5281/zenodo.14379776",
+            "schema:name": "DiSSCo Translator Service",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "data-translator"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "https://doi.org/10.5281/zenodo.14379776",
+                "@type": "ods:Identifier",
+                "dcterms:title": "DOI",
+                "dcterms:type": "DOI",
+                "dcterms:identifier": "https://doi.org/10.5281/zenodo.14379776",
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvableFDOCompliant",
+                "ods:identifierStatus": "Preferred"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "@type": "ods:EntityRelationship",
+        "dwc:relationshipOfResource": "hasCOLID",
+        "dwc:relatedResourceID": "TJJK",
+        "ods:relatedResourceURI": "https://www.catalogueoflife.org/data/taxon/TJJK",
+        "dwc:relationshipEstablishedDate": "2026-02-23T14:34:56.570Z",
+        "ods:hasAgents": [
+          {
+            "@id": "https://doi.org/10.5281/zenodo.14380476",
+            "@type": "schema:SoftwareApplication",
+            "schema:identifier": "https://doi.org/10.5281/zenodo.14380476",
+            "schema:name": "DiSSCo Name Usage Search Service",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "taxon-resolver"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "https://doi.org/10.5281/zenodo.14380476",
+                "@type": "ods:Identifier",
+                "dcterms:title": "DOI",
+                "dcterms:type": "DOI",
+                "dcterms:identifier": "https://doi.org/10.5281/zenodo.14380476",
+                "ods:isPartOfLabel": false,
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvableFDOCompliant",
+                "ods:identifierStatus": "Preferred"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "@type": "ods:EntityRelationship",
+        "dwc:relationshipOfResource": "hasDigitalMedia",
+        "dwc:relatedResourceID": "https://doi.org/SANDBOX/MJJ-KE7-NGV",
+        "ods:relatedResourceURI": "https://doi.org/SANDBOX/MJJ-KE7-NGV",
+        "dwc:relationshipEstablishedDate": "2026-02-26T09:33:47.892Z",
+        "ods:hasAgents": [
+          {
+            "@id": "https://doi.org/10.5281/zenodo.14383054",
+            "@type": "schema:SoftwareApplication",
+            "schema:identifier": "https://doi.org/10.5281/zenodo.14383054",
+            "schema:name": "DiSSCo Digital Specimen Processing Service",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "processing-service"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "https://doi.org/10.5281/zenodo.14383054",
+                "@type": "ods:Identifier",
+                "dcterms:title": "DOI",
+                "dcterms:type": "DOI",
+                "dcterms:identifier": "https://doi.org/10.5281/zenodo.14383054",
+                "ods:isPartOfLabel": false,
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvableFDOCompliant",
+                "ods:identifierStatus": "Preferred"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "@type": "ods:EntityRelationship",
+        "dwc:relationshipOfResource": "hasDigitalMedia",
+        "dwc:relatedResourceID": "https://doi.org/SANDBOX/A56-QFQ-X3N",
+        "ods:relatedResourceURI": "https://doi.org/SANDBOX/A56-QFQ-X3N",
+        "dwc:relationshipEstablishedDate": "2026-02-26T09:33:47.892Z",
+        "ods:hasAgents": [
+          {
+            "@id": "https://doi.org/10.5281/zenodo.14383054",
+            "@type": "schema:SoftwareApplication",
+            "schema:identifier": "https://doi.org/10.5281/zenodo.14383054",
+            "schema:name": "DiSSCo Digital Specimen Processing Service",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "processing-service"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "https://doi.org/10.5281/zenodo.14383054",
+                "@type": "ods:Identifier",
+                "dcterms:title": "DOI",
+                "dcterms:type": "DOI",
+                "dcterms:identifier": "https://doi.org/10.5281/zenodo.14383054",
+                "ods:isPartOfLabel": false,
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvableFDOCompliant",
+                "ods:identifierStatus": "Preferred"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "ods:hasIdentifications": [
+      {
+        "@type": "ods:Identification",
+        "ods:identificationType": "TaxonIdentification",
+        "dwc:verbatimIdentification": "Chamaecyparis pisifera (Siebold & Zucc.) Endl.",
+        "ods:isVerifiedIdentification": true,
+        "ods:hasTaxonIdentifications": [
+          {
+            "@id": "https://www.catalogueoflife.org/data/taxon/TJJK",
+            "@type": "ods:TaxonIdentification",
+            "dwc:taxonID": "https://www.catalogueoflife.org/data/taxon/TJJK",
+            "dwc:scientificName": "Chamaecyparis pisifera (Siebold & Zucc.) Endl.",
+            "ods:scientificNameHTMLLabel": "<i>Chamaecyparis pisifera</i> (Siebold & Zucc.) Endl.",
+            "ods:genusHTMLLabel": "<i>Chamaecyparis</i>",
+            "dwc:scientificNameAuthorship": "(Siebold & Zucc.) Endl.",
+            "dwc:taxonRank": "SPECIES",
+            "dwc:kingdom": "Plantae",
+            "dwc:phylum": "Tracheophyta",
+            "dwc:class": "Pinopsida",
+            "dwc:order": "Pinales",
+            "dwc:family": "Cupressaceae",
+            "dwc:genus": "Chamaecyparis",
+            "dwc:specificEpithet": "pisifera",
+            "dwc:taxonomicStatus": "ACCEPTED",
+            "dwc:nomenclaturalCode": "ICBN",
+            "dwc:genericName": "Chamaecyparis"
+          }
+        ]
+      }
+    ],
+    "ods:hasIdentifiers": [
+      {
+        "@id": "http://www.botanicalcollections.be/specimen/BR0000024498869",
+        "@type": "ods:Identifier",
+        "dcterms:title": "dwc:occurrenceID",
+        "dcterms:type": "URL",
+        "dcterms:identifier": "http://www.botanicalcollections.be/specimen/BR0000024498869",
+        "ods:gupriLevel": "GloballyUniqueStablePersistentResolvable"
+      },
+      {
+        "@id": "http://www.botanicalcollections.be/specimen/BR0000024498869",
+        "@type": "ods:Identifier",
+        "dcterms:title": "dwca:ID",
+        "dcterms:type": "URL",
+        "dcterms:identifier": "http://www.botanicalcollections.be/specimen/BR0000024498869",
+        "ods:gupriLevel": "GloballyUniqueStablePersistentResolvable"
+      },
+      {
+        "@id": "BR0000024498869",
+        "@type": "ods:Identifier",
+        "dcterms:title": "dwc:catalogNumber",
+        "dcterms:type": "Locally unique identifier",
+        "dcterms:identifier": "BR0000024498869",
+        "ods:gupriLevel": "LocallyUniqueStable"
+      }
+    ],
+    "ods:hasEvents": [
+      {
+        "@type": "ods:Event",
+        "dwc:eventType": "Collecting Event",
+        "dwc:eventDate": "1916-07",
+        "dwc:year": 1916,
+        "dwc:month": 7,
+        "dwc:habitat": "Tuin",
+        "ods:hasAgents": [
+          {
+            "@id": "https://kiki.huh.harvard.edu/databases/botanist_search.php?mode=details",
+            "@type": "schema:Person",
+            "schema:identifier": "https://kiki.huh.harvard.edu/databases/botanist_search.php?mode=details",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "collector"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "https://kiki.huh.harvard.edu/databases/botanist_search.php?mode=details",
+                "@type": "ods:Identifier",
+                "dcterms:title": "URL",
+                "dcterms:type": "URL",
+                "dcterms:identifier": "https://kiki.huh.harvard.edu/databases/botanist_search.php?mode=details",
+                "ods:gupriLevel": "GloballyUniqueStablePersistentResolvable"
+              }
+            ]
+          },
+          {
+            "@id": "id=33026",
+            "@type": "schema:Person",
+            "schema:identifier": "id=33026",
+            "ods:hasRoles": [
+              {
+                "@type": "schema:Role",
+                "schema:roleName": "collector"
+              }
+            ],
+            "ods:hasIdentifiers": [
+              {
+                "@id": "id=33026",
+                "@type": "ods:Identifier",
+                "dcterms:type": "Locally unique identifier",
+                "dcterms:identifier": "id=33026",
+                "ods:gupriLevel": "LocallyUniqueStable"
+              }
+            ]
+          }
+        ],
+        "ods:hasLocation": {
+          "@type": "ods:Location",
+          "dwc:country": "Belgium",
+          "dwc:countryCode": "BE",
+          "dwc:locality": "Mechelen, tuin prof. Bellis",
+          "ods:hasGeoreference": {
+            "@type": "ods:Georeference",
+            "dwc:decimalLatitude": 51.026111,
+            "dwc:decimalLongitude": 4.478055,
+            "dwc:coordinateUncertaintyInMeters": 2500.0
+          }
+        }
+      }
+    ]
+  }
+}

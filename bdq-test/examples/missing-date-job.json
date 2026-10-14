@@ -1,0 +1,16 @@
+{
+  "jobId": "local-missing-date-example",
+  "batchingRequested": false,
+  "object": {
+    "@id": "https://example.org/specimens/missing-date",
+    "@type": "ods:DigitalSpecimen",
+    "dcterms:identifier": "https://example.org/specimens/missing-date",
+    "ods:fdoType": "https://doi.org/21.T11148/894b1e6cad57e921764e",
+    "ods:hasEvents": [
+      {
+        "@type": "ods:Event",
+        "dwc:eventType": "Collecting Event"
+      }
+    ]
+  }
+}
