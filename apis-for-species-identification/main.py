@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import os
@@ -10,6 +11,7 @@ from pika.amqp_object import Method, Properties
 from pika.adapters.blocking_connection import BlockingChannel
 
 import shared
+from shared_ocr.shared_ocr import get_specimen_from_media
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
@@ -17,8 +19,6 @@ logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 Restrictions:
 - Max 1 event at the time, so no batch processing.
 - Media associated with exactly one specimen. One specimen is allowed to have multiple medias(images).
-- Only for animals
-Trained for wild-life images, not museum data.
 """
 
 def run_rabbitmq() -> None:
@@ -58,11 +58,18 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         shared.send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
-def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id: str) -> dict:
+def map_to_annotation_event(media_object: Dict, result: Dict[str, str], job_id: str) -> dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
-    :param result: The result which contains either the GBIF ID or an error message
+    :param result: The result which contains either 
+        {
+            "api_call": str,
+            "scientific_name": str,
+            "probability": str,
+            "datetime": str,
+            "api_tag": str
+        } or {"error_message": str}
     :param job_id: The job ID of the message
     :return: Returns a formatted annotation Record which includes the Job ID
     """
@@ -73,14 +80,18 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id:
             "annotations": [
                 shared.map_to_empty_annotation(
                     timestamp,
-                    result.get("error_message"),
-                    specimen_data,
+                    result.get("error_message", ""),
+                    media_object,
                     shared.ER_PATH,
-                    result.get("queryString"),
+                    result.get("api_call", ""),
                 )
             ],
         }
     ods_agent = shared.get_agent()
+    
+    specimen_object = get_specimen_from_media(media_object)
+    
+    
     oa_value = shared.map_to_entity_relationship(
         "hasGbifID",
         result.get("gbifID"),
@@ -94,8 +105,8 @@ def map_to_annotation_event(specimen_data: Dict, result: Dict[str, str], job_id:
         timestamp,
         oa_value,
         oa_selector,
-        specimen_data[shared.ODS_ID],
-        specimen_data[shared.ODS_TYPE],
+        media_object[shared.ODS_ID],
+        media_object[shared.ODS_TYPE],
         result["queryString"],
     )
 
@@ -117,59 +128,46 @@ def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -
     )
 
 
-def run_api_call(specimen_data: Dict) -> Dict[str, str]:
+def run_api_call(media_object: Dict) -> Dict[str, str]:
     """
     Calls GBIF API based on the occurrenceID, catalogNumber and basisOfRecord
-    :param specimen_data: The JSON data of the Digital Specimen
+    :param media_object: The JSON data of the Media Object
     :return: The result from the API, which contains either the GBIF ID or an error message
     """
-    identifiers = get_identifiers_from_object(specimen_data)
-    if not identifiers:
-        logging.info("No relevant identifiers found for specimen")
+    image_path = get_image_from_object(media_object)
+    if not image_path:
+        logging.info("No relevant image found for specimen")
         return {
-            "queryString": None,
+            "api_call": "",
             "error_message": "Failed to make the match, no relevant identifiers for GBIF",
         }
-    query_string = f"https://api.gbif.org/v1/occurrence/search?&basisOfRecord={specimen_data.get('dwc:basisOfRecord')}"
-    if "occurrenceID" in identifiers:
-        query_string += "&occurrenceID=" + identifiers.get("occurrenceID")
-    if "catalogNumber" in identifiers:
-        query_string = query_string + f"&catalogNumber={identifiers.get('catalogNumber')}"
-    response = requests.get(query_string)
-    response_json = json.loads(response.content)
-    if response_json.get("count") == 1:
-        logging.info("Successfully retrieved a single result from GBIF based on the identifiers")
+    identify_api_path = os.environ.get("IDENTIFY_API_PATH")
+    if not identify_api_path:
+        logging.error("IDENTIFY_API_PATH environment variable is not set")
         return {
-            "queryString": query_string,
-            "gbifID": response_json.get("results")[0].get("gbifID"),
+            "api_call": "",
+            "error_message": "Failed to make the match, API path not configured",
         }
-    elif response_json["count"] == 0:
-        logging.info("No results were returned, unable to create a relationship")
-        return {
-            "queryString": query_string,
-            "error_message": "Failed to make the match, no match could be created",
-        }
-    else:
-        logging.info("More than one result returned, unable to create a relationship")
-        return {
-            "queryString": query_string,
-            "error_message": "Failed to make the match, too many candidates",
-        }
-
-
-def get_identifiers_from_object(specimen_data: Dict) -> Dict[str, str]:
-    """
-    Retrieve the correct identifiers from the Digital Specimen
-    :param specimen_data: Json data of the Digital Specimen
-    :return: The mapped relevant_identifiers (occurrenceID and catalogNumber)
-    """
-    relevant_identifiers = {}
-    for identifier in specimen_data.get("ods:hasIdentifiers"):
-        if identifier.get("dcterms:title") in ["dwc:occurrenceID", "abcd:unitGUID"]:
-            relevant_identifiers["occurrenceID"] = identifier.get("dcterms:identifier")
-        if identifier.get("dcterms:title") in ["dwc:catalogNumber", "abcd:unitID"]:
-            relevant_identifiers["catalogNumber"] = identifier.get("dcterms:identifier")
-    return relevant_identifiers
+    with open(image_path, "rb") as image:
+        response = requests.post(identify_api_path, params={"image": image})
+    response_json = json.loads(response.json())
+    
+    prediction_items = response_json["predictions"][0]["taxa"]["items"][0]
+    generated_by = response_json["generated_by"]
+    
+    probability_top1 = prediction_items[0]["probability"]
+    scientific_name_top1 = prediction_items[0]["scientificName"]
+    datetime = generated_by["datetime"]
+    api_tag = generated_by["tag"]
+    
+    return {
+        "api_call": f'api: {identify_api_path}, image: {image_path}',
+        "scientific_name": scientific_name_top1,
+        "probability": probability_top1,
+        "datetime": datetime,
+        "api_tag": api_tag
+    }
+    
 
 
 def run_local(example: str) -> None:
@@ -182,12 +180,16 @@ def run_local(example: str) -> None:
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
+    print(response.content)
     specimen_data = json.loads(response.content).get("data").get("attributes")
     result = run_api_call(specimen_data)
     annotations = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()))
     logging.info("Created annotations: " + json.dumps(annotations, indent=2))
 
 
+
+
+
 if __name__ == "__main__":
-    run_rabbitmq()
-    # run_local("https://dev.dissco.tech/api/digital-specimen/v1/TEST/QAQ-MFW-YSV")
+    # run_rabbitmq()
+    run_local("https://sandbox.dissco.tech/api/digital-media/v1/SANDBOX/53L-8ZD-C80")
