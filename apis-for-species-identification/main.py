@@ -169,8 +169,8 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
     }
 
 def get_image_from_object(media_object) -> str:
-    serviceAccessPoints=media_object.get("serviceAccessPoints")
-    imageUrl=serviceAccessPoints.get("accessURI")
+    print(media_object)
+    imageUrl=media_object.get("ac:accessURI")
     return imageUrl
 
 def get_image_type(media_object) -> str:
@@ -190,7 +190,6 @@ def run_local(example: str) -> None:
     :return: Return nothing but will log the result
     """
     response = requests.get(example)
-    print(response.content)
     specimen_data = json.loads(response.content).get("data").get("attributes")
     result = run_api_call(specimen_data)
     annotations = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()))
