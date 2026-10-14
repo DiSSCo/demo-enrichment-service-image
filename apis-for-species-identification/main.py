@@ -14,6 +14,7 @@ from pika.amqp_object import Method, Properties
 from pika.adapters.blocking_connection import BlockingChannel
 
 import shared
+from shared.shared import Motivation
 from shared_ocr.shared_ocr import get_specimen_from_media
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
@@ -91,18 +92,32 @@ def map_to_annotation_event(media_object: Dict, result: Dict[str, str], job_id: 
             ],
         }
     ods_agent = shared.get_agent()
-    
-    
+
     specimen_object = get_specimen_from_media(media_object)
     
+    # TODO: loop over these
+        # specimen_object, 
+        # result["scientific_name"], 
+        # result["probability"], 
+        # result["datetime"], 
+        # result["api_tag"]
     
-    oa_value = shared.map_to_entity_relationship(
-        "hasGbifID",
-        result.get("gbifID"),
-        f"https://www.gbif.org/occurrence/{result.get('gbifID')}",
-        timestamp,
-        ods_agent,
+    
+    shared.map_to_annotation_str_val(
+        ods_agent=ods_agent,
+        timestamp=shared.timestamp_now(),
+        oa_value=result["scientific_name"],
+        oa_selector=shared.build_term_selector(<FILL_VALUE_HERE>),
+        target_id=specimen_object.get("target_id"),
+        target_type=specimen_object.get("target_type"),
+        dcterms_ref=result["api_call"],
+        motivation=shared.Motivation.ADDING.value,
     )
+    
+    print(specimen_object)
+    
+    oa_value = specimen_object
+    
     oa_selector = shared.build_class_selector(shared.ER_PATH)
     annotation = shared.map_to_annotation(
         ods_agent,
@@ -179,7 +194,6 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
     }
 
     response = requests.post(url=identify_api_path, files=files)
-    response_json = response.json()
         
     if response.status_code != 200:
         logging.error(f"API call failed with status code {response.status_code}: {response.text}")
@@ -191,7 +205,6 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
 
     prediction_items = response_json["predictions"][0]["taxa"]["items"][0]
     generated_by = response_json["generated_by"]
-    print(generated_by)
     
     probability_top1 = prediction_items["probability"]
     scientific_name_top1 = prediction_items["scientific_name"]
