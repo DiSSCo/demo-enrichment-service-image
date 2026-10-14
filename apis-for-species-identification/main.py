@@ -180,6 +180,7 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
         
     if response.status_code != 200:
         logging.error(f"API call failed with status code {response.status_code}: {response.text}")
+        # TODO: Fill in as curl command.
         return {
             "api_call": f'api: {identify_api_path}, image: {image_path}',
             "error_message": f"Failed to make the match, API call failed with status code {response.status_code}",
