@@ -7,6 +7,11 @@ from abc import ABC, abstractmethod
 from datetime import date, timedelta
 from typing import Any, ClassVar, NamedTuple
 
+try:
+    from . import gbif
+except ImportError:
+    import gbif
+
 TEST_LABEL = "VALIDATION_EVENTDATE_NOTEMPTY"
 TEST_VERSION_IRI = "https://rs.tdwg.org/bdqtest/terms/version/f51e15a6-a67d-4729-9c28-3766299d2985-2023-09-17"
 IMPLEMENTATION_VERSION = "0.1.0"
@@ -120,8 +125,12 @@ EventDateNotEmpty = ValidationEventDateNotEmpty
 
 RUN_HAS_RESULT = "RUN_HAS_RESULT"
 INTERNAL_PREREQUISITES_NOT_MET = "INTERNAL_PREREQUISITES_NOT_MET"
+EXTERNAL_PREREQUISITES_NOT_MET = "EXTERNAL_PREREQUISITES_NOT_MET"
 COMPLIANT = "COMPLIANT"
 NOT_COMPLIANT = "NOT_COMPLIANT"
+FILLED_IN = "FILLED_IN"
+AMENDED = "AMENDED"
+NOT_AMENDED = "NOT_AMENDED"
 
 # ISO 3166-1 alpha-2 officially assigned codes (249), plus the user-assigned XZ
 # (high seas) and ZZ (unknown), which the test specification says to accept.
@@ -163,12 +172,28 @@ def not_run(comment: str) -> dict[str, str]:
     return bdq_response(INTERNAL_PREREQUISITES_NOT_MET, "", comment)
 
 
+def external_prerequisites_not_met(comment: str) -> dict[str, str]:
+    return bdq_response(EXTERNAL_PREREQUISITES_NOT_MET, "", comment)
+
+
 def compliant(comment: str) -> dict[str, str]:
     return bdq_response(RUN_HAS_RESULT, COMPLIANT, comment)
 
 
 def not_compliant(comment: str) -> dict[str, str]:
     return bdq_response(RUN_HAS_RESULT, NOT_COMPLIANT, comment)
+
+
+def filled_in(term: str, value: str, comment: str) -> dict[str, Any]:
+    return {
+        "Response.status": FILLED_IN,
+        "Response.result": {term: value},
+        "Response.comment": comment,
+    }
+
+
+def not_amended(comment: str) -> dict[str, str]:
+    return bdq_response(NOT_AMENDED, "", comment)
 
 
 def is_empty_value(value: Any) -> bool:
@@ -608,6 +633,418 @@ class ValidationTaxonNotEmpty(BDQEvent):
 # Every implemented test, in run order. main.py runs all of them unless --tests
 # selects some. The registry above (used when test_bdq_event gets no tests) still
 # holds only ValidationEventDateNotEmpty.
+
+
+# GBIF Backbone Taxonomy tests (Tier 5) -------------------------------------
+
+
+class _TaxonRankFound(BDQEvent):
+    scope = "taxon"
+    rank: str = ""
+
+    def validate(self, value: Any) -> dict[str, Any]:
+        if is_empty_value(value):
+            return not_run(f"{self.term} is empty.")
+        val_str = str(value).strip()
+        try:
+            results = gbif.query_species(val_str)
+        except gbif.GBIFServiceError:
+            return external_prerequisites_not_met(
+                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
+            )
+        target_rank = self.rank.upper()
+        for item in results:
+            if item.get("rank") == target_rank:
+                return compliant(
+                    f"{self.term} occurs at the rank of {self.rank.capitalize()} in the GBIF Backbone Taxonomy."
+                )
+        return not_compliant(
+            f"{self.term} does not occur at the rank of {self.rank.capitalize()} in the GBIF Backbone Taxonomy."
+        )
+
+
+class ValidationKingdomFound(_TaxonRankFound):
+    """VALIDATION_KINGDOM_FOUND: dwc:kingdom occurs at rank of Kingdom in GBIF Backbone."""
+
+    test_label = "VALIDATION_KINGDOM_FOUND"
+    test_version_iri = "https://rs.tdwg.org/bdqtest/terms/version/125b5493-052d-4a0d-a3e1-ed5bf792689e-2023-09-18"
+    term = "dwc:kingdom"
+    rank = "KINGDOM"
+
+
+class ValidationPhylumFound(_TaxonRankFound):
+    """VALIDATION_PHYLUM_FOUND: dwc:phylum occurs at rank of Phylum in GBIF Backbone."""
+
+    test_label = "VALIDATION_PHYLUM_FOUND"
+    test_version_iri = "https://rs.tdwg.org/bdqtest/terms/version/eaad41c5-1d46-4917-a08b-4fd1d7ff5c0f-2022-03-25"
+    term = "dwc:phylum"
+    rank = "PHYLUM"
+
+
+class ValidationClassFound(_TaxonRankFound):
+    """VALIDATION_CLASS_FOUND: dwc:class occurs at rank of Class in GBIF Backbone."""
+
+    test_label = "VALIDATION_CLASS_FOUND"
+    test_version_iri = "https://rs.tdwg.org/bdqtest/terms/version/2cd6884e-3d14-4476-94f7-1191cfff309b-2023-09-18"
+    term = "dwc:class"
+    rank = "CLASS"
+
+
+class ValidationOrderFound(_TaxonRankFound):
+    """VALIDATION_ORDER_FOUND: dwc:order occurs at rank of Order in GBIF Backbone."""
+
+    test_label = "VALIDATION_ORDER_FOUND"
+    test_version_iri = "https://rs.tdwg.org/bdqtest/terms/version/81cc974d-43cc-4c0f-a5e0-afa23b455aa3-2023-09-18"
+    term = "dwc:order"
+    rank = "ORDER"
+
+
+class ValidationFamilyFound(_TaxonRankFound):
+    """VALIDATION_FAMILY_FOUND: dwc:family occurs at rank of Family in GBIF Backbone."""
+
+    test_label = "VALIDATION_FAMILY_FOUND"
+    test_version_iri = "https://rs.tdwg.org/bdqtest/terms/version/3667556d-d8f5-454c-922b-af8af38f613c-2023-09-17"
+    term = "dwc:family"
+    rank = "FAMILY"
+
+
+class ValidationGenusFound(_TaxonRankFound):
+    """VALIDATION_GENUS_FOUND: dwc:genus occurs at rank of Genus in GBIF Backbone."""
+
+    test_label = "VALIDATION_GENUS_FOUND"
+    test_version_iri = "https://rs.tdwg.org/bdqtest/terms/version/f2ce7d55-5b1d-426a-b00e-6d4efe3058ec-2023-09-18"
+    term = "dwc:genus"
+    rank = "GENUS"
+
+
+class ValidationScientificNameFound(BDQEvent):
+    """VALIDATION_SCIENTIFICNAME_FOUND: dwc:scientificName matches a record in GBIF Backbone."""
+
+    test_label = "VALIDATION_SCIENTIFICNAME_FOUND"
+    test_version_iri = "https://rs.tdwg.org/bdqtest/terms/version/3f335517-f442-4b98-b149-1e87ff16de45-2023-09-17"
+    term = "dwc:scientificName"
+    scope = "taxon"
+
+    def validate(self, value: Any) -> dict[str, Any]:
+        if is_empty_value(value):
+            return not_run("dwc:scientificName is empty.")
+        val_str = str(value).strip()
+        try:
+            results = gbif.query_species(val_str)
+            matched = bool(results)
+            if not matched:
+                match = gbif.match_species(val_str, strict=True)
+                matched = match.get("matchType") == "EXACT" and bool(match.get("usageKey"))
+        except gbif.GBIFServiceError:
+            return external_prerequisites_not_met(
+                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
+            )
+        if matched:
+            return compliant(f"dwc:scientificName '{val_str}' was found in the GBIF Backbone Taxonomy.")
+        return not_compliant(f"dwc:scientificName '{val_str}' was not found in the GBIF Backbone Taxonomy.")
+
+
+class ValidationClassificationConsistent(BDQEvent):
+    """VALIDATION_CLASSIFICATION_CONSISTENT: higher classification terms are consistent in GBIF Backbone."""
+
+    test_label = "VALIDATION_CLASSIFICATION_CONSISTENT"
+    test_version_iri = "https://rs.tdwg.org/bdqtest/terms/version/2750c040-1d4a-4149-99fe-0512785f2d5f-2023-09-18"
+    term = "dwc:scientificName"
+    terms = (
+        "dwc:kingdom",
+        "dwc:phylum",
+        "dwc:class",
+        "dwc:order",
+        "dwc:superfamily",
+        "dwc:family",
+        "dwc:subfamily",
+        "dwc:tribe",
+        "dwc:subtribe",
+        "dwc:genus",
+    )
+    scope = "taxon"
+
+    def validate(self, value: dict[str, Any]) -> dict[str, Any]:
+        filled_terms = {t: str(value[t]).strip() for t in self.terms if not is_empty_value(value.get(t))}
+        if not filled_terms:
+            return not_run("All higher classification terms are empty.")
+
+        rank_order = [
+            "dwc:genus",
+            "dwc:subtribe",
+            "dwc:tribe",
+            "dwc:subfamily",
+            "dwc:family",
+            "dwc:superfamily",
+            "dwc:order",
+            "dwc:class",
+            "dwc:phylum",
+            "dwc:kingdom",
+        ]
+        lowest_term = None
+        for t in rank_order:
+            if t in filled_terms:
+                lowest_term = t
+                break
+
+        lowest_val = filled_terms[lowest_term]
+        rank_name = lowest_term.removeprefix("dwc:").upper()
+        try:
+            match = gbif.match_species(name=lowest_val, rank=rank_name, strict=True)
+            if match.get("matchType") == "NONE" or not match.get("usageKey"):
+                candidates = gbif.query_species(lowest_val)
+                matched_candidates = [c for c in candidates if c.get("rank") == rank_name]
+                if not matched_candidates:
+                    return not_compliant(
+                        f"Lowest classification term {lowest_term}='{lowest_val}' could not be matched in the GBIF Backbone Taxonomy."
+                    )
+                match = matched_candidates[0]
+        except gbif.GBIFServiceError:
+            return external_prerequisites_not_met(
+                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
+            )
+
+        for t, term_val in filled_terms.items():
+            if t == lowest_term:
+                continue
+            gbif_field = t.removeprefix("dwc:").lower()
+            expected = match.get(gbif_field)
+            if expected and str(expected).strip().lower() != term_val.lower():
+                return not_compliant(
+                    f"Higher classification term {t}='{term_val}' is inconsistent with '{expected}' in the GBIF Backbone Taxonomy."
+                )
+        return compliant("Higher classification terms are consistent in the GBIF Backbone Taxonomy.")
+
+
+class ValidationTaxonUnambiguous(BDQEvent):
+    """VALIDATION_TAXON_UNAMBIGUOUS: taxon can be unambiguously resolved in GBIF Backbone."""
+
+    test_label = "VALIDATION_TAXON_UNAMBIGUOUS"
+    test_version_iri = "https://rs.tdwg.org/bdqtest/terms/version/4c09f127-737b-4686-82a0-7c8e30841590-2023-09-18"
+    term = "dwc:scientificName"
+    terms = (
+        "dwc:taxonID",
+        "dwc:acceptedNameUsageID",
+        "dwc:originalNameUsageID",
+        "dwc:taxonConceptID",
+        "dwc:scientificName",
+        "dwc:higherClassification",
+        "dwc:kingdom",
+        "dwc:phylum",
+        "dwc:class",
+        "dwc:order",
+        "dwc:superfamily",
+        "dwc:family",
+        "dwc:subfamily",
+        "dwc:tribe",
+        "dwc:subtribe",
+        "dwc:genus",
+        "dwc:genericName",
+        "dwc:subgenus",
+        "dwc:infragenericEpithet",
+        "dwc:specificEpithet",
+        "dwc:infraspecificEpithet",
+        "dwc:cultivarEpithet",
+        "dwc:vernacularName",
+        "dwc:scientificNameAuthorship",
+        "dwc:taxonRank",
+    )
+    scope = "taxon"
+
+    def validate(self, value: dict[str, Any]) -> dict[str, Any]:
+        sci_id = value.get("dwc:scientificNameID")
+        has_sci_id = not is_empty_value(sci_id)
+        sci_name = value.get("dwc:scientificName")
+        authorship = value.get("dwc:scientificNameAuthorship")
+        genus = value.get("dwc:genus") or value.get("dwc:genericName")
+        spec_ep = value.get("dwc:specificEpithet")
+        infra_ep = value.get("dwc:infraspecificEpithet")
+        cultivar_ep = value.get("dwc:cultivarEpithet")
+
+        if (
+            not has_sci_id
+            and is_empty_value(sci_name)
+            and is_empty_value(genus)
+            and is_empty_value(spec_ep)
+            and is_empty_value(infra_ep)
+            and is_empty_value(authorship)
+            and is_empty_value(cultivar_ep)
+        ):
+            return not_run("All relevant taxon naming values are empty.")
+
+        try:
+            if has_sci_id:
+                key = gbif.parse_gbif_key(sci_id)
+                if key is None:
+                    return not_compliant(f"dwc:scientificNameID '{sci_id}' contains an uninterpretable value.")
+                rec = gbif.get_species_by_key(key)
+                if rec and rec.get("key"):
+                    return compliant(
+                        f"dwc:scientificNameID '{sci_id}' unambiguously references a single taxon record in the GBIF Backbone."
+                    )
+                return not_compliant(f"dwc:scientificNameID '{sci_id}' could not be resolved in the GBIF Backbone.")
+
+            name_query = str(sci_name).strip() if not is_empty_value(sci_name) else ""
+            if not name_query:
+                parts = [p for p in (genus, spec_ep, infra_ep, cultivar_ep) if not is_empty_value(p)]
+                name_query = " ".join(str(p).strip() for p in parts)
+
+            if authorship and not is_empty_value(authorship) and str(authorship).strip() not in name_query:
+                name_query = f"{name_query} {str(authorship).strip()}".strip()
+
+            match = gbif.match_species(
+                name=name_query,
+                kingdom=value.get("dwc:kingdom"),
+                phylum=value.get("dwc:phylum"),
+                class_=value.get("dwc:class"),
+                order=value.get("dwc:order"),
+                family=value.get("dwc:family"),
+                genus=value.get("dwc:genus") or value.get("dwc:genericName"),
+                rank=value.get("dwc:taxonRank"),
+            )
+            if (
+                match.get("matchType") in ("EXACT", "FUZZY")
+                and match.get("usageKey")
+                and match.get("confidence", 0) >= 80
+            ):
+                return compliant(
+                    f"Taxon unambiguously resolved in the GBIF Backbone to '{match.get('scientificName')}' (usageKey {match.get('usageKey')})."
+                )
+            return not_compliant("Taxon could not be unambiguously resolved in the GBIF Backbone Taxonomy.")
+        except gbif.GBIFServiceError:
+            return external_prerequisites_not_met(
+                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
+            )
+
+
+class AmendmentScientificNameFromScientificNameId(BDQEvent):
+    """AMENDMENT_SCIENTIFICNAME_FROM_SCIENTIFICNAMEID: fills in dwc:scientificName from dwc:scientificNameID."""
+
+    test_label = "AMENDMENT_SCIENTIFICNAME_FROM_SCIENTIFICNAMEID"
+    test_version_iri = "https://rs.tdwg.org/bdqtest/terms/version/f01fb3f9-2f7e-418b-9f51-adf50f202aea-2024-08-18"
+    term = "dwc:scientificName"
+    terms = ("dwc:scientificName", "dwc:scientificNameID")
+    scope = "taxon"
+
+    def validate(self, value: dict[str, Any]) -> dict[str, Any]:
+        sci_id = value.get("dwc:scientificNameID")
+        sci_name = value.get("dwc:scientificName")
+        if is_empty_value(sci_id) or not is_empty_value(sci_name):
+            return not_run("dwc:scientificNameID is empty or dwc:scientificName is not empty.")
+
+        key = gbif.parse_gbif_key(sci_id)
+        if key is None:
+            return not_amended("dwc:scientificNameID does not contain an interpretable value.")
+        try:
+            rec = gbif.get_species_by_key(key)
+            if rec and rec.get("scientificName"):
+                return filled_in(
+                    "dwc:scientificName",
+                    rec["scientificName"],
+                    f"dwc:scientificName filled in from GBIF Backbone for usageKey {key}.",
+                )
+            return not_amended(f"No taxon found in the GBIF Backbone for scientificNameID '{sci_id}'.")
+        except gbif.GBIFServiceError:
+            return external_prerequisites_not_met(
+                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
+            )
+
+
+class AmendmentScientificNameIdFromTaxon(BDQEvent):
+    """AMENDMENT_SCIENTIFICNAMEID_FROM_TAXON: proposes dwc:scientificNameID from taxon terms."""
+
+    test_label = "AMENDMENT_SCIENTIFICNAMEID_FROM_TAXON"
+    test_version_iri = "https://rs.tdwg.org/bdqtest/terms/version/431467d6-9b4b-48fa-a197-cd5379f5e889-2023-09-17"
+    term = "dwc:scientificNameID"
+    terms = (
+        "dwc:taxonID",
+        "dwc:scientificNameID",
+        "dwc:acceptedNameUsageID",
+        "dwc:originalNameUsageID",
+        "dwc:taxonConceptID",
+        "dwc:scientificName",
+        "dwc:higherClassification",
+        "dwc:kingdom",
+        "dwc:phylum",
+        "dwc:class",
+        "dwc:order",
+        "dwc:superfamily",
+        "dwc:family",
+        "dwc:subfamily",
+        "dwc:tribe",
+        "dwc:subtribe",
+        "dwc:genus",
+        "dwc:genericName",
+        "dwc:subgenus",
+        "dwc:specificEpithet",
+        "dwc:infraspecificEpithet",
+        "dwc:cultivarEpithet",
+        "dwc:vernacularName",
+        "dwc:scientificNameAuthorship",
+        "dwc:taxonRank",
+    )
+    scope = "taxon"
+
+    def validate(self, value: dict[str, Any]) -> dict[str, Any]:
+        sci_id = value.get("dwc:scientificNameID")
+        if not is_empty_value(sci_id):
+            return not_run("dwc:scientificNameID is not empty.")
+
+        sci_name = value.get("dwc:scientificName")
+        authorship = value.get("dwc:scientificNameAuthorship")
+        genus = value.get("dwc:genus") or value.get("dwc:genericName")
+        spec_ep = value.get("dwc:specificEpithet")
+        infra_ep = value.get("dwc:infraspecificEpithet")
+        cultivar_ep = value.get("dwc:cultivarEpithet")
+
+        if (
+            is_empty_value(sci_name)
+            and is_empty_value(genus)
+            and is_empty_value(spec_ep)
+            and is_empty_value(infra_ep)
+            and is_empty_value(authorship)
+            and is_empty_value(cultivar_ep)
+        ):
+            return not_run("All relevant taxon naming values are empty.")
+
+        name_query = str(sci_name).strip() if not is_empty_value(sci_name) else ""
+        if not name_query:
+            parts = [p for p in (genus, spec_ep, infra_ep, cultivar_ep) if not is_empty_value(p)]
+            name_query = " ".join(str(p).strip() for p in parts)
+
+        if authorship and not is_empty_value(authorship) and str(authorship).strip() not in name_query:
+            name_query = f"{name_query} {str(authorship).strip()}".strip()
+
+        try:
+            match = gbif.match_species(
+                name=name_query,
+                kingdom=value.get("dwc:kingdom"),
+                phylum=value.get("dwc:phylum"),
+                class_=value.get("dwc:class"),
+                order=value.get("dwc:order"),
+                family=value.get("dwc:family"),
+                genus=value.get("dwc:genus") or value.get("dwc:genericName"),
+                rank=value.get("dwc:taxonRank"),
+            )
+            if (
+                match.get("matchType") in ("EXACT", "FUZZY")
+                and match.get("usageKey")
+                and match.get("confidence", 0) >= 80
+            ):
+                usage_key = match["usageKey"]
+                proposed_id = f"gbif:{usage_key}"
+                return filled_in(
+                    "dwc:scientificNameID",
+                    proposed_id,
+                    f"dwc:scientificNameID filled in from GBIF Backbone for '{match.get('scientificName')}'.",
+                )
+            return not_amended("Taxon is ambiguous or could not be resolved in the GBIF Backbone Taxonomy.")
+        except gbif.GBIFServiceError:
+            return external_prerequisites_not_met(
+                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
+            )
+
+
 ALL_TESTS: list[type[BDQEvent]] = [
     ValidationEventDateNotEmpty,
     ValidationEventDateStandard,
@@ -626,5 +1063,16 @@ ALL_TESTS: list[type[BDQEvent]] = [
     ValidationScientificNameAuthorshipNotEmpty,
     ValidationNamePublishedInYearNotEmpty,
     ValidationTaxonNotEmpty,
+    ValidationKingdomFound,
+    ValidationPhylumFound,
+    ValidationClassFound,
+    ValidationOrderFound,
+    ValidationFamilyFound,
+    ValidationGenusFound,
+    ValidationScientificNameFound,
+    ValidationClassificationConsistent,
+    ValidationTaxonUnambiguous,
+    AmendmentScientificNameFromScientificNameId,
+    AmendmentScientificNameIdFromTaxon,
 ]
 TESTS_BY_LABEL: dict[str, type[BDQEvent]] = {test.test_label: test for test in ALL_TESTS}

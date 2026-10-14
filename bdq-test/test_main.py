@@ -9,27 +9,39 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import main
+import gbif
 from annotations import build_mas_annotation, test_bdq_event
 from bdq import (
     ALL_TESTS,
     ISO_3166_ALPHA2,
     BDQEvent,
+    AmendmentScientificNameFromScientificNameId,
+    AmendmentScientificNameIdFromTaxon,
     ValidationBasisOfRecordStandard,
+    ValidationClassFound,
+    ValidationClassificationConsistent,
     ValidationCoordinatesNotZero,
     ValidationCountryCodeStandard,
     ValidationDateIdentifiedInRange,
     ValidationEventDateInRange,
     ValidationEventDateNotEmpty,
     ValidationEventDateStandard,
+    ValidationFamilyFound,
+    ValidationGenusFound,
+    ValidationKingdomFound,
     ValidationKingdomNotEmpty,
     ValidationMaxElevationInRange,
     ValidationMinElevationInRange,
     ValidationNamePublishedInYearNotEmpty,
+    ValidationOrderFound,
+    ValidationPhylumFound,
     ValidationScientificNameAuthorshipNotEmpty,
+    ValidationScientificNameFound,
     ValidationScientificNameIdNotEmpty,
     ValidationScientificNameNotEmpty,
     ValidationTaxonNotEmpty,
     ValidationTaxonRankNotEmpty,
+    ValidationTaxonUnambiguous,
     ValidationYearInRange,
     parse_date_range,
     validate_event_date_notempty,
@@ -508,6 +520,144 @@ class NewBdqTestsTest(unittest.TestCase):
             ],
         )
 
+    def test_gbif_rank_found(self):
+        for test_cls, term, valid_val, invalid_val in [
+            (ValidationKingdomFound, "dwc:kingdom", "Plantae", "InvalidKingdom"),
+            (ValidationPhylumFound, "dwc:phylum", "Tracheophyta", "InvalidPhylum"),
+            (ValidationClassFound, "dwc:class", "Pinopsida", "InvalidClass"),
+            (ValidationOrderFound, "dwc:order", "Pinales", "InvalidOrder"),
+            (ValidationFamilyFound, "dwc:family", "Cupressaceae", "InvalidFamily"),
+            (ValidationGenusFound, "dwc:genus", "Chamaecyparis", "InvalidGenus"),
+        ]:
+            test = test_cls()
+            self.check(
+                test,
+                [
+                    (None, NOT_MET),
+                    ("", NOT_MET),
+                    ("   ", NOT_MET),
+                    (valid_val, PASS),
+                    (invalid_val, FAIL),
+                ],
+            )
+            # Test external prerequisites error handling
+            with patch("gbif.query_species", side_effect=gbif.GBIFServiceError("Service down")):
+                res = test.validate(valid_val)
+                self.assertEqual(res["Response.status"], "EXTERNAL_PREREQUISITES_NOT_MET")
+
+    def test_gbif_scientificname_found(self):
+        test = ValidationScientificNameFound()
+        self.check(
+            test,
+            [
+                (None, NOT_MET),
+                ("", NOT_MET),
+                ("Eucalyptus camaldulensis", PASS),
+                ("Chamaecyparis pisifera (Siebold & Zucc.) Endl.", PASS),
+                ("Capulus intort", FAIL),
+                ("NonExistentTaxonXYZ123", FAIL),
+            ],
+        )
+        with patch("gbif.query_species", side_effect=gbif.GBIFServiceError("Service down")):
+            res = test.validate("Eucalyptus camaldulensis")
+            self.assertEqual(res["Response.status"], "EXTERNAL_PREREQUISITES_NOT_MET")
+
+    def test_gbif_classification_consistent(self):
+        test = ValidationClassificationConsistent()
+        self.check(
+            test,
+            [
+                ({}, NOT_MET),
+                ({"dwc:kingdom": "   "}, NOT_MET),
+                (
+                    {
+                        "dwc:kingdom": "Plantae",
+                        "dwc:phylum": "Tracheophyta",
+                        "dwc:class": "Pinopsida",
+                        "dwc:order": "Pinales",
+                        "dwc:family": "Cupressaceae",
+                        "dwc:genus": "Chamaecyparis",
+                    },
+                    PASS,
+                ),
+                (
+                    {
+                        "dwc:kingdom": "Animalia",
+                        "dwc:genus": "Chamaecyparis",
+                    },
+                    FAIL,
+                ),
+            ],
+        )
+        with patch("gbif.match_species", side_effect=gbif.GBIFServiceError("Service down")):
+            res = test.validate({"dwc:genus": "Chamaecyparis"})
+            self.assertEqual(res["Response.status"], "EXTERNAL_PREREQUISITES_NOT_MET")
+
+    def test_gbif_taxon_unambiguous(self):
+        test = ValidationTaxonUnambiguous()
+        self.check(
+            test,
+            [
+                ({}, NOT_MET),
+                ({"dwc:scientificNameID": "gbif:2683880"}, PASS),
+                ({"dwc:scientificNameID": "https://www.gbif.org/species/2683880"}, PASS),
+                ({"dwc:scientificNameID": "invalid-id-format"}, FAIL),
+                ({"dwc:scientificNameID": "gbif:999999999999"}, FAIL),
+                (
+                    {
+                        "dwc:scientificName": "Chamaecyparis pisifera (Siebold & Zucc.) Endl.",
+                        "dwc:kingdom": "Plantae",
+                    },
+                    PASS,
+                ),
+                ({"dwc:scientificName": "Graphis"}, FAIL),  # ambiguous without higher classification
+                (
+                    {
+                        "dwc:scientificName": "Graphis",
+                        "dwc:class": "Lecanoromycetes",
+                    },
+                    PASS,
+                ),
+            ],
+        )
+
+    def test_gbif_amendments(self):
+        test_name = AmendmentScientificNameFromScientificNameId()
+        # Missing ID or present name -> NOT_MET
+        res1 = test_name.validate({"dwc:scientificNameID": None, "dwc:scientificName": None})
+        self.assertEqual(res1["Response.status"], "INTERNAL_PREREQUISITES_NOT_MET")
+        res2 = test_name.validate({"dwc:scientificNameID": "gbif:2683880", "dwc:scientificName": "Already Present"})
+        self.assertEqual(res2["Response.status"], "INTERNAL_PREREQUISITES_NOT_MET")
+        # Valid ID -> filled in
+        res3 = test_name.validate({"dwc:scientificNameID": "gbif:2683880", "dwc:scientificName": None})
+        self.assertEqual(res3["Response.status"], "FILLED_IN")
+        self.assertIn("Chamaecyparis pisifera", res3["Response.result"]["dwc:scientificName"])
+        # Invalid ID -> not amended
+        res4 = test_name.validate({"dwc:scientificNameID": "invalid_id", "dwc:scientificName": None})
+        self.assertEqual(res4["Response.status"], "NOT_AMENDED")
+
+        test_id = AmendmentScientificNameIdFromTaxon()
+        # Existing ID -> NOT_MET
+        res5 = test_id.validate({"dwc:scientificNameID": "gbif:2683880"})
+        self.assertEqual(res5["Response.status"], "INTERNAL_PREREQUISITES_NOT_MET")
+        # Empty names -> NOT_MET
+        res6 = test_id.validate({"dwc:scientificNameID": None})
+        self.assertEqual(res6["Response.status"], "INTERNAL_PREREQUISITES_NOT_MET")
+        # Unambiguous taxon -> filled in gbif key
+        res7 = test_id.validate({
+            "dwc:scientificNameID": None,
+            "dwc:scientificName": "Chamaecyparis pisifera (Siebold & Zucc.) Endl.",
+            "dwc:kingdom": "Plantae",
+        })
+        self.assertEqual(res7["Response.status"], "FILLED_IN")
+        self.assertEqual(res7["Response.result"]["dwc:scientificNameID"], "gbif:2683880")
+        # Ambiguous name without context -> NOT_AMENDED
+        res8 = test_id.validate({
+            "dwc:scientificNameID": None,
+            "dwc:scientificName": "Graphis",
+        })
+        self.assertEqual(res8["Response.status"], "NOT_AMENDED")
+
 
 class NewTestsAnnotationTest(unittest.TestCase):
     def setUp(self):
@@ -542,6 +692,17 @@ class NewTestsAnnotationTest(unittest.TestCase):
             "VALIDATION_SCIENTIFICNAMEAUTHORSHIP_NOTEMPTY": PASS,
             "VALIDATION_NAMEPUBLISHEDINYEAR_NOTEMPTY": FAIL,
             "VALIDATION_TAXON_NOTEMPTY": PASS,
+            "VALIDATION_KINGDOM_FOUND": PASS,
+            "VALIDATION_PHYLUM_FOUND": PASS,
+            "VALIDATION_CLASS_FOUND": PASS,
+            "VALIDATION_ORDER_FOUND": PASS,
+            "VALIDATION_FAMILY_FOUND": PASS,
+            "VALIDATION_GENUS_FOUND": PASS,
+            "VALIDATION_SCIENTIFICNAME_FOUND": PASS,
+            "VALIDATION_CLASSIFICATION_CONSISTENT": PASS,
+            "VALIDATION_TAXON_UNAMBIGUOUS": PASS,
+            "AMENDMENT_SCIENTIFICNAME_FROM_SCIENTIFICNAMEID": NOT_MET,
+            "AMENDMENT_SCIENTIFICNAMEID_FROM_TAXON": ("FILLED_IN", {"dwc:scientificNameID": "gbif:2683880"}),
         }
         self.assertEqual(set(expected), set(results))
         for label, expected_outcome in expected.items():
