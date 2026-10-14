@@ -10,10 +10,21 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from annotations import test_bdq_event
-from bdq import IMPLEMENTATION_VERSION
+from bdq import ALL_TESTS, IMPLEMENTATION_VERSION, TESTS_BY_LABEL
 
 LOGGER = logging.getLogger(__name__)
 SANDBOX_API = "https://sandbox.dissco.tech/api/digital-specimen/v1/"
+
+
+def select_tests(selection: str | None) -> list:
+    """Map "all" or comma-separated test labels to test classes; None or blank means all."""
+    if not selection or not selection.strip() or selection.strip().lower() == "all":
+        return list(ALL_TESTS)
+    labels = [label.strip() for label in selection.split(",") if label.strip()]
+    unknown = [label for label in labels if label not in TESTS_BY_LABEL]
+    if unknown:
+        raise ValueError(f"Unknown BDQ test(s): {', '.join(unknown)}. Available: {', '.join(TESTS_BY_LABEL)}")
+    return [TESTS_BY_LABEL[label] for label in labels]
 
 
 def fetch_sandbox_job(specimen_id: str, job_id: str) -> dict:
@@ -70,7 +81,7 @@ def process_message(channel, method, properties, body: bytes) -> None:
         if job_id is None:
             raise ValueError("The message must contain a nonempty string jobId")
         mark_job_as_running(job_id)
-        event = test_bdq_event(job)
+        event = test_bdq_event(job, tests=select_tests(os.environ.get("BDQ_TESTS")))
     except Exception as error:
         LOGGER.exception("BDQ job failed: %s", job_id)
         if job_id is None:
@@ -92,6 +103,7 @@ def run_rabbitmq() -> None:
     missing = [name for name in required if not os.environ.get(name)]
     if missing:
         raise ValueError(f"Missing RabbitMQ settings: {', '.join(missing)}")
+    select_tests(os.environ.get("BDQ_TESTS"))  # Fail at startup, not per job, on unknown labels.
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
             host=os.environ["RABBITMQ_HOST"],
@@ -127,6 +139,11 @@ def main() -> None:
     parser.add_argument("--job-id", default="local-bdq-test", help="Job identifier for a sandbox run")
     parser.add_argument("--output", type=Path, help="Write the annotation event to a file instead of stdout")
     parser.add_argument("--save-input", type=Path, help="Save the fetched sandbox job for offline reruns")
+    parser.add_argument(
+        "--tests",
+        default=os.environ.get("BDQ_TESTS"),
+        help='"all" (default) or comma-separated BDQ test labels; also read from env BDQ_TESTS',
+    )
     args = parser.parse_args()
     if args.save_input and not args.specimen:
         parser.error("--save-input requires --specimen")
@@ -134,7 +151,10 @@ def main() -> None:
         parser.error("--output is for local runs")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     try:
+        tests = select_tests(args.tests)
         if args.rabbitmq:
+            if args.tests:
+                os.environ["BDQ_TESTS"] = args.tests  # process_message reads it per job.
             run_rabbitmq()
             return
         if args.specimen:
@@ -143,7 +163,7 @@ def main() -> None:
                 write_json(job, args.save_input)
         else:
             job = json.loads(args.input.read_text(encoding="utf-8"))
-        event = test_bdq_event(job)
+        event = test_bdq_event(job, tests=tests)
         if args.output:
             write_json(event, args.output)
         else:

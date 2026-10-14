@@ -58,12 +58,14 @@ def build_mas_annotation(
         or getattr(test_instance, "IMPLEMENTATION_NAME", "bdq-test")
     )
     term = getattr(test_instance, "term", None) or getattr(test_instance, "TERM", "dwc:eventDate")
+    # Multi-term tests (with a `terms` attribute) receive and report a {term: value} dict.
+    input_values = value if getattr(test_instance, "terms", None) else {term: value}
 
     bdq_result = {
         "test": test_label,
         "testVersion": test_version_iri,
         "implementation": {"name": impl_name, "version": impl_version},
-        "input": {term: value},
+        "input": input_values,
         "inputPath": input_path,
         **response,
     }
@@ -120,6 +122,13 @@ def test_bdq_event(
     else:
         test_instances = [cls() for cls in BDQEvent.get_registered_tests()]
 
+    # Single-term event tests use the per-event loop below; tests in other OpenDS
+    # classes, or reading several terms, are assessed by assess_scope afterwards.
+    scoped_tests = [
+        test for test in test_instances if getattr(test, "scope", "event") != "event" or getattr(test, "terms", None)
+    ]
+    test_instances = [test for test in test_instances if not any(test is scoped for scoped in scoped_tests)]
+
     if not events:
         # No event class exists to select: assess the whole specimen.
         annotations = [
@@ -149,4 +158,105 @@ def test_bdq_event(
                 annotations.append(
                     build_mas_annotation(specimen, event.get(term), input_path, selector, test=test)
                 )
+    for test in scoped_tests:
+        annotations.extend(assess_scope(specimen, test))
     return {"jobId": job["jobId"], "annotations": annotations}
+
+
+# Steps from the specimen root to the OpenDS class holding a scope's terms.
+# A step ending in [] is an array: the test runs once per entry.
+SCOPE_PATHS = {
+    "event": ("ods:hasEvents[]",),
+    "location": ("ods:hasEvents[]", "ods:hasLocation"),
+    "georeference": ("ods:hasEvents[]", "ods:hasLocation", "ods:hasGeoreference"),
+    "identification": ("ods:hasIdentifications[]",),
+    "taxon": ("ods:hasIdentifications[]", "ods:hasTaxonIdentifications[]"),
+}
+
+
+def json_path(keys: Sequence) -> str:
+    """("ods:hasEvents", 0, "dwc:eventDate") -> $['ods:hasEvents'][0]['dwc:eventDate']"""
+    return "$" + "".join(f"[{key}]" if isinstance(key, int) or key == "*" else f"['{key}']" for key in keys)
+
+
+def resolve(specimen: dict, keys: Sequence):
+    """Follow keys from the specimen root; None when a step is missing."""
+    node = specimen
+    for key in keys:
+        if isinstance(key, int):
+            if not isinstance(node, list) or not 0 <= key < len(node):
+                return None
+        elif not isinstance(node, dict) or key not in node:
+            return None
+        node = node[key]
+    return node
+
+
+def scope_contexts(specimen: dict, scope: str):
+    """Yield (object, keys) for each OpenDS object holding a scope's terms.
+
+    The object is None when it is absent; keys still give the path it would have.
+    """
+    if scope == "specimen":
+        yield specimen, ()
+        return
+    if scope not in SCOPE_PATHS:
+        raise ValueError(f"Unknown BDQ test scope: {scope}")
+    yield from _walk_scope(specimen, (), SCOPE_PATHS[scope])
+
+
+def _walk_scope(node, keys: tuple, steps: Sequence):
+    if not steps:
+        yield (node if isinstance(node, dict) else None), keys
+        return
+    step, rest = steps[0], steps[1:]
+    if not step.endswith("[]"):
+        yield from _walk_scope(node.get(step) if isinstance(node, dict) else None, (*keys, step), rest)
+        return
+    collection = step.removesuffix("[]")
+    items = node.get(collection, []) if isinstance(node, dict) else []
+    if not isinstance(items, list):
+        raise TypeError(f"{collection} must be an array")
+    if not items:
+        # Absent or empty array: one assessment at the path the object would have.
+        placeholder = [part for s in rest for part in ((s[:-2], "*") if s.endswith("[]") else (s,))]
+        yield None, (*keys, collection, "*", *placeholder)
+        return
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise TypeError(f"Each {collection} entry must be an object")
+        yield from _walk_scope(item, (*keys, collection, index), rest)
+
+
+def nearest_class_selector(specimen: dict, keys: Sequence) -> dict | None:
+    """Select the deepest existing object on the path, or None for the whole specimen."""
+    for end in range(len(keys), 0, -1):
+        if isinstance(resolve(specimen, keys[:end]), dict):
+            return {"@type": "ods:ClassSelector", "ods:class": json_path(keys[:end])}
+    return None
+
+
+def assess_scope(specimen: dict, test: BDQEvent) -> list[dict]:
+    """Assess a test once per OpenDS object in its scope (see bdq.py for the attributes)."""
+    terms = getattr(test, "terms", None)
+    consulted_paths = getattr(test, "consulted_paths", {})
+    annotations = []
+    for found, keys in scope_contexts(specimen, getattr(test, "scope", "event")):
+        found = found or {}
+        if terms:
+            value = {
+                term: resolve(specimen, consulted_paths[term]) if term in consulted_paths else found.get(term)
+                for term in terms
+            }
+            input_path = json_path(keys)
+            selector = nearest_class_selector(specimen, keys)
+        else:
+            value = found.get(test.term)
+            input_path = json_path((*keys, test.term))
+            if test.term in found:
+                selector = {"@type": "ods:TermSelector", "ods:term": input_path}
+            else:
+                # An assessment cannot select a term absent from the specimen.
+                selector = nearest_class_selector(specimen, keys)
+        annotations.append(build_mas_annotation(specimen, value, input_path, selector, test=test))
+    return annotations
