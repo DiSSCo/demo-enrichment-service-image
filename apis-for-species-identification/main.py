@@ -142,6 +142,7 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
             "error_message": "Failed to make the match, no relevant identifiers for GBIF",
         }
     identify_api_path = os.environ.get("IDENTIFY_API_PATH")
+    identify_api_path = "https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify"
     if not identify_api_path:
         logging.error("IDENTIFY_API_PATH environment variable is not set")
         return {
