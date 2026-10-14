@@ -2,7 +2,10 @@ import datetime
 import json
 import logging
 import os
+import io
 import uuid
+import urllib.request
+from PIL import Image
 
 import pika
 import requests as requests
@@ -89,6 +92,7 @@ def map_to_annotation_event(media_object: Dict, result: Dict[str, str], job_id: 
         }
     ods_agent = shared.get_agent()
     
+    
     specimen_object = get_specimen_from_media(media_object)
     
     
@@ -142,35 +146,67 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
             "error_message": "Failed to make the match, no relevant identifiers for GBIF",
         }
     identify_api_path = os.environ.get("IDENTIFY_API_PATH")
-    identify_api_path = "https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify"
+    identify_api_path = "https://acc-multi-source.identify.biodiversityanalysis.eu/v2/observation/identify"
     if not identify_api_path:
         logging.error("IDENTIFY_API_PATH environment variable is not set")
         return {
             "api_call": "",
             "error_message": "Failed to make the match, API path not configured",
         }
-    with open(image_path, "rb") as image:
-        response = requests.post(identify_api_path, params={"image": image})
-    response_json = json.loads(response.json())
-    
+
+    # Check if the image URL is valid
+    image_path = "https://medialib.naturalis.nl/file/id/ZMA.INS.1443716_1/format/small"
+
+    max_dimension = 500  # Max width or height in pixels
+
+    # 1. Download image bytes
+    with urllib.request.urlopen(image_path) as response:
+        raw_bytes = response.read()
+
+    # 2. Resize with Pillow
+    with Image.open(io.BytesIO(raw_bytes)) as img:
+        img.thumbnail((max_dimension, max_dimension))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+
+        image_file = io.BytesIO()
+        img.save(image_file, format="JPEG", quality=85)
+        image_file.seek(0)
+
+    # 3. Explicitly state the filename AND Content-Type in a 3-tuple
+    files = {
+        "image": ("image.jpg", image_file, "image/jpeg")
+    }
+
+    response = requests.post(url=identify_api_path, files=files)
+    response_json = response.json()
+        
+    if response.status_code != 200:
+        logging.error(f"API call failed with status code {response.status_code}: {response.text}")
+        return {
+            "api_call": f'api: {identify_api_path}, image: {image_path}',
+            "error_message": f"Failed to make the match, API call failed with status code {response.status_code}",
+        }
+    response_json = response.json()
+
     prediction_items = response_json["predictions"][0]["taxa"]["items"][0]
     generated_by = response_json["generated_by"]
+    print(generated_by)
     
-    probability_top1 = prediction_items[0]["probability"]
-    scientific_name_top1 = prediction_items[0]["scientificName"]
-    datetime = generated_by["datetime"]
+    probability_top1 = prediction_items["probability"]
+    scientific_name_top1 = prediction_items["scientific_name"]
+    date_time = datetime.datetime.now().isoformat()
     api_tag = generated_by["tag"]
-    
+
     return {
         "api_call": f'api: {identify_api_path}, image: {image_path}',
         "scientific_name": scientific_name_top1,
         "probability": probability_top1,
-        "datetime": datetime,
+        "datetime": date_time,
         "api_tag": api_tag
     }
 
 def get_image_from_object(media_object) -> str:
-    print(media_object)
     imageUrl=media_object.get("ac:accessURI")
     return imageUrl
 
