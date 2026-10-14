@@ -167,6 +167,16 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
         "datetime": datetime,
         "api_tag": api_tag
     }
+
+def get_image_from_object(media_object) -> str:
+    serviceAccessPoints=media_object.get("serviceAccessPoints")
+    imageUrl=serviceAccessPoints.get("accessURI")
+    return imageUrl
+
+def get_image_type(media_object) -> str:
+    serviceAccessPoints=media_object.get("serviceAccessPoints")
+    imageFormat=serviceAccessPoints.get("format")
+    return imageFormat
     
 
 
