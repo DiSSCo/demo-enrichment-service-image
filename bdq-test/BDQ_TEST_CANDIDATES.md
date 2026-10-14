@@ -80,7 +80,7 @@ fixed list or a regex that can ship in the code.
 The matching `AMENDMENT_*_STANDARDIZED` tests can be added with synonym maps.
 Record the snapshot date in `Response.comment` so results are reproducible.
 
-## Skip for now: these need external services
+## Tier 5: External services needed
 
 | Dependency | Tests |
 | --- | --- |
