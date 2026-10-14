@@ -1,9 +1,11 @@
-# demo-enrichment-service-image
+# BDQ enrichment
 
 ## Description
-This project gathers demonstrator Machine Annotation Services (MASs) and enrichment pipelines operating within the Distributed System of Scientific Collections ([DiSSCo](https://www.dissco.eu/)) and Open Digital Specimen ([openDS](https://schemas.dissco.tech/)) architecture.
+This project gathers demonstrator Machine Annotation Services (MASs) and enrichment pipelines operating within the 
+Distributed System of Scientific Collections ([DiSSCo](https://www.dissco.eu/)) and 
+Open Digital Specimen ([openDS](https://schemas.dissco.tech/)) architecture.
 
-Each enrichment service processes Digital Specimen or Digital Media objects to generate standardized annotations, linkage records (e.g., to external biodiversity and geoscientific databases), morphological measurements, quality assessments, and automated text transcriptions.
+The BDQ enrichment service processes Digital Specimen objects to generate quality assessments from .
 
 ---
 

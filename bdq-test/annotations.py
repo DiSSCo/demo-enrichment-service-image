@@ -2,9 +2,16 @@
 
 import json
 import os
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from bdq import IMPLEMENTATION_VERSION, TEST_LABEL, TEST_VERSION_IRI, validate_event_date_notempty
+from bdq import (
+    IMPLEMENTATION_VERSION,
+    TEST_LABEL,
+    TEST_VERSION_IRI,
+    BDQEvent,
+    ValidationEventDateNotEmpty,
+)
 
 DIGITAL_SPECIMEN_FDO_TYPE = "https://doi.org/21.T11148/894b1e6cad57e921764e"
 
@@ -22,13 +29,41 @@ def build_creator() -> dict:
     }
 
 
-def build_mas_annotation(specimen: dict, value: str | None, input_path: str, selector: dict | None) -> dict:
-    response = validate_event_date_notempty(value)
+def build_mas_annotation(
+    specimen: dict,
+    value: str | None,
+    input_path: str,
+    selector: dict | None,
+    test: BDQEvent | type[BDQEvent] | None = None,
+) -> dict:
+    if test is None:
+        test_instance = ValidationEventDateNotEmpty()
+    elif isinstance(test, type):
+        test_instance = test()
+    else:
+        test_instance = test
+
+    response = test_instance.validate(value)
+    test_label = getattr(test_instance, "test_label", None) or getattr(test_instance, "TEST_LABEL", TEST_LABEL)
+    test_version_iri = (
+        getattr(test_instance, "test_version_iri", None)
+        or getattr(test_instance, "TEST_VERSION_IRI", TEST_VERSION_IRI)
+    )
+    impl_version = (
+        getattr(test_instance, "implementation_version", None)
+        or getattr(test_instance, "IMPLEMENTATION_VERSION", IMPLEMENTATION_VERSION)
+    )
+    impl_name = (
+        getattr(test_instance, "implementation_name", None)
+        or getattr(test_instance, "IMPLEMENTATION_NAME", "bdq-test")
+    )
+    term = getattr(test_instance, "term", None) or getattr(test_instance, "TERM", "dwc:eventDate")
+
     bdq_result = {
-        "test": TEST_LABEL,
-        "testVersion": TEST_VERSION_IRI,
-        "implementation": {"name": "bdq-test", "version": IMPLEMENTATION_VERSION},
-        "input": {"dwc:eventDate": value},
+        "test": test_label,
+        "testVersion": test_version_iri,
+        "implementation": {"name": impl_name, "version": impl_version},
+        "input": {term: value},
         "inputPath": input_path,
         **response,
     }
@@ -43,7 +78,7 @@ def build_mas_annotation(specimen: dict, value: str | None, input_path: str, sel
     return {
         "@type": "ods:Annotation",
         "oa:motivation": "oa:assessing",
-        "oa:motivatedBy": f"{TEST_LABEL}: {response['Response.comment']}",
+        "oa:motivatedBy": f"{test_label}: {response['Response.comment']}",
         "dcterms:created": datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "dcterms:creator": build_creator(),
         "oa:hasTarget": target,
@@ -51,12 +86,15 @@ def build_mas_annotation(specimen: dict, value: str | None, input_path: str, sel
             "@type": "oa:TextualBody",
             # DiSSCo's 0.4 body schema requires an array of strings.
             "oa:value": [json.dumps(bdq_result, ensure_ascii=False)],
-            "dcterms:references": TEST_VERSION_IRI,
+            "dcterms:references": test_version_iri,
         },
     }
 
 
-def test_bdq_event(job: dict) -> dict:
+def test_bdq_event(
+    job: dict,
+    tests: Sequence[BDQEvent | type[BDQEvent]] | None = None,
+) -> dict:
     """Assess each event independently and return the original jobId unchanged."""
     if not isinstance(job, dict) or not isinstance(job.get("jobId"), str) or not job["jobId"].strip():
         raise ValueError("The job must contain a nonempty string jobId")
@@ -74,20 +112,41 @@ def test_bdq_event(job: dict) -> dict:
     events = specimen.get("ods:hasEvents", [])
     if not isinstance(events, list):
         raise TypeError("ods:hasEvents must be an array")
+
+    test_instances: list[BDQEvent] = []
+    if tests is not None:
+        for t in tests:
+            test_instances.append(t() if isinstance(t, type) else t)
+    else:
+        test_instances = [cls() for cls in BDQEvent.get_registered_tests()]
+
     if not events:
         # No event class exists to select: assess the whole specimen.
-        annotations = [build_mas_annotation(specimen, None, "$['ods:hasEvents'][*]['dwc:eventDate']", None)]
+        annotations = [
+            build_mas_annotation(
+                specimen,
+                None,
+                f"$['ods:hasEvents'][*]['{getattr(test, 'term', 'dwc:eventDate')}']",
+                None,
+                test=test,
+            )
+            for test in test_instances
+        ]
     else:
         annotations = []
         for index, event in enumerate(events):
             if not isinstance(event, dict):
                 raise TypeError("Each ods:hasEvents entry must be an object")
             event_path = f"$['ods:hasEvents'][{index}]"
-            input_path = f"{event_path}['dwc:eventDate']"
-            if "dwc:eventDate" in event:
-                selector = {"@type": "ods:TermSelector", "ods:term": input_path}
-            else:
-                # An assessment cannot select a term absent from the specimen.
-                selector = {"@type": "ods:ClassSelector", "ods:class": event_path}
-            annotations.append(build_mas_annotation(specimen, event.get("dwc:eventDate"), input_path, selector))
+            for test in test_instances:
+                term = getattr(test, "term", None) or getattr(test, "TERM", "dwc:eventDate")
+                input_path = f"{event_path}['{term}']"
+                if term in event:
+                    selector = {"@type": "ods:TermSelector", "ods:term": input_path}
+                else:
+                    # An assessment cannot select a term absent from the specimen.
+                    selector = {"@type": "ods:ClassSelector", "ods:class": event_path}
+                annotations.append(
+                    build_mas_annotation(specimen, event.get(term), input_path, selector, test=test)
+                )
     return {"jobId": job["jobId"], "annotations": annotations}

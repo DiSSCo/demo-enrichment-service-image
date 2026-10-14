@@ -8,8 +8,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import main
-from annotations import test_bdq_event
-from bdq import validate_event_date_notempty
+from annotations import build_mas_annotation, test_bdq_event
+from bdq import BDQEvent, ValidationEventDateNotEmpty, validate_event_date_notempty
 
 EXAMPLES = Path(__file__).parent / "examples"
 
@@ -132,6 +132,143 @@ class MessageTest(unittest.TestCase):
         publish.assert_not_called()
         self.channel.basic_nack.assert_called_once_with(delivery_tag=42, requeue=False)
         self.channel.basic_ack.assert_not_called()
+
+
+class PluginTest(unittest.TestCase):
+    def setUp(self):
+        self.job = json.loads((EXAMPLES / "sandbox-job.json").read_text(encoding="utf-8"))
+
+    def tearDown(self):
+        BDQEvent.reset_registry()
+
+    def test_custom_bdq_event_subclass_plugin(self):
+        class ValidationYearNotEmpty(BDQEvent):
+            test_label = "VALIDATION_YEAR_NOTEMPTY"
+            test_version_iri = "https://example.org/test/year-notempty"
+            term = "dwc:year"
+
+            def validate(self, value: str | None) -> dict[str, str]:
+                is_valid = value is not None and value.isdigit()
+                return {
+                    "Response.status": "RUN_HAS_RESULT",
+                    "Response.result": "COMPLIANT" if is_valid else "NOT_COMPLIANT",
+                    "Response.comment": "Year is valid digit." if is_valid else "Year is missing or invalid.",
+                }
+
+        self.job["object"]["ods:hasEvents"] = [
+            {"@type": "ods:Event", "dwc:eventDate": "1916-07", "dwc:year": "1916"},
+            {"@type": "ods:Event", "dwc:eventDate": "1920-01"},
+        ]
+
+        event = test_bdq_event(self.job, tests=[ValidationEventDateNotEmpty, ValidationYearNotEmpty])
+        annotations = event["annotations"]
+        self.assertEqual(len(annotations), 4)
+
+        # Event 0: eventDate and year
+        res0_date = json.loads(annotations[0]["oa:hasBody"]["oa:value"][0])
+        self.assertEqual(res0_date["test"], "VALIDATION_EVENTDATE_NOTEMPTY")
+        self.assertEqual(res0_date["Response.result"], "COMPLIANT")
+        self.assertEqual(
+            annotations[0]["oa:hasTarget"]["oa:hasSelector"]["ods:term"],
+            "$['ods:hasEvents'][0]['dwc:eventDate']",
+        )
+
+        res0_year = json.loads(annotations[1]["oa:hasBody"]["oa:value"][0])
+        self.assertEqual(res0_year["test"], "VALIDATION_YEAR_NOTEMPTY")
+        self.assertEqual(res0_year["Response.result"], "COMPLIANT")
+        self.assertEqual(
+            annotations[1]["oa:hasTarget"]["oa:hasSelector"]["ods:term"],
+            "$['ods:hasEvents'][0]['dwc:year']",
+        )
+
+        # Event 1: missing year selects class
+        res1_date = json.loads(annotations[2]["oa:hasBody"]["oa:value"][0])
+        self.assertEqual(res1_date["test"], "VALIDATION_EVENTDATE_NOTEMPTY")
+        self.assertEqual(res1_date["Response.result"], "COMPLIANT")
+
+        res1_year = json.loads(annotations[3]["oa:hasBody"]["oa:value"][0])
+        self.assertEqual(res1_year["test"], "VALIDATION_YEAR_NOTEMPTY")
+        self.assertEqual(res1_year["Response.result"], "NOT_COMPLIANT")
+        self.assertEqual(
+            annotations[3]["oa:hasTarget"]["oa:hasSelector"],
+            {"@type": "ods:ClassSelector", "ods:class": "$['ods:hasEvents'][1]"},
+        )
+
+    def test_registered_plugins_and_instances(self):
+        class CustomEventTest(BDQEvent):
+            test_label = "CUSTOM_EVENT_TEST"
+            test_version_iri = "https://example.org/custom-test"
+            term = "dwc:eventDate"
+
+            def validate(self, value: str | None) -> dict[str, str]:
+                return {
+                    "Response.status": "RUN_HAS_RESULT",
+                    "Response.result": "COMPLIANT",
+                    "Response.comment": "Custom test comment.",
+                }
+
+        # Test passing instance
+        event_inst = test_bdq_event(self.job, tests=[CustomEventTest()])
+        self.assertEqual(len(event_inst["annotations"]), 1)
+        res = json.loads(event_inst["annotations"][0]["oa:hasBody"]["oa:value"][0])
+        self.assertEqual(res["test"], "CUSTOM_EVENT_TEST")
+
+        # Test registry
+        BDQEvent.register(CustomEventTest)
+        self.assertIn(CustomEventTest, BDQEvent.get_registered_tests())
+        event_reg = test_bdq_event(self.job)
+        self.assertEqual(len(event_reg["annotations"]), 2)
+
+        BDQEvent.unregister(CustomEventTest)
+        self.assertNotIn(CustomEventTest, BDQEvent.get_registered_tests())
+        event_unreg = test_bdq_event(self.job)
+        self.assertEqual(len(event_unreg["annotations"]), 1)
+
+    def test_custom_plugin_no_events(self):
+        class CustomEventTest(BDQEvent):
+            test_label = "CUSTOM_NO_EVENT_TEST"
+            test_version_iri = "https://example.org/custom-no-event"
+            term = "dwc:verbatimEventDate"
+
+            def validate(self, value: str | None) -> dict[str, str]:
+                return {
+                    "Response.status": "RUN_HAS_RESULT",
+                    "Response.result": "NOT_COMPLIANT",
+                    "Response.comment": "No events present.",
+                }
+
+        self.job["object"]["ods:hasEvents"] = []
+        event = test_bdq_event(self.job, tests=[ValidationEventDateNotEmpty(), CustomEventTest()])
+        self.assertEqual(len(event["annotations"]), 2)
+        res0 = json.loads(event["annotations"][0]["oa:hasBody"]["oa:value"][0])
+        res1 = json.loads(event["annotations"][1]["oa:hasBody"]["oa:value"][0])
+        self.assertEqual(res0["test"], "VALIDATION_EVENTDATE_NOTEMPTY")
+        self.assertEqual(res1["test"], "CUSTOM_NO_EVENT_TEST")
+        self.assertEqual(res1["inputPath"], "$['ods:hasEvents'][*]['dwc:verbatimEventDate']")
+
+    def test_build_mas_annotation_with_custom_test(self):
+        class CustomEventTest(BDQEvent):
+            test_label = "CUSTOM_DIRECT_TEST"
+            test_version_iri = "https://example.org/custom-direct"
+            term = "dwc:eventDate"
+
+            def validate(self, value: str | None) -> dict[str, str]:
+                return {
+                    "Response.status": "RUN_HAS_RESULT",
+                    "Response.result": "COMPLIANT",
+                    "Response.comment": "Direct annotation built.",
+                }
+
+        annotation = build_mas_annotation(
+            self.job["object"],
+            "1916-07",
+            "$['ods:hasEvents'][0]['dwc:eventDate']",
+            {"@type": "ods:TermSelector", "ods:term": "$['ods:hasEvents'][0]['dwc:eventDate']"},
+            test=CustomEventTest(),
+        )
+        self.assertEqual(annotation["oa:motivatedBy"], "CUSTOM_DIRECT_TEST: Direct annotation built.")
+        result = json.loads(annotation["oa:hasBody"]["oa:value"][0])
+        self.assertEqual(result["test"], "CUSTOM_DIRECT_TEST")
 
 
 if __name__ == "__main__":
