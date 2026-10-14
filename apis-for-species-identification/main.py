@@ -96,37 +96,20 @@ def map_to_annotation_event(media_object: Dict, result: Dict[str, str], job_id: 
     specimen_object = get_specimen_from_media(media_object)
     
     # TODO: loop over these
-        # specimen_object, 
-        # result["scientific_name"], 
         # result["probability"], 
         # result["datetime"], 
         # result["api_tag"]
     
     
-    shared.map_to_annotation_str_val(
+    annotation = shared.map_to_annotation_str_val(
         ods_agent=ods_agent,
         timestamp=shared.timestamp_now(),
         oa_value=result["scientific_name"],
-        oa_selector=shared.build_term_selector(<FILL_VALUE_HERE>),
-        target_id=specimen_object.get("target_id"),
-        target_type=specimen_object.get("target_type"),
+        oa_selector=shared.build_term_selector("dwc:scientificName"),
+        target_id=specimen_object[shared.ODS_ID],
+        target_type=specimen_object[shared.ODS_TYPE],
         dcterms_ref=result["api_call"],
         motivation=shared.Motivation.ADDING.value,
-    )
-    
-    print(specimen_object)
-    
-    oa_value = specimen_object
-    
-    oa_selector = shared.build_class_selector(shared.ER_PATH)
-    annotation = shared.map_to_annotation(
-        ods_agent,
-        timestamp,
-        oa_value,
-        oa_selector,
-        media_object[shared.ODS_ID],
-        media_object[shared.ODS_TYPE],
-        result["queryString"],
     )
 
     return {"jobId": job_id, "annotations": [annotation]}
@@ -161,7 +144,7 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
             "error_message": "Failed to make the match, no relevant identifiers for GBIF",
         }
     identify_api_path = os.environ.get("IDENTIFY_API_PATH")
-    identify_api_path = "https://acc-multi-source.identify.biodiversityanalysis.eu/v2/observation/identify"
+    identify_api_path = "https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify"
     if not identify_api_path:
         logging.error("IDENTIFY_API_PATH environment variable is not set")
         return {
