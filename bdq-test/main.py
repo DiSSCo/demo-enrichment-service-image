@@ -9,7 +9,7 @@ from urllib.error import URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from annotations import build_annotation_event
+from annotations import test_bdq_event
 from bdq import IMPLEMENTATION_VERSION
 
 LOGGER = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ def process_message(channel, method, properties, body: bytes) -> None:
         if job_id is None:
             raise ValueError("The message must contain a nonempty string jobId")
         mark_job_as_running(job_id)
-        event = build_annotation_event(job)
+        event = test_bdq_event(job)
     except Exception as error:
         LOGGER.exception("BDQ job failed: %s", job_id)
         if job_id is None:
@@ -143,7 +143,7 @@ def main() -> None:
                 write_json(job, args.save_input)
         else:
             job = json.loads(args.input.read_text(encoding="utf-8"))
-        event = build_annotation_event(job)
+        event = test_bdq_event(job)
         if args.output:
             write_json(event, args.output)
         else:

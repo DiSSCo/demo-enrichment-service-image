@@ -22,7 +22,7 @@ def build_creator() -> dict:
     }
 
 
-def build_annotation(specimen: dict, value: str | None, input_path: str, selector: dict | None) -> dict:
+def build_mas_annotation(specimen: dict, value: str | None, input_path: str, selector: dict | None) -> dict:
     response = validate_event_date_notempty(value)
     bdq_result = {
         "test": TEST_LABEL,
@@ -56,7 +56,7 @@ def build_annotation(specimen: dict, value: str | None, input_path: str, selecto
     }
 
 
-def build_annotation_event(job: dict) -> dict:
+def test_bdq_event(job: dict) -> dict:
     """Assess each event independently and return the original jobId unchanged."""
     if not isinstance(job, dict) or not isinstance(job.get("jobId"), str) or not job["jobId"].strip():
         raise ValueError("The job must contain a nonempty string jobId")
@@ -76,7 +76,7 @@ def build_annotation_event(job: dict) -> dict:
         raise TypeError("ods:hasEvents must be an array")
     if not events:
         # No event class exists to select: assess the whole specimen.
-        annotations = [build_annotation(specimen, None, "$['ods:hasEvents'][*]['dwc:eventDate']", None)]
+        annotations = [build_mas_annotation(specimen, None, "$['ods:hasEvents'][*]['dwc:eventDate']", None)]
     else:
         annotations = []
         for index, event in enumerate(events):
@@ -89,5 +89,5 @@ def build_annotation_event(job: dict) -> dict:
             else:
                 # An assessment cannot select a term absent from the specimen.
                 selector = {"@type": "ods:ClassSelector", "ods:class": event_path}
-            annotations.append(build_annotation(specimen, event.get("dwc:eventDate"), input_path, selector))
+            annotations.append(build_mas_annotation(specimen, event.get("dwc:eventDate"), input_path, selector))
     return {"jobId": job["jobId"], "annotations": annotations}

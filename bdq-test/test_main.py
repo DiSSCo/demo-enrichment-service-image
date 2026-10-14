@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import main
-from annotations import build_annotation_event
+from annotations import test_bdq_event
 from bdq import validate_event_date_notempty
 
 EXAMPLES = Path(__file__).parent / "examples"
@@ -37,7 +37,7 @@ class AnnotationTest(unittest.TestCase):
 
     def test_real_sandbox_snapshot(self):
         original = copy.deepcopy(self.job)
-        event = build_annotation_event(self.job)
+        event = test_bdq_event(self.job)
         self.assertEqual(event["jobId"], self.job["jobId"])
         self.assertEqual(len(event["annotations"]), 1)
         annotation = event["annotations"][0]
@@ -54,7 +54,7 @@ class AnnotationTest(unittest.TestCase):
 
     def test_missing_date_selects_existing_event(self):
         job = json.loads((EXAMPLES / "missing-date-job.json").read_text(encoding="utf-8"))
-        annotation = build_annotation_event(job)["annotations"][0]
+        annotation = test_bdq_event(job)["annotations"][0]
         self.assertEqual(
             annotation["oa:hasTarget"]["oa:hasSelector"],
             {"@type": "ods:ClassSelector", "ods:class": "$['ods:hasEvents'][0]"},
@@ -69,7 +69,7 @@ class AnnotationTest(unittest.TestCase):
                     del job["object"]["ods:hasEvents"]
                 else:
                     job["object"]["ods:hasEvents"] = events
-                annotation = build_annotation_event(job)["annotations"][0]
+                annotation = test_bdq_event(job)["annotations"][0]
                 self.assertNotIn("oa:hasSelector", annotation["oa:hasTarget"])
                 result = json.loads(annotation["oa:hasBody"]["oa:value"][0])
                 self.assertEqual(result["Response.result"], "NOT_COMPLIANT")
@@ -79,7 +79,7 @@ class AnnotationTest(unittest.TestCase):
             {"@type": "ods:Event", "dwc:eventDate": "1916-07"},
             {"@type": "ods:Event", "dwc:eventDate": ""},
         ]
-        annotations = build_annotation_event(self.job)["annotations"]
+        annotations = test_bdq_event(self.job)["annotations"]
         self.assertEqual(len(annotations), 2)
         for index, expected in enumerate(["COMPLIANT", "NOT_COMPLIANT"]):
             result = json.loads(annotations[index]["oa:hasBody"]["oa:value"][0])
@@ -89,7 +89,7 @@ class AnnotationTest(unittest.TestCase):
     def test_rejects_malformed_jobs(self):
         for job in [[], {}, {"jobId": ""}, {"jobId": "x", "object": []}]:
             with self.subTest(job=job), self.assertRaises((TypeError, ValueError)):
-                build_annotation_event(job)
+                test_bdq_event(job)
 
 
 class MessageTest(unittest.TestCase):
