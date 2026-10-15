@@ -14,6 +14,18 @@ MEDIA_FDO = "https://doi.org/21.T11148/bbad8c4e101e8af01115"
 JSONLD_TYPE = "@type"
 
 
+def image_selector(region: dict | None) -> dict:
+    if region is None:
+        # Select the existing whole object without inventing a region of evidence.
+        return {JSONLD_TYPE: "ods:ClassSelector", "ods:class": "$"}
+    x, y, width, height = (float(value) for value in region["bbox"])
+    return {
+        JSONLD_TYPE: "oa:FragmentSelector",
+        "dcterms:conformsTo": "https://ac.tdwg.org/termlist/#711-region-of-interest-vocabulary",
+        "ac:hasROI": {"ac:xFrac": x, "ac:yFrac": y, "ac:widthFrac": width, "ac:heightFrac": height},
+    }
+
+
 def validate_event(event: dict) -> None:
     index = json.loads((SCHEMAS / "index.json").read_text())
     resources = []
@@ -47,24 +59,20 @@ def map_event(job: dict, response: dict, mas_id: str, mas_name: str) -> dict:
         "schema:name": mas_name,
     }
     timestamp = dt.datetime.now(dt.UTC).isoformat()
-    annotations = []
+    annotations = {}
     for observation in response["observation"]["observations"]:
-        # One annotation for each evidence region; unresolved features target the whole media.
+        # DiSSCo identifies comments by target, selector, creator and motivation.
+        # Combine insights for the same selector, preserving every prediction.
         regions = observation["evidence"] or [None]
         for region in regions:
+            selector = image_selector(region)
             target = {
                 "@id": target_id,
                 JSONLD_TYPE: "ods:DigitalMediaObject",
                 "dcterms:identifier": media.get("dcterms:identifier", target_id),
                 "ods:fdoType": MEDIA_FDO,
+                "oa:hasSelector": selector,
             }
-            if region:
-                x, y, width, height = region["bbox"]
-                target["oa:hasSelector"] = {
-                    JSONLD_TYPE: "oa:FragmentSelector",
-                    "dcterms:conformsTo": "https://ac.tdwg.org/termlist/#711-region-of-interest-vocabulary",
-                    "ac:hasROI": {"ac:xFrac": x, "ac:yFrac": y, "ac:widthFrac": width, "ac:heightFrac": height},
-                }
             value = {
                 "contract": VERSION,
                 "feature_id": observation["feature_id"],
@@ -83,7 +91,8 @@ def map_event(job: dict, response: dict, mas_id: str, mas_name: str) -> dict:
                 "confidence": observation["confidence"],
                 "confidence_note": "Model self-report; uncalibrated",
             }
-            annotations.append(
+            annotation = annotations.setdefault(
+                json.dumps(selector, sort_keys=True),
                 {
                     JSONLD_TYPE: "ods:Annotation",
                     "oa:motivation": "oa:commenting",
@@ -93,11 +102,12 @@ def map_event(job: dict, response: dict, mas_id: str, mas_name: str) -> dict:
                     "oa:hasTarget": target,
                     "oa:hasBody": {
                         JSONLD_TYPE: "oa:TextualBody",
-                        "oa:value": [json.dumps(value)],
+                        "oa:value": [],
                         "dcterms:references": media["ac:accessURI"],
                     },
-                }
+                },
             )
-    event = {"jobId": job["jobId"], "annotations": annotations}
+            annotation["oa:hasBody"]["oa:value"].append(json.dumps(value))
+    event = {"jobId": job["jobId"], "annotations": list(annotations.values())}
     validate_event(event)
     return event
