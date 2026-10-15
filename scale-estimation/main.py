@@ -349,6 +349,6 @@ def run_local(example: str) -> None:
 
 if __name__ == "__main__":
     # Local testing
-    specimen_url = "https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/BAC-9KZ-T77"
-    run_local(specimen_url)
-    #run_rabbitmq()
+    #specimen_url = "https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/BAC-9KZ-T77"
+    #run_local(specimen_url)
+    run_rabbitmq()
