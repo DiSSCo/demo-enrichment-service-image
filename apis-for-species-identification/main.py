@@ -239,5 +239,5 @@ def run_local(example: str) -> None:
 
 
 if __name__ == "__main__":
-    # run_rabbitmq()
-    run_local("https://sandbox.dissco.tech/api/digital-media/v1/SANDBOX/53L-8ZD-C80")
+    run_rabbitmq()
+    # run_local("https://sandbox.dissco.tech/api/digital-media/v1/SANDBOX/53L-8ZD-C80")
