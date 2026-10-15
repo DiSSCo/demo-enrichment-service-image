@@ -40,6 +40,8 @@ def build_annotations(
             "boundary_distance_km": result["boundary_distance_km"],
             "tolerance_km": result["tolerance_km"],
             "suggestions": suggestions,
+            "coordinate_source": location["coordinate_source"],
+            "distance": location["distance"],
         }
 
         annotations.append(
