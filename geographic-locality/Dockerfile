@@ -15,6 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # copy the MAS (main.py, value_service.py, pointer_annotations.py, indigenous_names.py)
 COPY geographic-locality/*.py ./
+COPY geographic-locality/geographic_locality_mas/ ./geographic_locality_mas/
+COPY geographic-locality/data/reference/ ./data/reference/
 
 # copy shared directory
 COPY shared/ shared/

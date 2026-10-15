@@ -21,9 +21,16 @@ def event_for(spec):
 
 
 def only_annotation(spec):
+    """Return the Indigenous place-name annotation, excluding other MAS components."""
     annotations = event_for(spec)["annotations"]
-    assert len(annotations) == 1
-    return annotations[0]
+    pointers = [
+        annotation for annotation in annotations
+        if annotation["oa:hasBody"]["oa:value"][0].startswith(
+            "Indigenous place-name pointer (prototype)."
+        )
+    ]
+    assert len(pointers) == 1
+    return pointers[0]
 
 
 def text_of(annotation):
@@ -126,7 +133,12 @@ def test_process_message_publishes_the_event(ssr, monkeypatch):
     [sent] = channel.published
     assert (sent["exchange"], sent["routing_key"]) == ("mas-annotation-exchange", "mas-annotation")
     event = json.loads(sent["body"])
-    assert event["jobId"] == "job-7" and len(event["annotations"]) == 1
+    assert event["jobId"] == "job-7"
+    assert len(event["annotations"]) == 2
+    assert any(
+        "Natural Earth country-boundary validation" in a["oa:hasBody"]["oa:value"][0]
+        for a in event["annotations"]
+    )
     assert_no_made_up_names(event)
 
 

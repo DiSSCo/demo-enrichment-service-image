@@ -37,6 +37,45 @@ Kven names (a national minority language, not Indigenous) are never annotated.
 Only `oa:commenting` is used: it is never merged into the record and its creator can
 delete it. Note that a deleted DiSSCo annotation stays readable as a tombstone.
 
+## Geographic coordinate validation (integration in progress)
+
+**Contributor:** Craig Frayne
+
+This component checks whether a Digital Specimen's recorded coordinates are
+geographically consistent with its recorded country. It uses Natural Earth
+country boundaries and normalizes common country-name variants.
+
+For each location in `ods:hasEvents`, the validator:
+
+1. Extracts the country, latitude and longitude.
+2. Checks whether the coordinates fall within the recorded country.
+3. Applies a configurable boundary tolerance (default: 5 km).
+4. Identifies possible latitude/longitude sign errors.
+5. Produces structured findings intended for location-specific
+   `ods:commenting` annotations.
+
+Validation statuses:
+
+| Status | Meaning |
+|---|---|
+| `consistent` | Coordinates fall within the recorded country |
+| `near_boundary` | Coordinates fall just outside the boundary, within tolerance |
+| `inconsistent` | Coordinates fall outside the recorded country and tolerance |
+| `unable_to_validate` | Insufficient information or unknown country |
+| `invalid_coordinates` | Invalid coordinate values or ranges |
+
+Suggested coordinate corrections require human review. The MAS does not
+automatically modify specimen coordinates.
+
+**Limitations:** Natural Earth represents modern political boundaries.
+Historical collecting localities, offshore specimens, disputed territories,
+uncertain georeferencing and boundary inaccuracies can produce misleading
+results. A geographic inconsistency is a quality-control flag, not proof
+that the specimen record is incorrect.
+
+Source implementation:
+https://github.com/craigmateo/dissco-geographic-locality-mas
+
 ## Environment
 
 None required. DiSSCo injects `RABBITMQ_*`, `MAS_ID`, `MAS_NAME`, `RUNNING_ENDPOINT`.

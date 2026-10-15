@@ -18,6 +18,7 @@ import uuid
 from typing import Any
 
 import pika
+import coordinate_annotations
 import pointer_annotations
 import requests
 import value_service
@@ -62,6 +63,14 @@ def build_annotation_event(specimen: dict[str, Any], job_id: str) -> dict[str, A
     """Value service -> pointer comments -> name guard -> annotation event."""
     response = value_service.enrich(specimen)
     annotations = pointer_annotations.build_annotations(specimen, response, shared.get_agent(), shared.timestamp_now())
+    pointer_annotations.assert_no_names(annotations, response)
+    annotations.extend(
+        coordinate_annotations.build_annotations(
+            specimen,
+            shared.get_agent(),
+            shared.timestamp_now(),
+        )
+    )
     pointer_annotations.assert_no_names(annotations, response)
     return {"jobId": job_id, "annotations": annotations}
 
