@@ -13,6 +13,9 @@ logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
 SCALE_ESTIMATION_URL = "https://herbaria.idlab.ugent.be/api/mas-scale-estimation"
 METHOD_REFERENCE = "https://github.com/kymillev/demo-enrichment-service-image"
+MEDIA_TYPE = "ods:DigitalMediaObject"
+MEDIA_FDO = "https://doi.org/21.T11148/bbad8c4e101e8af01115"
+ROI_CONFORMS_TO = "https://ac.tdwg.org/termlist/#711-region-of-interest-vocabulary"
 
 
 def run_rabbitmq() -> None:
@@ -45,9 +48,11 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
     try:
         shared.mark_job_as_running(job_id=json_value.get("jobId"))
         digital_object = json_value.get("object")
-        image_uri = get_image_uri(digital_object)
+        image_uri, media_object = resolve_still_image(digital_object)
         scale, image_height, image_width = run_scale_estimation(image_uri)
-        annotations = map_result_to_annotation(digital_object, scale, image_height, image_width)
+        annotations = map_result_to_annotation(
+            digital_object, scale, image_height, image_width, media_object=media_object
+        )
         annotation_event = map_to_annotation_event(annotations, json_value["jobId"])
 
         logging.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
@@ -100,34 +105,62 @@ def map_to_assertion(scale: Dict[str, Any], timestamp: str, ods_agent: Dict) -> 
     }
 
 
-def map_result_to_annotation(
-    digital_object: Dict,
-    scale: Optional[Dict[str, Any]],
-    image_height: int,
-    image_width: int,
-) -> List[Dict[str, Any]]:
-    """
-    Map the best ruler match to annotations:
-    - one on the ruler region, so the bounding box is shown on the image
-    - one adding the scale factor as an ods:Assertion
-    - one adding ac:scaleFactor and one adding ac:scaleFactorUnits, the terms proposed in
-      https://github.com/tdwg/ac/issues/283
-    If no ruler match was returned, a comment annotation is returned instead.
-    :param digital_object: the target object of the annotation
-    :param scale: parsed best match, or None when the service found no ruler
-    :param image_height: height of the image in pixels
-    :param image_width: width of the image in pixels
-    :return: list of annotations
-    """
-    timestamp = shared.timestamp_now()
-    ods_agent = shared.get_agent()
+def _media_class(media_object: Dict) -> str:
+    """Return the media class name. Job payloads often only carry the FDO DOI in ods:fdoType."""
+    object_type = media_object.get(shared.AT_TYPE)
+    if isinstance(object_type, str) and object_type.startswith("ods:"):
+        return object_type
+    return MEDIA_TYPE
 
-    if not scale:
-        return [map_result_to_empty_annotation(digital_object, image_height=image_height, image_width=image_width)]
 
-    annotations = []
+def _clip_unit(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
+def build_ruler_fragment_selector(bbox_xyxy: List, image_width: int, image_height: int) -> Dict[str, Any]:
+    """
+    Convert a pixel xyxy ruler box into the fractional region DiSSCover draws.
+
+    The scale service returns ``ruler_bbox_xyxy`` in original-image pixels.
+    The website multiplies ``ac:xFrac``, ``ac:yFrac``, ``ac:widthFrac`` and
+    ``ac:heightFrac`` by the displayed image size, the same selector used by
+    traittrail-specimen-observation.
+    """
+    if image_width <= 0 or image_height <= 0:
+        raise ValueError("Image width and height are required to place the ruler bounding box")
+    x1, y1, x2, y2 = (float(value) for value in bbox_xyxy)
+    if x2 <= x1 or y2 <= y1:
+        raise ValueError("Ruler bounding box is empty")
+
+    x_frac = _clip_unit(x1 / image_width)
+    y_frac = _clip_unit(y1 / image_height)
+    width_frac = min(_clip_unit((x2 - x1) / image_width), 1.0 - x_frac)
+    height_frac = min(_clip_unit((y2 - y1) / image_height), 1.0 - y_frac)
+    return {
+        shared.AT_TYPE: "oa:FragmentSelector",
+        "dcterms:conformsTo": ROI_CONFORMS_TO,
+        "ac:hasROI": {
+            "ac:xFrac": x_frac,
+            "ac:yFrac": y_frac,
+            "ac:widthFrac": width_frac,
+            "ac:heightFrac": height_frac,
+        },
+    }
+
+
+def map_ruler_region_annotation(
+    media_object: Dict, scale: Dict[str, Any], image_width: int, image_height: int, timestamp: str
+) -> Dict[str, Any]:
+    """
+    Comment on the ruler region of the digital media object.
+
+    DiSSCover draws a box only for an ``oa:FragmentSelector`` on the media record.
+    ``ods:adding`` is for merging a value into a field, so the ruler box is a comment,
+    matching traittrail-specimen-observation. ``@type`` is the media class and
+    ``ods:fdoType`` stays the media type DOI.
+    """
+    selector = build_ruler_fragment_selector(scale["boundingBox"], image_width, image_height)
     region_value = {
-        "boundingBox": scale.get("boundingBox"),
         "class": scale.get("class"),
         "score": scale.get("score"),
         "scale_factor": scale.get("scale_factor"),
@@ -135,8 +168,59 @@ def map_result_to_annotation(
         "overall_score": scale.get("overall_score"),
         "image_similarity": scale.get("image_similarity"),
     }
-    region_selector = shared.build_fragment_selector(scale, image_width, image_height)
-    annotations.append(map_scale_annotation(digital_object, scale, region_value, region_selector, timestamp))
+    target_id = media_object.get(shared.ODS_ID) or media_object.get(shared.AT_ID)
+    if not target_id:
+        raise ValueError("Digital media is missing dcterms:identifier")
+
+    annotation = shared.map_to_annotation_str_val(
+        ods_agent=shared.get_agent(),
+        timestamp=timestamp,
+        oa_value=json.dumps(region_value),
+        oa_selector=selector,
+        target_id=target_id,
+        target_type=media_object.get(shared.ODS_TYPE) or MEDIA_FDO,
+        dcterms_ref=METHOD_REFERENCE,
+        motivation="oa:commenting",
+    )
+    target = annotation["oa:hasTarget"]
+    target[shared.AT_TYPE] = _media_class(media_object)
+    target[shared.ODS_TYPE] = media_object.get(shared.ODS_TYPE) or MEDIA_FDO
+    if media_object.get(shared.AT_ID):
+        target[shared.AT_ID] = media_object[shared.AT_ID]
+    annotation["oa:motivatedBy"] = "Ruler region predicted on this image"
+    return annotation
+
+
+def map_result_to_annotation(
+    digital_object: Dict,
+    scale: Optional[Dict[str, Any]],
+    image_height: int,
+    image_width: int,
+    media_object: Optional[Dict] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Map the best ruler match to annotations:
+    - one commenting annotation on the media object, with a fractional fragment selector
+      so the website draws the ruler bounding box
+    - one adding the scale factor as an ods:Assertion
+    - one adding ac:scaleFactor and one adding ac:scaleFactorUnits, the terms proposed in
+      https://github.com/tdwg/ac/issues/283
+    If no ruler match was returned, a comment annotation is returned instead.
+    :param digital_object: the job target, used for the scale-factor annotations
+    :param scale: parsed best match, or None when the service found no ruler
+    :param image_height: height of the image in pixels
+    :param image_width: width of the image in pixels
+    :param media_object: digital media the box is drawn on; defaults to the job target
+    :return: list of annotations
+    """
+    timestamp = shared.timestamp_now()
+    ods_agent = shared.get_agent()
+    media_object = media_object or digital_object
+
+    if not scale:
+        return [map_result_to_empty_annotation(media_object)]
+
+    annotations = [map_ruler_region_annotation(media_object, scale, image_width, image_height, timestamp)]
 
     assertion_index = len(digital_object.get("ods:hasAssertions", []))
     assertion_value = map_to_assertion(scale, timestamp, ods_agent)
@@ -191,46 +275,55 @@ def map_scale_annotation(
     return annotation
 
 
-def map_result_to_empty_annotation(digital_object: Dict, image_height: int, image_width: int):
+def map_result_to_empty_annotation(media_object: Dict):
     """
-    Given a target object and no found detections, map the result to an openDS comment annotation to inform the user.
-    :param digital_object: the target object of the annotation
-    :param image_height: the height of the processed image
-    :param image_width: the width of the processed image
-    :return: Annotation event
+    Comment that no ruler was found. The selector is the whole media object.
+    A fragment selector is only used when there is a real ruler box.
+    :param media_object: digital media the comment is attached to
+    :return: commenting annotation
     """
     timestamp = shared.timestamp_now()
     message = "Scale estimation model found no detections in this image"
-    selector = shared.build_entire_image_fragment_selector(height=image_height, width=image_width)
+    selector = shared.build_class_selector("$")
+    target_id = media_object.get(shared.ODS_ID) or media_object.get(shared.AT_ID)
 
     annotation = shared.map_to_annotation_str_val(
         ods_agent=shared.get_agent(),
         timestamp=timestamp,
         oa_value=message,
         oa_selector=selector,
-        target_id=digital_object[shared.ODS_ID],
-        target_type=digital_object[shared.ODS_TYPE],
+        target_id=target_id,
+        target_type=media_object.get(shared.ODS_TYPE) or MEDIA_FDO,
         dcterms_ref=METHOD_REFERENCE,
         motivation="oa:commenting",
     )
-
+    target = annotation["oa:hasTarget"]
+    target[shared.AT_TYPE] = _media_class(media_object)
+    target[shared.ODS_TYPE] = media_object.get(shared.ODS_TYPE) or MEDIA_FDO
+    if media_object.get(shared.AT_ID):
+        target[shared.AT_ID] = media_object[shared.AT_ID]
     return annotation
 
 
-def get_image_uri(digital_object: Dict, source_url: str | None = None) -> str:
+def _is_still_image(digital_object: Dict) -> bool:
+    access_uri = digital_object.get("ac:accessURI")
+    if not access_uri:
+        return False
+    media_type = digital_object.get("dcterms:type")
+    return media_type in (None, "StillImage") or str(digital_object.get("dcterms:format", "")).startswith("image/")
+
+
+def resolve_still_image(digital_object: Dict, source_url: str | None = None) -> Tuple[str, Dict]:
     """
-    Resolve the herbarium sheet image URL from a digital media object or a digital specimen.
-    Specimens do not carry ac:accessURI. Their images are linked through
+    Resolve the herbarium sheet image and the digital media record it belongs to.
+    The ruler box has to target that media record. A specimen job links to it through
     ods:hasEntityRelationships where dwc:relationshipOfResource is hasDigitalMedia.
-    Those digital media records are fetched, and the StillImage access URI is returned.
     :param digital_object: openDS digital specimen or digital media attributes
     :param source_url: API URL the specimen was loaded from, used to find the matching media API
-    :return: image access URI
+    :return: image access URI and the digital media attributes
     """
-    media_type = digital_object.get("dcterms:type")
-    access_uri = digital_object.get("ac:accessURI")
-    if access_uri and (media_type in (None, "StillImage") or str(digital_object.get("dcterms:format", "")).startswith("image/")):
-        return access_uri
+    if _is_still_image(digital_object):
+        return digital_object["ac:accessURI"], digital_object
 
     media_ids = [
         relationship.get("dwc:relatedResourceID")
@@ -250,9 +343,23 @@ def get_image_uri(digital_object: Dict, source_url: str | None = None) -> str:
         if not uri:
             continue
         if media.get("dcterms:type") == "StillImage" or str(media.get("dcterms:format", "")).startswith("image/"):
-            return uri
+            return uri, media
 
     raise ValueError("Linked digital media did not include a StillImage access URI")
+
+
+def get_image_uri(digital_object: Dict, source_url: str | None = None) -> str:
+    """
+    Resolve the herbarium sheet image URL from a digital media object or a digital specimen.
+    Specimens do not carry ac:accessURI. Their images are linked through
+    ods:hasEntityRelationships where dwc:relationshipOfResource is hasDigitalMedia.
+    Those digital media records are fetched, and the StillImage access URI is returned.
+    :param digital_object: openDS digital specimen or digital media attributes
+    :param source_url: API URL the specimen was loaded from, used to find the matching media API
+    :return: image access URI
+    """
+    image_uri, _media = resolve_still_image(digital_object, source_url=source_url)
+    return image_uri
 
 
 def _dissco_api_base(digital_object: Dict, source_url: str | None = None) -> str:
@@ -335,10 +442,12 @@ def run_local(example: str) -> None:
     json_value = json.loads(response.content).get("data")
 
     digital_object = json_value.get("attributes")
-    image_uri = get_image_uri(digital_object, source_url=example)
+    image_uri, media_object = resolve_still_image(digital_object, source_url=example)
     logging.info(f"Image URI: {image_uri}")
     scale, image_height, image_width = run_scale_estimation(image_uri)
-    annotations = map_result_to_annotation(digital_object, scale, image_height, image_width)
+    annotations = map_result_to_annotation(
+        digital_object, scale, image_height, image_width, media_object=media_object
+    )
     annotation_event = map_to_annotation_event(annotations, str(uuid.uuid4()))
 
     pretty_output = json.dumps(annotation_event, indent=2)
