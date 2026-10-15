@@ -6,10 +6,11 @@ import io
 import uuid
 import urllib.request
 from PIL import Image
+from jsonpath_ng import annotations
 
 import pika
 import requests as requests
-from typing import Dict
+from typing import Dict, Any
 from pika.amqp_object import Method, Properties
 from pika.adapters.blocking_connection import BlockingChannel
 
@@ -94,25 +95,30 @@ def map_to_annotation_event(media_object: Dict, result: Dict[str, str], job_id: 
     ods_agent = shared.get_agent()
 
     specimen_object = get_specimen_from_media(media_object)
-    
-    # TODO: loop over these
-        # result["probability"], 
-        # result["datetime"], 
-        # result["api_tag"]
-    
-    
-    annotation = shared.map_to_annotation_str_val(
-        ods_agent=ods_agent,
-        timestamp=shared.timestamp_now(),
-        oa_value=result["scientific_name"],
-        oa_selector=shared.build_term_selector("dwc:scientificName"),
-        target_id=specimen_object[shared.ODS_ID],
-        target_type=specimen_object[shared.ODS_TYPE],
-        dcterms_ref=result["api_call"],
-        motivation=shared.Motivation.ADDING.value,
-    )
 
-    return {"jobId": job_id, "annotations": [annotation]}
+    selectors: dict[str, Dict[Any, Any]] = {
+        "scientific_name": shared.build_term_selector("dwc:scientificName"),
+        "probability": shared.build_term_selector("ods:score"),
+    }
+    
+    annotations = []
+    for key, oa_selector in selectors.items():
+        oa_value = result[key]
+        
+        annotation = shared.map_to_annotation_str_val(
+            ods_agent=ods_agent,
+            timestamp=shared.timestamp_now(),
+            oa_value=oa_value,
+            oa_selector=oa_selector,
+            target_id=specimen_object[shared.ODS_ID],
+            target_type=specimen_object[shared.ODS_TYPE],
+            dcterms_ref=f"{result['api_call']}, api_tag:{result['api_tag']}",
+            motivation=shared.Motivation.ADDING.value,
+        )
+        
+        annotations.append(annotation)
+
+    return {"jobId": job_id, "annotations": annotations}
 
 
 def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
@@ -177,12 +183,17 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
     }
 
     response = requests.post(url=identify_api_path, files=files)
+    api_call = """
+        curl \
+            --location 'https://multi-source.identify.biodiversityanalysis.eu:443/v2/observation/identify' \
+            --form 'image=@\"/home/django/Pictures/apechthis.jpeg\"' \
+    """
         
     if response.status_code != 200:
         logging.error(f"API call failed with status code {response.status_code}: {response.text}")
-        # TODO: Fill in as curl command.
+        
         return {
-            "api_call": f'api: {identify_api_path}, image: {image_path}',
+            "api_call": api_call,
             "error_message": f"Failed to make the match, API call failed with status code {response.status_code}",
         }
     response_json = response.json()
@@ -196,7 +207,7 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
     api_tag = generated_by["tag"]
 
     return {
-        "api_call": f'api: {identify_api_path}, image: {image_path}',
+        "api_call": api_call,
         "scientific_name": scientific_name_top1,
         "probability": probability_top1,
         "datetime": date_time,
