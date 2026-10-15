@@ -1,9 +1,11 @@
-"""Geographic Locality MAS: Indigenous place-name pointers (prototype).
+"""Geographic Locality MAS: Indigenous community context, Sámi (prototype).
 
 RabbitMQ message -> value service (embedded, or the API at VALUE_SERVICE_URL) ->
-pointer-only oa:commenting annotations -> mas-annotation-exchange.
-A failed lookup, or an annotation that would contain a place name, sends a
-failure message instead (job FAILED). See README.md.
+one oa:commenting per location: may a Sámi community be connected to this locality,
+and whom should the holding institution contact for collaboration and approval ->
+mas-annotation-exchange. A failed name-register lookup (with no listed area), or a
+comment that would contain a name, sends a failure message instead (job FAILED).
+See README.md.
 
 Local dry run: prints the annotation events, publishes nothing.
   PYTHONPATH=. venv/bin/python geographic-locality/main.py SANDBOX/X16-9NF-V0S [SANDBOX/... ...]
@@ -17,8 +19,8 @@ import sys
 import uuid
 from typing import Any
 
+import community_annotations
 import pika
-import pointer_annotations
 import requests
 import value_service
 from pika.adapters.blocking_connection import BlockingChannel
@@ -30,7 +32,7 @@ logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 SANDBOX_API = "https://sandbox.dissco.tech/api/digital-specimen/v1"
 PREVIEW_MAS_ID = "PREVIEW/GEOGRAPHIC-LOCALITY"
-PREVIEW_MAS_NAME = "Geographic Locality: Indigenous place-name pointers (prototype)"
+PREVIEW_MAS_NAME = "Geographic Locality: Indigenous community context, Sámi (prototype)"
 
 
 def run_rabbitmq() -> None:
@@ -59,10 +61,11 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
 
 
 def build_annotation_event(specimen: dict[str, Any], job_id: str) -> dict[str, Any]:
-    """Value service -> pointer comments -> name guard -> annotation event."""
+    """Value service (with its names guard) -> community comments -> annotation event."""
     response = value_service.enrich(specimen)
-    annotations = pointer_annotations.build_annotations(specimen, response, shared.get_agent(), shared.timestamp_now())
-    pointer_annotations.assert_no_names(annotations, response)
+    annotations = community_annotations.build_annotations(
+        specimen, response, shared.get_agent(), shared.timestamp_now()
+    )
     return {"jobId": job_id, "annotations": annotations}
 
 

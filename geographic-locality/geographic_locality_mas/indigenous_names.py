@@ -637,7 +637,8 @@ def message_for(status, label, radius_m, n_places=0, n_nearby=0):
             "coordinates, and no name match on the locality text.")
 
 
-def find_indigenous_names(location, gazetteer=None, max_nearby=MAX_NEARBY, today=None):
+def find_indigenous_names(location, gazetteer=None, max_nearby=MAX_NEARBY, today=None,
+                          register_names=None):
     """Indigenous-language place names for one specimen location.
 
     location: dict with locality, county, country (or country_code), latitude,
@@ -647,6 +648,8 @@ def find_indigenous_names(location, gazetteer=None, max_nearby=MAX_NEARBY, today
     Returns a dict: status, gazetteer, query, matches, minority_language_names,
     nearby, summary, message, retrieved. status is one of match, nearby,
     no_match, no_coordinates, not_covered, error.
+    register_names: optional set. Every Indigenous and Kven name the lookup
+      returned is added to it, for a names guard. Not in the result.
     """
     today = today or datetime.now(timezone.utc).date()
     out = {"specimen_id": location.get("specimen_id"),
@@ -677,6 +680,9 @@ def find_indigenous_names(location, gazetteer=None, max_nearby=MAX_NEARBY, today
     except (GazetteerError, requests.RequestException, KeyError, TypeError, ValueError) as e:
         out.update(status="error", message=redact(f"{meta['label']} lookup failed: {e}"))
         return out
+    if register_names is not None:
+        register_names.update(nfc(d["name"]) for d in names
+                              if d.get("name") and language_info(d["language"])[2] != OTHER)
     hits = summarise_hits(names, location.get("locality"))
     matches, minority, nearby = to_matches(hits, gaz, unc, radius, today, max_nearby)
     n_places = len({m["place_id"] for m in matches})

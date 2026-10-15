@@ -3,17 +3,18 @@
 Run from the repository root:  pytest geographic-locality/tests
 (pytest.ini puts geographic-locality/ and the repository root on the path.)
 No test calls a real API. All place names are made up (Synth-NNNN); place IDs 9000xx
-are not real Kartverket IDs.
+are not real Kartverket IDs. Area names (Karasjok) are the majority-language names in
+the team's area table.
 """
 
 import os
 
-import indigenous_names as ina
 import pytest
+from geographic_locality_mas import indigenous_names as ina
 
 # shared.get_agent() reads these when shared is first imported (by the test module)
 os.environ.setdefault("MAS_ID", "TEST/MAS-0001")
-os.environ.setdefault("MAS_NAME", "Geographic Locality: Indigenous place-name pointers (test)")
+os.environ.setdefault("MAS_NAME", "Geographic Locality: Indigenous community context, Sámi (test)")
 
 FDO_TYPE = "https://doi.org/21.T11148/894b1e6cad57e921764e"
 SPECIMEN_ID = "https://doi.org/SANDBOX/TST-000-001"
@@ -44,25 +45,34 @@ SSR_NAMES = [
 MADE_UP_INDIGENOUS_AND_KVEN = ["Synth-0001", "Synth-0002", "Synth-0003"]
 
 
-def specimen(locality="Ved Synth-1000, nær vannet", country="Norway", lat=70.1, lon=25.1, unc=707):
-    """A bare openDS Digital Specimen (as RabbitMQ delivers it). Event 0 has no location."""
+def specimen(locality="Ved Synth-1000, nær vannet", country="Norway", coords=(69.0, 23.0), unc=707, **admin):
+    """A bare openDS Digital Specimen (as RabbitMQ delivers it). Event 0 has no location.
+    admin: dwc fields of the location, e.g. municipality="Karasjok"."""
     geo = (
         {}
-        if lat is None
+        if coords is None
         else {
             "ods:hasGeoreference": {
                 "@type": "ods:GeoReference",
-                "dwc:decimalLatitude": lat,
-                "dwc:decimalLongitude": lon,
+                "dwc:decimalLatitude": coords[0],
+                "dwc:decimalLongitude": coords[1],
                 "dwc:coordinateUncertaintyInMeters": unc,
             }
         }
     )
-    location = {"@type": "ods:Location", "dwc:country": country, "dwc:locality": locality, **geo}
+    location = {
+        "@type": "ods:Location",
+        "dwc:country": country,
+        "dwc:locality": locality,
+        **{f"dwc:{k}": v for k, v in admin.items()},
+        **geo,
+    }
     return {
         "@id": SPECIMEN_ID,
         "dcterms:identifier": SPECIMEN_ID,
         "ods:fdoType": FDO_TYPE,
+        "ods:organisationName": "Synthetic Herbarium",
+        "ods:organisationID": "https://ror.org/000000000",
         "ods:hasEvents": [{"@type": "ods:Event"}, {"@type": "ods:Event", "ods:hasLocation": location}],
     }
 
@@ -79,7 +89,7 @@ class FakeChannel:
 
 @pytest.fixture
 def ssr(monkeypatch):
-    """Mocked SSR lookup; records the calls. Set .names or .error to change the answer."""
+    """Mocked SSR (and NLS) lookup; records the calls. Set .names or .error to change the answer."""
 
     class Lookup:
         def __init__(self):

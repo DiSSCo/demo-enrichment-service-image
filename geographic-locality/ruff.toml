@@ -1,0 +1,5 @@
+# Repository settings (and the repository root as source root, as before);
+# the vendored team code in geographic_locality_mas/ is linted in the team repository.
+extend = "../ruff.toml"
+src = [".."]
+extend-exclude = ["geographic_locality_mas"]

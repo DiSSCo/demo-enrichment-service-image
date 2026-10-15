@@ -1,6 +1,6 @@
 {
-  "schema:name": "Geographic Locality: Indigenous place-name pointers (prototype)",
-  "schema:description": "DiSSCo MAS Hackathon 2026 prototype (Geographic Place Names team). Comments on a specimen location with links to entries in the Norwegian place-name register (Kartverket SSR) that hold Indigenous (Sámi) names. Copies no names. Built without Sámi input; not reviewed by Sámi representatives.",
+  "schema:name": "Geographic Locality: Indigenous community context, Sámi (prototype)",
+  "schema:description": "DiSSCo MAS Hackathon 2026 prototype (Geographic Place Names team). Comments on a specimen location when a Sámi community may be connected to the locality (Norway's administrative area for Sámi languages, Finland's Sámi Homeland, and as evidence only the official place-name registers): the community needs to be contacted for collaboration and approval before Sámi knowledge is added to the record, and the holding institution should contact the Sámi bodies. Copies no names. Built without Sámi input; not reviewed by Sámi representatives.",
   "ods:containerImage": "public.ecr.aws/dissco/geographic-locality",
   "ods:containerTag": "latest",
   "ods:batchingPermitted": false,
