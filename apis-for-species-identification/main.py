@@ -124,7 +124,7 @@ def publish_annotation_event(annotation_event: dict, channel: BlockingChannel) -
     :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
     """
-    logger.info("Publishing annotation: " + str(annotation_event))
+    logging.info("Publishing annotation: " + str(annotation_event))
     channel.basic_publish(
         exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
         routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
