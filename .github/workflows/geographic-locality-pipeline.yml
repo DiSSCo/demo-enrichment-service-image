@@ -1,0 +1,63 @@
+name: Build Geographic Locality
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'geographic-locality/**'
+      - 'shared/**'
+      - '.github/workflows/geographic-locality-pipeline.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'geographic-locality/**'
+      - 'shared/**'
+      - '.github/workflows/geographic-locality-pipeline.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # Lint only this MAS: the latest ruff flags existing code elsewhere in the repository.
+      - uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6 # v3
+        with:
+          src: geographic-locality
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Test
+        run: |
+          pip install --only-binary=:all: -r geographic-locality/requirements.txt pytest
+          pytest geographic-locality/tests -q
+      - name: Login to Public ECR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@dd4fa0671be5250ee6f50aedf4cb05514abda2c7 # v1
+        with:
+          registry: public.ecr.aws
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@818d4b7b91585d195f67373fd9cb0332e31a7175 # v4
+        with:
+          images: public.ecr.aws/dissco/geographic-locality
+          tags: |
+            type=sha
+            type=raw,value=latest
+      - name: Build and push
+        uses: docker/build-push-action@1104d471370f9806843c095c1db02b5a90c5f8b6 # v3
+        with:
+          context: .
+          file: geographic-locality/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: Set outputs
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Push tag
+        if: github.event_name != 'pull_request'
+        uses: anothrNick/github-tag-action@ce4b5ffa38e072fa7a901e417253c438fcc2ccce # 1.36.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CUSTOM_TAG: image-sha-${{ steps.vars.outputs.sha_short }}
