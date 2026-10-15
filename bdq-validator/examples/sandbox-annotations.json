@@ -7,10 +7,10 @@
       "oa:motivatedBy": "VALIDATION_EVENTDATE_NOTEMPTY: dwc:eventDate has a value.",
       "dcterms:created": "2026-10-14T08:01:31.207Z",
       "dcterms:creator": {
-        "@id": "https://example.org/mas/bdq-test",
+        "@id": "https://example.org/mas/bdq-validator",
         "@type": "schema:SoftwareApplication",
-        "schema:identifier": "https://example.org/mas/bdq-test",
-        "schema:name": "BDQ event date test",
+        "schema:identifier": "https://example.org/mas/bdq-validator",
+        "schema:name": "BDQ Validator",
         "ods:hasRoles": [
           {
             "@type": "schema:Role",
@@ -31,7 +31,7 @@
       "oa:hasBody": {
         "@type": "oa:TextualBody",
         "oa:value": [
-          "{\"test\": \"VALIDATION_EVENTDATE_NOTEMPTY\", \"testVersion\": \"https://rs.tdwg.org/bdqtest/terms/version/f51e15a6-a67d-4729-9c28-3766299d2985-2023-09-17\", \"implementation\": {\"name\": \"bdq-test\", \"version\": \"0.1.0\"}, \"input\": {\"dwc:eventDate\": \"1916-07\"}, \"inputPath\": \"$['ods:hasEvents'][0]['dwc:eventDate']\", \"Response.status\": \"RUN_HAS_RESULT\", \"Response.result\": \"COMPLIANT\", \"Response.comment\": \"dwc:eventDate has a value.\"}"
+          "{\"test\": \"VALIDATION_EVENTDATE_NOTEMPTY\", \"testVersion\": \"https://rs.tdwg.org/bdqtest/terms/version/f51e15a6-a67d-4729-9c28-3766299d2985-2023-09-17\", \"implementation\": {\"name\": \"bdq-validator\", \"version\": \"0.1.0\"}, \"input\": {\"dwc:eventDate\": \"1916-07\"}, \"inputPath\": \"$['ods:hasEvents'][0]['dwc:eventDate']\", \"Response.status\": \"RUN_HAS_RESULT\", \"Response.result\": \"COMPLIANT\", \"Response.comment\": \"dwc:eventDate has a value.\"}"
         ],
         "dcterms:references": "https://rs.tdwg.org/bdqtest/terms/version/f51e15a6-a67d-4729-9c28-3766299d2985-2023-09-17"
       }

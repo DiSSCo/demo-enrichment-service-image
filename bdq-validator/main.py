@@ -33,7 +33,7 @@ def fetch_sandbox_job(specimen_id: str, job_id: str) -> dict:
         raise ValueError("Use a SANDBOX/XXX-XXX-XXX identifier or its sandbox specimen page URL")
     request = Request(
         SANDBOX_API + quote(specimen_id, safe="/"),
-        headers={"Accept": "application/json", "User-Agent": f"bdq-test/{IMPLEMENTATION_VERSION}"},
+        headers={"Accept": "application/json", "User-Agent": f"bdq-validator/{IMPLEMENTATION_VERSION}"},
     )
     with urlopen(request, timeout=20) as response:
         document = json.load(response)
@@ -141,7 +141,7 @@ def main() -> None:
     source.add_argument("--input", type=Path, help="Read a saved MAS job envelope")
     source.add_argument("--specimen", help="Fetch a live specimen from the DiSSCo sandbox")
     source.add_argument("--rabbitmq", action="store_true", help="Consume jobs and publish annotation events")
-    parser.add_argument("--job-id", default="local-bdq-test", help="Job identifier for a sandbox run")
+    parser.add_argument("--job-id", default="local-bdq-validator", help="Job identifier for a sandbox run")
     parser.add_argument("--output", type=Path, help="Write the annotation event to a file instead of stdout")
     parser.add_argument("--save-input", type=Path, help="Save the fetched sandbox job for offline reruns")
     parser.add_argument(
@@ -174,7 +174,7 @@ def main() -> None:
         else:
             print(json.dumps(event, indent=2, ensure_ascii=False))
     except (OSError, URLError, ValueError, TypeError, ImportError) as error:
-        parser.exit(status=1, message=f"bdq-test: {error}\n")
+        parser.exit(status=1, message=f"bdq-validator: {error}\n")
 
 
 if __name__ == "__main__":

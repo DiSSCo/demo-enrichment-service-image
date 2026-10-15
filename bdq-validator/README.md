@@ -1,4 +1,4 @@
-# BDQ test MAS
+# BDQ Validator MAS
 
 A DiSSCo Machine Annotation Service implementing 28 selected BDQ tests, including
 local validations and GBIF-backed taxonomy checks. It produces `oa:assessing`
@@ -21,7 +21,7 @@ Run these commands from the repository root. The local runner uses only the Pyth
 standard library; Python 3.12 or newer is recommended.
 
 ```sh
-python3 bdq-test/main.py --specimen SANDBOX/ZJZ-NMY-GN8 --tests VALIDATION_EVENTDATE_NOTEMPTY
+python3 bdq-validator/main.py --specimen SANDBOX/ZJZ-NMY-GN8 --tests VALIDATION_EVENTDATE_NOTEMPTY
 ```
 
 This fetches [the sandbox specimen](https://sandbox.dissco.tech/ds/SANDBOX/ZJZ-NMY-GN8)
@@ -43,17 +43,17 @@ collecting event with `dwc:eventDate: "1916-07"`, which returns:
 Rerun the saved specimen without network access:
 
 ```sh
-python3 bdq-test/main.py --input bdq-test/examples/sandbox-job.json --tests VALIDATION_EVENTDATE_NOTEMPTY
+python3 bdq-validator/main.py --input bdq-validator/examples/sandbox-job.json --tests VALIDATION_EVENTDATE_NOTEMPTY
 ```
 
 Refresh the saved input and output from the sandbox:
 
 ```sh
-python3 bdq-test/main.py --specimen SANDBOX/ZJZ-NMY-GN8 \
+python3 bdq-validator/main.py --specimen SANDBOX/ZJZ-NMY-GN8 \
   --tests VALIDATION_EVENTDATE_NOTEMPTY \
   --job-id local-SANDBOX-ZJZ-NMY-GN8 \
-  --save-input bdq-test/examples/sandbox-job.json \
-  --output bdq-test/examples/sandbox-annotations.json
+  --save-input bdq-validator/examples/sandbox-job.json \
+  --output bdq-validator/examples/sandbox-annotations.json
 ```
 
 `examples/sandbox-job.json` preserves the real specimen attributes. Its job ID is
@@ -64,7 +64,7 @@ publishing annotations to DiSSCo.
 ## Try a missing date
 
 ```sh
-python3 bdq-test/main.py --input bdq-test/examples/missing-date-job.json --tests VALIDATION_EVENTDATE_NOTEMPTY
+python3 bdq-validator/main.py --input bdq-validator/examples/missing-date-job.json --tests VALIDATION_EVENTDATE_NOTEMPTY
 ```
 
 This separate, synthetic specimen has an event without `dwc:eventDate`. Its result
@@ -85,7 +85,7 @@ class because the date property does not exist. Its saved output is
 - DiSSCo's 0.4 body schema requires strings in `oa:value`, so the structured BDQ
   result is serialized with `json.dumps`. Decode `oa:value[0]` to read it.
 - `MAS_ID` and `MAS_NAME` identify the software that generated the annotation.
-  Local runs use `https://example.org/mas/bdq-test` if no MAS ID is configured.
+  Local runs use `https://example.org/mas/bdq-validator` if no MAS ID is configured.
 
 BDQ Empty includes absent/null values and strings containing only characters
 U+0000 through U+0020. Strings such as `"NULL"`, `"unknown"`, and `"?"` are NotEmpty.
@@ -98,7 +98,7 @@ events, missing properties, and RabbitMQ acknowledgement/error handling. Some
 taxonomy checks currently call live GBIF, so the full suite needs network access:
 
 ```sh
-python3 -m unittest discover -s bdq-test -p 'test_*.py' -v
+python3 -m unittest discover -s bdq-validator -p 'test_*.py' -v
 ```
 
 Validate the example outputs against the official DiSSCo annotation event schema
@@ -106,20 +106,20 @@ Validate the example outputs against the official DiSSCo annotation event schema
 
 ```sh
 python3 -m venv venv
-venv/bin/python -m pip install -r bdq-test/requirements-dev.txt
-venv/bin/python bdq-test/validate_output.py \
-  bdq-test/examples/sandbox-annotations.json \
-  bdq-test/examples/missing-date-annotations.json
+venv/bin/python -m pip install -r bdq-validator/requirements-dev.txt
+venv/bin/python bdq-validator/validate_output.py \
+  bdq-validator/examples/sandbox-annotations.json \
+  bdq-validator/examples/missing-date-annotations.json
 ```
 
 ## Run through RabbitMQ
 
-Install `requirements.txt`, then run `python3 bdq-test/main.py --rabbitmq`, or build
+Install `requirements.txt`, then run `python3 bdq-validator/main.py --rabbitmq`, or build
 the container from the repository root:
 
 ```sh
-docker build -f bdq-test/Dockerfile -t bdq-test .
-docker run --rm --env-file .env bdq-test
+docker build -f bdq-validator/Dockerfile -t bdq-validator .
+docker run --rm --env-file .env bdq-validator
 ```
 
 Configure the environment with values supplied by DiSSCo:
@@ -131,7 +131,7 @@ Configure the environment with values supplied by DiSSCo:
 | `RABBITMQ_PASSWORD` | Required broker password |
 | `RABBITMQ_QUEUE` | Required queue assigned to this MAS |
 | `MAS_ID` | Required registered MAS handle, without `https://hdl.handle.net/` |
-| `MAS_NAME` | Software name; default `BDQ event date test` |
+| `MAS_NAME` | Software name; default `BDQ Validator` |
 | `BDQ_TESTS` | Default `all`, or comma-separated test labels |
 | `RUNNING_ENDPOINT` | Optional job-status base URL; uses the template's URL construction |
 | `RABBITMQ_PORT` | Default `5672` |

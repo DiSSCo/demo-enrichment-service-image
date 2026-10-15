@@ -1,6 +1,6 @@
 # New BDQ tests: how they work
 
-We added **16 new data quality tests** to the bdq-test MAS. Together with the original
+We added **16 new data quality tests** to the bdq-validator MAS. Together with the original
 test (`VALIDATION_EVENTDATE_NOTEMPTY`), the MAS now runs **17 tests**, all of them by
 default. None of them calls an external API.
 
@@ -206,17 +206,17 @@ By default, **all 17 tests run**. Use `--tests` to run only some of them.
 
 ```sh
 # All 17 tests (default)
-python3 bdq-test/main.py --specimen SANDBOX/ZJZ-NMY-GN8
+python3 bdq-validator/main.py --specimen SANDBOX/ZJZ-NMY-GN8
 
 # Only some tests
-python3 bdq-test/main.py --specimen SANDBOX/ZJZ-NMY-GN8 \
+python3 bdq-validator/main.py --specimen SANDBOX/ZJZ-NMY-GN8 \
   --tests VALIDATION_COUNTRYCODE_STANDARD,VALIDATION_COORDINATES_NOTZERO
 
 # RabbitMQ / Docker: all tests by default, or choose with an environment variable
-BDQ_TESTS=VALIDATION_EVENTDATE_NOTEMPTY python3 bdq-test/main.py --rabbitmq
+BDQ_TESTS=VALIDATION_EVENTDATE_NOTEMPTY python3 bdq-validator/main.py --rabbitmq
 
 # Run the unit tests
-python3 -m unittest discover -s bdq-test -p 'test_*.py' -v
+python3 -m unittest discover -s bdq-validator -p 'test_*.py' -v
 ```
 
 A misspelled test name stops the program immediately with a list of valid names.

@@ -19,12 +19,12 @@ DIGITAL_SPECIMEN_FDO_TYPE = "https://doi.org/21.T11148/894b1e6cad57e921764e"
 def build_creator() -> dict:
     """Use the registered MAS identity, or an explicit local demo identity."""
     mas_id = os.environ.get("MAS_ID")
-    identifier = f"https://hdl.handle.net/{mas_id}" if mas_id else "https://example.org/mas/bdq-test"
+    identifier = f"https://hdl.handle.net/{mas_id}" if mas_id else "https://example.org/mas/bdq-validator"
     return {
         "@id": identifier,
         "@type": "schema:SoftwareApplication",
         "schema:identifier": identifier,
-        "schema:name": os.environ.get("MAS_NAME", "BDQ event date test"),
+        "schema:name": os.environ.get("MAS_NAME", "BDQ Validator"),
         "ods:hasRoles": [{"@type": "schema:Role", "schema:roleName": "machine-annotation-service"}],
     }
 
@@ -52,7 +52,7 @@ def build_mas_annotation(
         test_instance, "IMPLEMENTATION_VERSION", IMPLEMENTATION_VERSION
     )
     impl_name = getattr(test_instance, "implementation_name", None) or getattr(
-        test_instance, "IMPLEMENTATION_NAME", "bdq-test"
+        test_instance, "IMPLEMENTATION_NAME", "bdq-validator"
     )
     term = getattr(test_instance, "term", None) or getattr(test_instance, "TERM", "dwc:eventDate")
     # Multi-term tests (with a `terms` attribute) receive and report a {term: value} dict.

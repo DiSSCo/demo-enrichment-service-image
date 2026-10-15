@@ -3,7 +3,7 @@
 Our BDQ Machine Annotation Service checked one DiSSCo specimen against **17 data quality
 tests** from the TDWG Biodiversity Data Quality (BDQ) standard.
 
-> Generated with `python3 bdq-test/main.py --specimen SANDBOX/ZJZ-NMY-GN8`
+> Generated with `python3 bdq-validator/main.py --specimen SANDBOX/ZJZ-NMY-GN8`
 > on 2026-10-14, against specimen version 4.
 
 ## The specimen

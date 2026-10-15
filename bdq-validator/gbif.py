@@ -55,7 +55,7 @@ def _fetch_json(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict | list | Non
         url,
         headers={
             "Accept": "application/json",
-            "User-Agent": "bdq-test/0.1.0 (DiSSCo BDQ MAS; +https://dissco.eu)",
+            "User-Agent": "bdq-validator/0.1.0 (DiSSCo BDQ MAS; +https://dissco.eu)",
         },
     )
     try:

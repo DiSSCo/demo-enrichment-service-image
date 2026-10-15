@@ -24,13 +24,13 @@ class BDQEvent(ABC):
 
     test_label: str = ""
     test_version_iri: str = ""
-    implementation_name: str = "bdq-test"
+    implementation_name: str = "bdq-validator"
     implementation_version: str = IMPLEMENTATION_VERSION
     term: str = "dwc:eventDate"
 
     TEST_LABEL: str = ""
     TEST_VERSION_IRI: str = ""
-    IMPLEMENTATION_NAME: str = "bdq-test"
+    IMPLEMENTATION_NAME: str = "bdq-validator"
     IMPLEMENTATION_VERSION: str = IMPLEMENTATION_VERSION
     TERM: str = "dwc:eventDate"
 
@@ -89,7 +89,7 @@ class ValidationEventDateNotEmpty(BDQEvent):
 
     test_label = TEST_LABEL
     test_version_iri = TEST_VERSION_IRI
-    implementation_name = "bdq-test"
+    implementation_name = "bdq-validator"
     implementation_version = IMPLEMENTATION_VERSION
     term = "dwc:eventDate"
 
