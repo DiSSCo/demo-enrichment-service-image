@@ -2,7 +2,7 @@ import json
 import logging
 import sys
 from types import SimpleNamespace
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 import main as worker
 import pytest
@@ -268,23 +268,63 @@ def test_http_failure_logs_stage_without_secrets(job, response, monkeypatch, cap
     assert [action[0] for action in channel.actions] == ["publish", "ack"]
 
 
-def test_running_callback_failure_is_visible(job, monkeypatch, caplog):
+@pytest.mark.parametrize(
+    "error",
+    [
+        HTTPError("https://example.org/?key=private-secret", status, "private-secret", {}, None)
+        for status in (401, 404, 503)
+    ]
+    + [URLError("private-secret"), TimeoutError("private-secret")],
+)
+def test_running_callback_failure_warns_and_still_publishes_annotations(job, response, monkeypatch, caplog, error):
     monkeypatch.setitem(sys.modules, "pika", SimpleNamespace(BasicProperties=lambda **kw: kw))
     monkeypatch.setenv("RUNNING_ENDPOINT", "https://example.org/running")
     monkeypatch.setenv("MAS_ID", "SANDBOX/test-mas")
     caplog.set_level(logging.INFO, logger=worker.LOGGER.name)
 
     def denied_running_endpoint(url, **kwargs):
-        raise HTTPError(url, 401, "private-secret", {}, None)
+        raise error
 
     monkeypatch.setattr(worker, "urlopen", denied_running_endpoint)
-    monkeypatch.setattr(worker, "run_job", lambda job: pytest.fail("Must not infer after progress callback failure"))
-    worker.process_message(Channel(), SimpleNamespace(delivery_tag=1), None, json.dumps(job).encode())
+    original_run_job = worker.run_job
+    monkeypatch.setattr(
+        worker, "run_job", lambda job: original_run_job(job, image_fetch=lambda url: b"image", inference=response)
+    )
+    channel = Channel()
+    worker.process_message(channel, SimpleNamespace(delivery_tag=1), None, json.dumps(job).encode())
     records = [json.loads(record.message) for record in caplog.records if record.name == worker.LOGGER.name]
-    failure = next(record for record in records if record["event"] == "stage_failed")
-    assert failure["stage"] == "notify_running"
-    assert failure["http_status"] == 401
+    warning = next(record for record in records if record["event"] == "running_notification_failed")
+    assert warning["continuing"] is True
+    assert warning["error_type"] == type(error).__name__
+    if isinstance(error, HTTPError):
+        assert warning["http_status"] == error.code
+    assert any(record.levelno == logging.WARNING for record in caplog.records)
+    assert not any(record["event"] == "job_failed" for record in records)
     assert "private-secret" not in caplog.text
+    assert "https://example.org/?key=" not in caplog.text
+    assert [action[0] for action in channel.actions] == ["publish", "ack"]
+    published = channel.actions[0][1]
+    event = json.loads(published["body"])
+    assert published["routing_key"] == "mas-annotation"
+    assert event["jobId"] == job["jobId"]
+    assert len(event["annotations"]) == 16
+    validate_event(event)
+
+
+@pytest.mark.parametrize("mas_id", ["SANDBOX/test-mas", "https://hdl.handle.net/SANDBOX/test-mas"])
+def test_running_callback_uses_handle_path_and_preserves_creator_id(mas_id, monkeypatch):
+    monkeypatch.setenv("RUNNING_ENDPOINT", "https://example.org/api/mjr/v1/")
+    monkeypatch.setenv("MAS_ID", mas_id)
+    calls = []
+
+    def capture_callback(url, *, timeout):
+        calls.append((url, timeout))
+        return SimpleNamespace(close=lambda: None)
+
+    monkeypatch.setattr(worker, "urlopen", capture_callback)
+    worker.notify_running("SANDBOX/test-job")
+    assert calls == [("https://example.org/api/mjr/v1/SANDBOX/test-mas/SANDBOX/test-job/running", 15)]
+    assert worker.os.environ["MAS_ID"] == mas_id
 
 
 def test_startup_logs_configuration_presence_without_values(monkeypatch, caplog):

@@ -123,12 +123,17 @@ def run_job(job: dict, *, image_fetch=fetch_image, inference=None) -> dict:
 
 def notify_running(job_id):
     running = os.environ.get("RUNNING_ENDPOINT")
-    '''
     if running:
         # Matches current demo repository shared.mark_job_as_running.
-        url = f"{running.rstrip('/')}/{os.environ['MAS_ID']}/{job_id}/running"
-        urlopen(url, timeout=15).close()
-    '''
+        mas_id = os.environ["MAS_ID"].removeprefix("https://hdl.handle.net/")
+        url = f"{running.rstrip('/')}/{mas_id}/{job_id}/running"
+        try:
+            urlopen(url, timeout=15).close()
+        except OSError as error:
+            # Progress is advisory. Preserve image/model failures as real job failures.
+            log_event(
+                logging.WARNING, "running_notification_failed", job_id=job_id, continuing=True, **error_details(error)
+            )
 
 
 def process_message(channel, method, properties, body):
