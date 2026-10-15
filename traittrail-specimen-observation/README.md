@@ -18,6 +18,8 @@ All predictions remain unreviewed. Studio can open the exported event alongside 
 
 DiSSCo supplies MAS_ID, MAS_NAME, RABBITMQ_HOST, RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_QUEUE and RUNNING_ENDPOINT. Configure TRAITTRAIL_API_URL for the agreed HTTPS value-service address, plus TRAITTRAIL_API_TOKEN as a deployment secret matching the value service. Standard annotation/failure routing follows the existing examples. Cross-resource batching is unsupported.
 
+The running-status request uses `{RUNNING_ENDPOINT}/{MAS_ID}/{jobId}/running`, with MAS_ID as its short Handle (for example `SANDBOX/SS6-GDM-NHR`). A full `https://hdl.handle.net/` MAS identifier is also accepted and normalised only for this request; annotation creator attribution remains unchanged. RUNNING_ENDPOINT must target the same environment as the scheduled job. HTTP/network failures from this advisory update emit `running_notification_failed` with `continuing: true`, then image analysis continues. Download, inference, validation and broker publication failures retain their normal failure handling. A callback warning still needs deployment investigation, and the intermediate RUNNING state may be absent.
+
 Restrict this demo to the organisation/dataset agreed with the support team; tombstone the MAS and remove its secret after the hackathon. Registration, restriction and endpoint configuration remain pending.
 
 ## Validation
@@ -32,7 +34,7 @@ Pinned schemas validate offline. The 26 tests cover region and unknown mapping, 
 
 The container emits unbuffered startup and job-stage diagnostics to stderr. Startup reports only whether each expected setting exists, never its value. Job logs identify receipt, running notification, validation, media download, inference, annotation mapping and acknowledgement. Failures include the stage, exception type, HTTP status where available and traceback file/function/line locations. Request headers/bodies, URLs and raw exception text are excluded so that access tokens and signed media links stay out of logs.
 
-For a failed sandbox job, provide the job Handle and deployed container tag/digest, then inspect the pod's `traittrail.mas` log entries. A failure at `notify_running` precedes image download/inference. A failure at `download_media` concerns the source image. An `inference` failure concerns the configured value service or its result. `TRAITTRAIL_API_URL` must be the agreed HTTPS base URL without `/infer`; the registered secret name must be `TRAITTRAIL_API_TOKEN`. If the GB10 API sees no request, inspect earlier stages and the deployed endpoint configuration first.
+For a failed sandbox job, provide the job Handle and deployed container tag/digest, then inspect the pod's `traittrail.mas` log entries. `running_notification_failed` is an advisory warning before image download/inference, not a model failure. A failure at `download_media` concerns the source image. An `inference` failure concerns the configured value service or its result. `TRAITTRAIL_API_URL` must be the agreed HTTPS base URL without `/infer`; the registered secret name must be `TRAITTRAIL_API_TOKEN`. If the GB10 API sees no request, inspect earlier stages and the deployed endpoint configuration first.
 
 ## Current preparation — 15 October 2026
 

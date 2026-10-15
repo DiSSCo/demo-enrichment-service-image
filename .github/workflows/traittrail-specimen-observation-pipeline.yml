@@ -1,7 +1,7 @@
 name: Check, build and publish TraitTrail specimen observation
 on:
   push:
-    branches: [main, traittrail-mas, traittrail-quality-fixes]
+    branches: [main, traittrail-mas, traittrail-quality-fixes, traittrail-progress-callback]
     paths:
       - 'traittrail-specimen-observation/**'
       - '.github/workflows/traittrail-specimen-observation-pipeline.yml'
