@@ -31,6 +31,7 @@ Restrictions and comments:
     * Image will be cropped based on what the AI can handle. (i.e. 500 x 500pixels)
     * The default model: https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify is trained on wildlife data instead of museum collection data, so it might not perform well on all specimen.
     * The prediction is rejected if the probability score is lower than the minimum set probability score.
+    * The AI model should use this prediction schema: https://gitlab.com/arise-biodiversity/schemas/-/blob/main/schema_dsi_predictions.json
 """
 
 
