@@ -151,11 +151,10 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
 
     max_dimension = os.environ.get("MAX_RESOLUTION", "500,500")   # Max width or height in pixels
     max_width, max_height = map(int, max_dimension.split(","))
-    # 1. Download image bytes
+
     with urllib.request.urlopen(image_path) as response:
         raw_bytes = response.read()
 
-    # 2. Resize with Pillow
     with Image.open(io.BytesIO(raw_bytes)) as img:
         img.thumbnail((max_width, max_height))
         if img.mode in ("RGBA", "P"):
@@ -165,7 +164,6 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
         img.save(image_file, format="JPEG", quality=85)
         image_file.seek(0)
 
-    # 3. Explicitly state the filename AND Content-Type in a 3-tuple
     files = {
         "image": ("image.jpg", image_file, "image/jpeg")
     }
@@ -203,13 +201,13 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
     }
 
 def get_image_from_object(media_object) -> str:
-    imageUrl=media_object.get("ac:accessURI")
-    return imageUrl
+    image_url=media_object.get("ac:accessURI")
+    return image_url
 
 def get_image_type(media_object) -> str:
-    serviceAccessPoints=media_object.get("serviceAccessPoints")
-    imageFormat=serviceAccessPoints.get("format")
-    return imageFormat
+    service_access_points=media_object.get("serviceAccessPoints")
+    image_format=service_access_points.get("format")
+    return image_format
     
 
 
