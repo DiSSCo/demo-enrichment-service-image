@@ -4,9 +4,9 @@ WORKDIR /code
 
 RUN adduser --disabled-password --gecos '' --system --uid 1001 python && chown -R python /code
 
-COPY ruler_detection/requirements.txt .
+COPY ruler_detection/requirements.lock .
 
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir --require-hashes --only-binary=:all: -r requirements.lock
 
 COPY shared/ shared/
 

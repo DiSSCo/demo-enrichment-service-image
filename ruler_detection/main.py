@@ -57,8 +57,8 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
 
         logger.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
         publish_annotation_event(annotation_event, channel)
-    except Exception as e:  # noqa: BLE001 any failure must be reported to DiSSCo as a failed job
-        logger.error(f"Failed to publish annotation event: {e}")
+    except Exception as e:
+        logger.exception("Failed to publish annotation event")
         shared.send_failed_message(json_value["jobId"], str(e), channel)
 
 
