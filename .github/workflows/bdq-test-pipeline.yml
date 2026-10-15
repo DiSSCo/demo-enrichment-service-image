@@ -31,7 +31,12 @@ jobs:
         uses: astral-sh/ruff-action@v3
         with:
           args: format --check bdq-test
-      - name: Run offline checks
+      - name: Run service checks
         run: python -m unittest discover -s bdq-test -p 'test_*.py' -v
       - name: Build container
         run: docker build -f bdq-test/Dockerfile -t bdq-test .
+      - name: Run container example
+        run: >-
+          docker run --rm
+          --mount "type=bind,source=${{ github.workspace }}/bdq-test/examples,target=/examples,readonly"
+          bdq-test --input /examples/sandbox-job.json --tests VALIDATION_EVENTDATE_NOTEMPTY

@@ -1,4 +1,4 @@
-"""Map OpenDS event dates and BDQ responses to DiSSCo annotation events."""
+"""Map OpenDS fields and BDQ responses to DiSSCo annotation events."""
 
 import json
 import os
@@ -45,17 +45,14 @@ def build_mas_annotation(
 
     response = test_instance.validate(value)
     test_label = getattr(test_instance, "test_label", None) or getattr(test_instance, "TEST_LABEL", TEST_LABEL)
-    test_version_iri = (
-        getattr(test_instance, "test_version_iri", None)
-        or getattr(test_instance, "TEST_VERSION_IRI", TEST_VERSION_IRI)
+    test_version_iri = getattr(test_instance, "test_version_iri", None) or getattr(
+        test_instance, "TEST_VERSION_IRI", TEST_VERSION_IRI
     )
-    impl_version = (
-        getattr(test_instance, "implementation_version", None)
-        or getattr(test_instance, "IMPLEMENTATION_VERSION", IMPLEMENTATION_VERSION)
+    impl_version = getattr(test_instance, "implementation_version", None) or getattr(
+        test_instance, "IMPLEMENTATION_VERSION", IMPLEMENTATION_VERSION
     )
-    impl_name = (
-        getattr(test_instance, "implementation_name", None)
-        or getattr(test_instance, "IMPLEMENTATION_NAME", "bdq-test")
+    impl_name = getattr(test_instance, "implementation_name", None) or getattr(
+        test_instance, "IMPLEMENTATION_NAME", "bdq-test"
     )
     term = getattr(test_instance, "term", None) or getattr(test_instance, "TERM", "dwc:eventDate")
     # Multi-term tests (with a `terms` attribute) receive and report a {term: value} dict.
@@ -155,9 +152,7 @@ def test_bdq_event(
                 else:
                     # An assessment cannot select a term absent from the specimen.
                     selector = {"@type": "ods:ClassSelector", "ods:class": event_path}
-                annotations.append(
-                    build_mas_annotation(specimen, event.get(term), input_path, selector, test=test)
-                )
+                annotations.append(build_mas_annotation(specimen, event.get(term), input_path, selector, test=test))
     for test in scoped_tests:
         annotations.extend(assess_scope(specimen, test))
     return {"jobId": job["jobId"], "annotations": annotations}

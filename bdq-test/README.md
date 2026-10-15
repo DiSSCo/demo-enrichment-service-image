@@ -1,16 +1,19 @@
-# BDQ event date test MAS
+# BDQ test MAS
 
-A small DiSSCo Machine Annotation Service implementing one selected BDQ test:
-`VALIDATION_EVENTDATE_NOTEMPTY`. It assesses whether each OpenDS event has an
-event date and produces `oa:assessing` annotations. Date format and date validity
-are separate BDQ tests.
+A DiSSCo Machine Annotation Service implementing 28 selected BDQ tests, including
+local validations and GBIF-backed taxonomy checks. It produces `oa:assessing`
+annotations for the relevant OpenDS events, locations, identifications and taxa.
+The commands below start with the simple `VALIDATION_EVENTDATE_NOTEMPTY` example.
+Omit `--tests` to run all 28 tests; GBIF-backed tests need network access.
 
 The same processing function is used for a saved JSON job, a live sandbox specimen,
 and jobs received through RabbitMQ:
 
 ```text
-job JSON → OpenDS event dates → BDQ response → annotation event JSON
+job JSON → OpenDS fields → BDQ responses → annotation event JSON
 ```
+
+For registration and testing on DiSSCo's own broker, see [Sandbox setup](SANDBOX.md).
 
 ## Run the real sandbox example
 
@@ -18,7 +21,7 @@ Run these commands from the repository root. The local runner uses only the Pyth
 standard library; Python 3.12 or newer is recommended.
 
 ```sh
-python3 bdq-test/main.py --specimen SANDBOX/ZJZ-NMY-GN8
+python3 bdq-test/main.py --specimen SANDBOX/ZJZ-NMY-GN8 --tests VALIDATION_EVENTDATE_NOTEMPTY
 ```
 
 This fetches [the sandbox specimen](https://sandbox.dissco.tech/ds/SANDBOX/ZJZ-NMY-GN8)
@@ -40,13 +43,14 @@ collecting event with `dwc:eventDate: "1916-07"`, which returns:
 Rerun the saved specimen without network access:
 
 ```sh
-python3 bdq-test/main.py --input bdq-test/examples/sandbox-job.json
+python3 bdq-test/main.py --input bdq-test/examples/sandbox-job.json --tests VALIDATION_EVENTDATE_NOTEMPTY
 ```
 
 Refresh the saved input and output from the sandbox:
 
 ```sh
 python3 bdq-test/main.py --specimen SANDBOX/ZJZ-NMY-GN8 \
+  --tests VALIDATION_EVENTDATE_NOTEMPTY \
   --job-id local-SANDBOX-ZJZ-NMY-GN8 \
   --save-input bdq-test/examples/sandbox-job.json \
   --output bdq-test/examples/sandbox-annotations.json
@@ -60,7 +64,7 @@ publishing annotations to DiSSCo.
 ## Try a missing date
 
 ```sh
-python3 bdq-test/main.py --input bdq-test/examples/missing-date-job.json
+python3 bdq-test/main.py --input bdq-test/examples/missing-date-job.json --tests VALIDATION_EVENTDATE_NOTEMPTY
 ```
 
 This separate, synthetic specimen has an event without `dwc:eventDate`. Its result
@@ -89,8 +93,9 @@ A nonempty value passes this particular test even if it is not a valid date.
 
 ## Check the service
 
-The offline checks include BDQ empty-value cases, the real specimen snapshot,
-multiple events, missing properties, and RabbitMQ acknowledgement/error handling:
+The checks include BDQ empty-value cases, the real specimen snapshot, multiple
+events, missing properties, and RabbitMQ acknowledgement/error handling. Some
+taxonomy checks currently call live GBIF, so the full suite needs network access:
 
 ```sh
 python3 -m unittest discover -s bdq-test -p 'test_*.py' -v
@@ -127,6 +132,7 @@ Configure the environment with values supplied by DiSSCo:
 | `RABBITMQ_QUEUE` | Required queue assigned to this MAS |
 | `MAS_ID` | Required registered MAS handle, without `https://hdl.handle.net/` |
 | `MAS_NAME` | Software name; default `BDQ event date test` |
+| `BDQ_TESTS` | Default `all`, or comma-separated test labels |
 | `RUNNING_ENDPOINT` | Optional job-status base URL; uses the template's URL construction |
 | `RABBITMQ_PORT` | Default `5672` |
 | `RABBITMQ_VHOST` | Default `/` |
@@ -140,6 +146,8 @@ job at a time, optionally marks it running, publishes its annotations, and
 acknowledges the input after broker confirmation. Processing errors produce
 `{ "jobId": ..., "errorMessage": ... }` on the failure exchange. Messages without
 a usable job ID are rejected; configure a dead letter queue if they should be retained.
+If the optional job-status request fails, the worker logs a warning and continues
+the assessment so a temporary status-service outage does not fail a valid job.
 
 Register this prototype with batching disabled and a Digital Specimen filter:
 
@@ -159,5 +167,5 @@ and registering the MAS require the DiSSCo team.
 - [BDQ implementer's guide](https://bdq.tdwg.org/draft/docs/guide/implementers/index.html)
 - [DiSSCo annotation event schema 0.4](https://schemas.dissco.tech/schemas/developer-schema/annotation/0.4.0/annotation-processing-event.json)
 
-This prototype implements one test from the BDQ draft. Full BDQ implementation
+This prototype implements selected tests from the BDQ draft. Full BDQ implementation
 compliance requires the suite for at least one use case.

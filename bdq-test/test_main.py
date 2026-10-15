@@ -2,21 +2,23 @@
 
 import copy
 import json
+import os
 import unittest
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+from urllib.error import HTTPError, URLError
 
-import main
 import gbif
+import main
 from annotations import build_mas_annotation, test_bdq_event
 from bdq import (
     ALL_TESTS,
     ISO_3166_ALPHA2,
-    BDQEvent,
     AmendmentScientificNameFromScientificNameId,
     AmendmentScientificNameIdFromTaxon,
+    BDQEvent,
     ValidationBasisOfRecordStandard,
     ValidationClassFound,
     ValidationClassificationConsistent,
@@ -149,6 +151,37 @@ class MessageTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "broker unavailable"):
             main.process_message(self.channel, self.method, None, self.body)
         self.channel.basic_ack.assert_not_called()
+
+    def test_status_endpoint_errors_do_not_fail_valid_assessments(self):
+        endpoint = "https://example.org/jobs"
+        settings = {
+            "RUNNING_ENDPOINT": endpoint,
+            "MAS_ID": "SANDBOX/BDQ-MAS-001",
+            "BDQ_TESTS": "VALIDATION_EVENTDATE_NOTEMPTY",
+        }
+        errors = [
+            HTTPError(endpoint, 503, "Service unavailable", {}, None),
+            URLError("Status endpoint unavailable"),
+            TimeoutError("Status endpoint timed out"),
+        ]
+        for error in errors:
+            with self.subTest(error=type(error).__name__):
+                channel = Mock()
+                with (
+                    patch.dict(os.environ, settings),
+                    patch("main.urlopen", side_effect=error),
+                    patch("main.publish_event") as publish,
+                    self.assertLogs(main.LOGGER, level="WARNING"),
+                ):
+                    main.process_message(channel, self.method, None, self.body)
+                publish.assert_called_once()
+                event = publish.call_args.args[0]
+                self.assertEqual(event["jobId"], json.loads(self.body)["jobId"])
+                self.assertNotIn("errorMessage", event)
+                self.assertFalse(publish.call_args.kwargs.get("failed", False))
+                result = json.loads(event["annotations"][0]["oa:hasBody"]["oa:value"][0])
+                self.assertEqual(result["Response.result"], "COMPLIANT")
+                channel.basic_ack.assert_called_once_with(delivery_tag=42)
 
     @patch("main.mark_job_as_running")
     @patch("main.publish_event")
@@ -644,18 +677,22 @@ class NewBdqTestsTest(unittest.TestCase):
         res6 = test_id.validate({"dwc:scientificNameID": None})
         self.assertEqual(res6["Response.status"], "INTERNAL_PREREQUISITES_NOT_MET")
         # Unambiguous taxon -> filled in gbif key
-        res7 = test_id.validate({
-            "dwc:scientificNameID": None,
-            "dwc:scientificName": "Chamaecyparis pisifera (Siebold & Zucc.) Endl.",
-            "dwc:kingdom": "Plantae",
-        })
+        res7 = test_id.validate(
+            {
+                "dwc:scientificNameID": None,
+                "dwc:scientificName": "Chamaecyparis pisifera (Siebold & Zucc.) Endl.",
+                "dwc:kingdom": "Plantae",
+            }
+        )
         self.assertEqual(res7["Response.status"], "FILLED_IN")
         self.assertEqual(res7["Response.result"]["dwc:scientificNameID"], "gbif:2683880")
         # Ambiguous name without context -> NOT_AMENDED
-        res8 = test_id.validate({
-            "dwc:scientificNameID": None,
-            "dwc:scientificName": "Graphis",
-        })
+        res8 = test_id.validate(
+            {
+                "dwc:scientificNameID": None,
+                "dwc:scientificName": "Graphis",
+            }
+        )
         self.assertEqual(res8["Response.status"], "NOT_AMENDED")
 
 
@@ -802,6 +839,21 @@ class NewTestsAnnotationTest(unittest.TestCase):
     def test_library_default_is_registry(self):
         # test_bdq_event() without tests= still uses the registry; main.py passes ALL_TESTS.
         self.assertEqual(len(test_bdq_event(self.job)["annotations"]), 1)
+
+    def test_taxon_id_is_preserved_in_mapped_unambiguous_test(self):
+        taxon = self.job["object"]["ods:hasIdentifications"][0]["ods:hasTaxonIdentifications"][0]
+        taxon.clear()
+        taxon.update({"@type": "ods:TaxonIdentification", "dwc:scientificNameID": "gbif:2683880"})
+        with (
+            patch("gbif.get_species_by_key", return_value={"key": 2683880}) as lookup,
+            patch("gbif.match_species") as name_match,
+        ):
+            event = test_bdq_event(self.job, tests=[ValidationTaxonUnambiguous])
+        result = json.loads(event["annotations"][0]["oa:hasBody"]["oa:value"][0])
+        self.assertEqual(result["input"]["dwc:scientificNameID"], "gbif:2683880")
+        self.assertEqual(outcome(result), PASS)
+        lookup.assert_called_once_with(2683880)
+        name_match.assert_not_called()
 
     def test_select_tests(self):
         self.assertEqual(main.select_tests(None), ALL_TESTS)

@@ -649,9 +649,7 @@ class _TaxonRankFound(BDQEvent):
         try:
             results = gbif.query_species(val_str)
         except gbif.GBIFServiceError:
-            return external_prerequisites_not_met(
-                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
-            )
+            return external_prerequisites_not_met("The GBIF Backbone Taxonomy service is unavailable or unreachable.")
         target_rank = self.rank.upper()
         for item in results:
             if item.get("rank") == target_rank:
@@ -736,9 +734,7 @@ class ValidationScientificNameFound(BDQEvent):
                 match = gbif.match_species(val_str, strict=True)
                 matched = match.get("matchType") == "EXACT" and bool(match.get("usageKey"))
         except gbif.GBIFServiceError:
-            return external_prerequisites_not_met(
-                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
-            )
+            return external_prerequisites_not_met("The GBIF Backbone Taxonomy service is unavailable or unreachable.")
         if matched:
             return compliant(f"dwc:scientificName '{val_str}' was found in the GBIF Backbone Taxonomy.")
         return not_compliant(f"dwc:scientificName '{val_str}' was not found in the GBIF Backbone Taxonomy.")
@@ -800,9 +796,7 @@ class ValidationClassificationConsistent(BDQEvent):
                     )
                 match = matched_candidates[0]
         except gbif.GBIFServiceError:
-            return external_prerequisites_not_met(
-                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
-            )
+            return external_prerequisites_not_met("The GBIF Backbone Taxonomy service is unavailable or unreachable.")
 
         for t, term_val in filled_terms.items():
             if t == lowest_term:
@@ -824,6 +818,7 @@ class ValidationTaxonUnambiguous(BDQEvent):
     term = "dwc:scientificName"
     terms = (
         "dwc:taxonID",
+        "dwc:scientificNameID",
         "dwc:acceptedNameUsageID",
         "dwc:originalNameUsageID",
         "dwc:taxonConceptID",
@@ -912,9 +907,7 @@ class ValidationTaxonUnambiguous(BDQEvent):
                 )
             return not_compliant("Taxon could not be unambiguously resolved in the GBIF Backbone Taxonomy.")
         except gbif.GBIFServiceError:
-            return external_prerequisites_not_met(
-                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
-            )
+            return external_prerequisites_not_met("The GBIF Backbone Taxonomy service is unavailable or unreachable.")
 
 
 class AmendmentScientificNameFromScientificNameId(BDQEvent):
@@ -945,9 +938,7 @@ class AmendmentScientificNameFromScientificNameId(BDQEvent):
                 )
             return not_amended(f"No taxon found in the GBIF Backbone for scientificNameID '{sci_id}'.")
         except gbif.GBIFServiceError:
-            return external_prerequisites_not_met(
-                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
-            )
+            return external_prerequisites_not_met("The GBIF Backbone Taxonomy service is unavailable or unreachable.")
 
 
 class AmendmentScientificNameIdFromTaxon(BDQEvent):
@@ -1040,9 +1031,7 @@ class AmendmentScientificNameIdFromTaxon(BDQEvent):
                 )
             return not_amended("Taxon is ambiguous or could not be resolved in the GBIF Backbone Taxonomy.")
         except gbif.GBIFServiceError:
-            return external_prerequisites_not_met(
-                "The GBIF Backbone Taxonomy service is unavailable or unreachable."
-            )
+            return external_prerequisites_not_met("The GBIF Backbone Taxonomy service is unavailable or unreachable.")
 
 
 ALL_TESTS: list[type[BDQEvent]] = [

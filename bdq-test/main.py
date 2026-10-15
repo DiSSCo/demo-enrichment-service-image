@@ -49,8 +49,13 @@ def mark_job_as_running(job_id: str) -> None:
     if endpoint:
         # Same URL construction as shared.mark_job_as_running in the MAS template.
         request = Request(f"{endpoint.rstrip('/')}/{os.environ['MAS_ID']}/{job_id}/running")
-        with urlopen(request, timeout=15):
-            pass
+        try:
+            with urlopen(request, timeout=15):
+                pass
+        except OSError as error:
+            # HTTPError, URLError and socket timeouts are OSError subclasses.
+            # Reporting progress is optional; still assess and complete the job.
+            LOGGER.warning("Could not mark job %s as running: %s; continuing the assessment", job_id, error)
 
 
 def publish_event(event: dict, channel, *, failed: bool = False) -> None:
