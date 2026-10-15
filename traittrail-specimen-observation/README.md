@@ -1,0 +1,37 @@
+# TraitTrail specimen observation MAS
+
+Receives a digital-media job, calls a configured image-observation API, and returns openDS 0.4.0 media comments with region evidence. Predictions are explicitly unreviewed; no automatic specimen edits or taxonomic identification.
+
+The external value service is provided by [TraitTrail Capture](https://github.com/JackDanHollister/traittrail-capture). For the hackathon it runs Qwen on the developer's GB10. No image uploads or model weights are bundled here.
+
+## How one job works
+
+1. DiSSCo sends a digital-media job containing the unchanged job ID, persistent media identifier and image access URL. The adapter processes one image per job; cross-resource batching is rejected.
+2. The adapter downloads the image from a public HTTPS URL (maximum 10 MiB), then sends its bytes to the configured external `/infer` service with the deployment bearer token.
+3. The external service checks JPEG/PNG input and image limits, retains the image/run evidence, and asks the configured VLM for the 16-feature insect observation contract. Unknown features are allowed; unsupported counts or invalid region evidence reject the result. The GB10 service accepts only one inference at a time.
+4. The adapter validates the observation contract again, maps each evidence region to a DiSSCo media comment and validates the complete annotation event against the pinned schema set. Unresolved observations target the whole media. One observation can yield several region annotations; no cropped or annotated image files are generated.
+5. The adapter publishes the result under the original job ID and acknowledges the input only after broker confirmation. Processing errors produce a failure event; invalid JSON or missing job IDs are rejected. Busy/time-out/model failures currently finish as failed jobs rather than triggering an automatic inference retry.
+
+All predictions remain unreviewed. Studio can open the exported event alongside its image and save separate human-review decisions; this adapter does not send those review decisions back to DiSSCo. The GitHub fork stores the adapter source, the planned DiSSCo deployment runs that adapter, and the external GB10 runs the VLM.
+
+## Configuration
+
+DiSSCo supplies MAS_ID, MAS_NAME, RABBITMQ_HOST, RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_QUEUE and RUNNING_ENDPOINT. Configure TRAITTRAIL_API_URL for the agreed HTTPS value-service address, plus TRAITTRAIL_API_TOKEN as a deployment secret matching the value service. Standard annotation/failure routing follows the existing examples. Cross-resource batching is unsupported.
+
+Restrict this demo to the organisation/dataset agreed with the support team; tombstone the MAS and remove its secret after the hackathon. Registration, restriction and endpoint configuration remain pending.
+
+## Validation
+
+Run python -m pytest -q traittrail-specimen-observation/test_mas.py. Build from this repository root with docker build -f traittrail-specimen-observation/Dockerfile -t traittrail-specimen-observation .
+
+Pinned schemas validate offline. Tests cover region and unknown mapping, failed jobs, invalid input and publish-before-ack. Local live inference has passed; sandbox acceptance and live RabbitMQ transport remain to be checked. Input delivery is at least once; durable deduplication is future production work.
+
+## Current preparation — 15 October 2026
+
+- The adapter is separate from the Studio UI and needs no graph, model weights or user images bundled into its container.
+- The protected external GB10 Qwen3.8 service was restarted and tested through ngrok. A fresh original image yielded 16 validated observations; mapping produced 20 annotations and passed the full pinned schema set. The organiser's latest annotation-processing-request schema matches pinned 0.4.0. Example target/MAS identifiers remain local fixtures, not registered PIDs.
+- Set `TRAITTRAIL_API_URL` to the agreed HTTPS base URL, without `/infer`. Supply `TRAITTRAIL_API_TOKEN` separately as a secret. Do not use the ngrok URL as a media identifier or commit the token. Temporary tunnel addresses can change on restart.
+- `.env.example` lists the configuration names without credentials. DiSSCo supplies the registered MAS Handle, RabbitMQ settings and running endpoint; restrict initial use to JPEG/PNG digital media of preserved insects (Insecta), with no country restriction and the organisation/dataset agreed by the organisers. Shells are outside scope.
+- Human review remains a separate Studio sidecar; this adapter always marks predictions unreviewed. A structurally valid annotation is not an expert-confirmed observation.
+- The workflow runs scoped lint/format checks, tests and a container build without registry secrets. Publishing an image to DiSSCo's registry and real queue/deployment setup remain organiser steps.
+- Registering, scheduling or submitting a live DiSSCo job has not been performed by this preparation. The developer will arrange a secure token transfer and agree the availability window.
