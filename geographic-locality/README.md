@@ -1,41 +1,43 @@
-# Geographic Locality MAS: Indigenous place-name pointers (prototype)
+# Geographic Locality MAS: Indigenous community context, Sámi (prototype)
 
 DiSSCo MAS Hackathon 2026, Geographic place names team (Craig Frayne (lead), Lena Thöle,
 Nidia Alvarez Armada, Franck Theeten, Marcus Ernst). Team repository:
 https://github.com/craigmateo/dissco-geographic-locality-mas
 
-For each location of a Digital Specimen, the MAS looks up official place names in
-the Norwegian place-name register (Kartverket SSR) and posts **one comment** that
-links to the register entries holding Indigenous (Sámi) names. It copies no names.
+For each location of a Digital Specimen the MAS asks: **may a Sámi community be connected to
+this locality?** If so, it posts **one comment** saying that the community needs to be
+contacted for collaboration and approval before Sámi knowledge is added to the record, and
+that the holding institution should make the contact (Sámi Parliament, then the local
+community). It copies no names and changes nothing in the record.
+Concept: `docs/indigenous-community-context.md` in the team repository.
 
-> Built without Sámi input. Every annotation says "Review status: not reviewed by
-> Sámi representatives". Sámi place names are Sámi knowledge, even when they come
-> from a state gazetteer, so this demo only points to the register.
+> Built without Sámi input. Every annotation ends with "Built without Sámi input." and
+> "Review status: not reviewed by Sámi representatives". The contact registry is a
+> placeholder until the Sámi side decides who speaks for whom; every contact says how sure it is.
 
 ## Flow
 
 ```
 RabbitMQ (job + Digital Specimen)
-  -> value_service.enrich()        embedded team module (indigenous_names.py),
-                                   or the hosted API if VALUE_SERVICE_URL is set
-  -> pointer_annotations           one oa:commenting per location: register links,
-                                   ISO 639-3 codes, name status, distance, confidence
-  -> assert_no_names()             refuses to publish if any Indigenous or Kven name
-                                   string from the lookup is in an annotation
+  -> value_service.enrich()        embedded team module (geographic_locality_mas/), or the
+                                   hosted API if VALUE_SERVICE_URL is set: one location per
+                                   event -> assess_location() -> community context + comment
+  -> names guard                   refuses a comment that holds a name from the Sámi or Kven
+                                   name registers
+  -> community_annotations         one oa:commenting per location
   -> mas-annotation-exchange       (failure exchange + job FAILED on any error)
 ```
 
-| Lookup status | Comment on `$['ods:hasEvents'][i]['ods:hasLocation']` |
+| Community context | Comment on `$['ods:hasEvents'][i]['ods:hasLocation']` |
 |---|---|
-| `match` | the locality text names a place with an Indigenous-language name: links to up to 3 register entries, language codes, name status, confidence |
-| `nearby` | no name match: register entries with Indigenous-language names near the coordinates, with distances (proximity only) |
-| `no_match`, `no_coordinates`, `not_covered` | short message (Norway only for now; Finland needs `MML_API_KEY`) |
+| `indigenous_context` | a Sámi community may be connected; contact for collaboration and approval; the areas the admin units lie in (with the law that defines them); register evidence as counts and ISO 639-3 codes; whom the holding institution should contact, in order; a candidate Local Contexts BC Notice |
+| `no_known_context`, `not_assessed`, `not_covered` | one sentence saying why (covered: Norway, Finland) |
+| `error` (name register down, no listed area) | failure message, job FAILED (can be re-run) |
 | no location in the record | comment on `$['ods:hasEvents']` |
-| `error` (gazetteer down) | failure message, job FAILED (can be re-run) |
 
-Kven names (a national minority language, not Indigenous) are never annotated.
-Only `oa:commenting` is used: it is never merged into the record and its creator can
-delete it. Note that a deleted DiSSCo annotation stays readable as a tombstone.
+- Evidence: the locality's admin units (`dwc:municipality`, `dwc:county`, `dwc:stateProvince`, `dwc:higherGeography`, never the locality text) lie in Norway's administrative area for Sámi languages or Finland's Sámi Homeland; or the official name registers (Kartverket SSR; NLS Finland only with `MML_API_KEY`) have Sámi-language names at or near the point. Only counts and language codes are kept. Kven is never counted.
+- No coordinate check runs in this MAS yet: coordinates count as "not checked". When the team's check is integrated, `assess_location(location, qc_status)` takes its status.
+- Only `oa:commenting`: never merged into the record, and its creator can delete it. A deleted DiSSCo annotation stays readable as a tombstone.
 
 ## Geographic coordinate validation (integration in progress)
 
@@ -82,7 +84,7 @@ None required. DiSSCo injects `RABBITMQ_*`, `MAS_ID`, `MAS_NAME`, `RUNNING_ENDPO
 
 | Variable | Kind | Use |
 |---|---|---|
-| `MML_API_KEY` | secret, optional | NLS Finland lookups. Not set for the demo: Finnish records get a "not configured" comment |
+| `MML_API_KEY` | secret, optional | NLS Finland register evidence. Not set for the demo: Finnish registers are not checked, the areas still are |
 | `VALUE_SERVICE_URL` | env, optional | call the hosted value service (`POST /v1/enrich`) instead of the embedded module |
 | `VALUE_SERVICE_API_KEY` | secret, optional | bearer key for that API |
 
@@ -91,8 +93,7 @@ None required. DiSSCo injects `RABBITMQ_*`, `MAS_ID`, `MAS_NAME`, `RUNNING_ENDPO
 `registration.json` (validates against openDS 0.4.0 `machine-annotation-service-request`):
 
 - image `public.ecr.aws/dissco/geographic-locality`, batching off, not ingestion-compatible, 1 replica;
-- the filter limits the MAS to three Sandbox test specimens
-  (`$['dcterms:identifier']`): one match, one nearby, one no match.
+- the filter limits the MAS to three Sandbox test specimens (`$['dcterms:identifier']`).
 
 ## Run locally (dry run, publishes nothing)
 
@@ -115,10 +116,13 @@ pytest geographic-locality/tests            # OPENDS_DIR=<openDS checkout> also 
 
 Tests use made-up names (`Synth-NNNN`) and mocked lookups; no test calls a real API.
 
-## Vendored module
+## Vendored team code
 
-`indigenous_names.py` is an unchanged copy of
-`src/geographic_locality_mas/indigenous_names.py` from the team repository, branch
-`feature/indigenous-place-names`, commit `6a5cb9b`
-(sha256 `52639629355fe4e349fc70f1e6862eb9d8ad7f806dd788d22a908c387d5ff78b`).
-Change it in the team repository and copy it again; don't reformat it here.
+`geographic_locality_mas/` holds copies of `community_context.py`, `indigenous_names.py` and the
+two CSV files from the team repository (branch `feature/indigenous-place-names`);
+`geographic_locality_mas/VENDORED.md` lists their sha256, and a test checks them. Change them in
+the team repository, then copy them again:
+`python geographic-locality/vendor_team.py ../dissco-geographic-locality-mas`.
+
+---
+*Side note: this MAS was written with help from Claude (Anthropic).*

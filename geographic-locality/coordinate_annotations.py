@@ -3,7 +3,7 @@
 import json
 from typing import Any
 
-import pointer_annotations
+import community_annotations
 from geographic_locality_mas.extraction import extract_localities
 from geographic_locality_mas.validation import (
     suggest_coordinate_sign_corrections,
@@ -18,7 +18,7 @@ def build_annotations(
     tolerance_km: float = 5.0,
 ) -> list[dict[str, Any]]:
     """Create one location-specific commenting annotation per extracted location."""
-    target = pointer_annotations.target_of(specimen)
+    target = community_annotations.target_of(specimen)
     annotations = []
 
     for location in extract_localities(specimen):
@@ -45,10 +45,10 @@ def build_annotations(
         }
 
         annotations.append(
-            pointer_annotations.comment(
+            community_annotations.comment(
                 agent,
                 timestamp,
-                json.dumps(finding, ensure_ascii=False),
+                [json.dumps(finding, ensure_ascii=False)],
                 location["target"],
                 target,
                 "",

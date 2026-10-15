@@ -13,10 +13,13 @@ COPY geographic-locality/requirements.txt .
 # install dependencies
 RUN pip install --no-cache-dir --only-binary=:all: -r requirements.txt
 
-# copy the MAS (main.py, value_service.py, pointer_annotations.py, indigenous_names.py)
+# copy the MAS (main.py, value_service.py, community_annotations.py)
 COPY geographic-locality/*.py ./
 COPY geographic-locality/geographic_locality_mas/ ./geographic_locality_mas/
 COPY geographic-locality/data/reference/ ./data/reference/
+
+# copy the vendored team modules and their data (community context, name registers)
+COPY geographic-locality/geographic_locality_mas/ geographic_locality_mas/
 
 # copy shared directory
 COPY shared/ shared/

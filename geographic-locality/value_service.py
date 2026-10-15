@@ -1,31 +1,36 @@
 """Value service of the Geographic Locality MAS: embedded by default, API if configured.
 
-The team's value service (https://github.com/craigmateo/dissco-geographic-locality-mas,
-POST /v1/enrich) is embedded here, so DiSSCo runs everything and no partner hosting
-is needed: indigenous_names.py is an unchanged copy of the team module (see README).
-If VALUE_SERVICE_URL is set, the MAS calls the hosted API instead. The response has
-the same shape either way (docs/value-service-contract.md in the team repo).
+For each location of a Digital Specimen: may a Sámi community be connected to this
+locality, and whom should the holding institution contact (community context)? The team
+module is embedded (geographic_locality_mas/, see VENDORED.md), so DiSSCo runs everything
+and no partner hosting is needed. If VALUE_SERVICE_URL is set, the MAS calls the hosted
+value service (POST /v1/enrich) instead. The response has the same shape either way
+(docs/value-service-contract.md in the team repo).
+
+Names guard: assess_location() raises if a comment would hold a name from the Sámi or Kven
+name registers (job FAILED); the hosted service answers HTTP 500. The embedded service uses geographic coordinate validation to assess whether coordinates
+are suitable for community-context lookup.
 
 Environment:
   VALUE_SERVICE_URL      optional, base URL of the hosted value service
   VALUE_SERVICE_API_KEY  optional, sent as 'Authorization: Bearer <key>'
-  MML_API_KEY            optional secret. Without it, Finnish locations get a
-                         "not configured" comment instead of an NLS lookup.
-
-The response holds gazetteer name strings. Never log it or copy it into an
-annotation: pointer_annotations.py builds the annotations from links and codes only.
+  MML_API_KEY            optional secret: name-register evidence for Finnish locations.
+                         Without it, Finnish registers are not checked (the areas still are).
 """
 
 import os
 from datetime import UTC, datetime
 from typing import Any
 
-import indigenous_names as ina
 import requests
+from geographic_locality_mas.community_context import REVIEW_STATUS, assess_location, loc_num, qc_status_for
 
 SERVICE = "geographic-locality-value-service (embedded)"
 API_TIMEOUT_S = 120
-NOT_CONFIGURED = "NLS Finland lookups are not configured in this deployment (no MML_API_KEY)."
+
+
+class ValueServiceError(RuntimeError):
+    """The hosted value service did not answer: the job is marked FAILED."""
 
 
 def location_path(event_index: int) -> str:
@@ -50,38 +55,23 @@ def locations_from_specimen(specimen: dict[str, Any]) -> tuple[str | None, list[
             {
                 "specimen_id": specimen_id,
                 "event_index": i,
+                "organisation": attrs.get("ods:organisationName"),
+                "organisation_id": attrs.get("ods:organisationID"),
                 "country": loc.get("dwc:country"),
                 "country_code": loc.get("dwc:countryCode"),
                 "state_province": loc.get("dwc:stateProvince"),
                 "county": loc.get("dwc:county"),
                 "municipality": loc.get("dwc:municipality"),
+                "higher_geography": loc.get("dwc:higherGeography"),
                 "locality": loc.get("dwc:locality"),
                 "verbatim_locality": loc.get("dwc:verbatimLocality"),
-                "latitude": ina.num1(geo.get("dwc:decimalLatitude")),
-                "longitude": ina.num1(geo.get("dwc:decimalLongitude")),
-                "coordinate_uncertainty_m": ina.num1(geo.get("dwc:coordinateUncertaintyInMeters")),
+                "latitude": loc_num(geo.get("dwc:decimalLatitude")),
+                "longitude": loc_num(geo.get("dwc:decimalLongitude")),
+                "coordinate_uncertainty_m": loc_num(geo.get("dwc:coordinateUncertaintyInMeters")),
             }
         )
     return specimen_id, out
 
-
-def lookup(location: dict[str, Any]) -> dict[str, Any]:
-    """find_indigenous_names() for one location; Finland without a key -> not_covered."""
-    if ina.gazetteer_for(location) == "nls" and not os.environ.get("MML_API_KEY"):
-        return {
-            "specimen_id": location.get("specimen_id"),
-            "event_index": location.get("event_index", 0),
-            "status": "not_covered",
-            "gazetteer": ina.GAZETTEERS["nls"]["label"],
-            "query": None,
-            "matches": [],
-            "minority_language_names": [],
-            "nearby": [],
-            "summary": None,
-            "message": NOT_CONFIGURED,
-            "retrieved": datetime.now(UTC).date().isoformat(),
-        }
-    return ina.find_indigenous_names(location)
 
 
 def enrich_embedded(specimen: dict[str, Any]) -> dict[str, Any]:
@@ -92,7 +82,7 @@ def enrich_embedded(specimen: dict[str, Any]) -> dict[str, Any]:
             "event_index": loc["event_index"],
             "target": location_path(loc["event_index"]),
             "location": loc,
-            "indigenous_names": {**lookup(loc), "review_status": ina.REVIEW_STATUS},
+            "community_context": assess_location(loc, qc_status=qc_status_for(loc)),
         }
         for loc in locations
     ]
@@ -100,7 +90,7 @@ def enrich_embedded(specimen: dict[str, Any]) -> dict[str, Any]:
         "service": SERVICE,
         "specimen_id": specimen_id,
         "created": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-        "review_status": ina.REVIEW_STATUS,
+        "review_status": REVIEW_STATUS,
         "results": results,
         "message": None if results else "No location in the specimen record.",
     }
@@ -111,12 +101,12 @@ def enrich_api(specimen: dict[str, Any], url: str, api_key: str | None = None) -
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     response = requests.post(
         f"{url.rstrip('/')}/v1/enrich",
-        json={"specimen": specimen, "enrichments": ["indigenous_names"]},
+        json={"specimen": specimen, "enrichments": ["community_context"]},
         headers=headers,
         timeout=API_TIMEOUT_S,
     )
     if not response.ok:
-        raise ina.GazetteerError(f"Value service returned HTTP {response.status_code}")
+        raise ValueServiceError(f"Value service returned HTTP {response.status_code}")
     return response.json()
 
 

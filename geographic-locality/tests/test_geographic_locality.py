@@ -1,11 +1,12 @@
-"""Tests for the Geographic Locality MAS (pointer-only Indigenous place-name comments)."""
+"""Tests for the Geographic Locality MAS (community comments: Sámi context, whom to contact)."""
 
+import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 import main
-import pointer_annotations as pa
 import pytest
 import value_service
 from conftest import MADE_UP_INDIGENOUS_AND_KVEN, SPECIMEN_ID, FakeChannel, specimen
@@ -14,6 +15,7 @@ import shared
 
 REVIEW = "Review status: not reviewed by Sámi representatives."
 LOCATION = "$['ods:hasEvents'][1]['ods:hasLocation']"
+VENDORED = Path(__file__).resolve().parents[1] / "geographic_locality_mas"
 
 
 def event_for(spec):
@@ -21,83 +23,81 @@ def event_for(spec):
 
 
 def only_annotation(spec):
-    """Return the Indigenous place-name annotation, excluding other MAS components."""
+    """Select the community-context annotation from the combined MAS output."""
     annotations = event_for(spec)["annotations"]
-    pointers = [
+    community = [
         annotation for annotation in annotations
-        if annotation["oa:hasBody"]["oa:value"][0].startswith(
-            "Indigenous place-name pointer (prototype)."
+        if any(
+            "Sámi" in line
+            for line in annotation["oa:hasBody"]["oa:value"]
         )
     ]
-    assert len(pointers) == 1
-    return pointers[0]
+    assert len(community) == 1
+    return community[0]
 
 
-def text_of(annotation):
-    return annotation["oa:hasBody"]["oa:value"][0]
+def lines_of(annotation):
+    return annotation["oa:hasBody"]["oa:value"]
 
 
-def assert_no_made_up_names(annotation):
-    dumped = json.dumps(annotation, ensure_ascii=False)
+def assert_no_made_up_names(data):
+    dumped = json.dumps(data, ensure_ascii=False)
     for name in MADE_UP_INDIGENOUS_AND_KVEN:
         assert name not in dumped
 
 
-def test_match_is_a_pointer_comment_without_names(ssr):
+def test_register_evidence_gives_a_community_comment(ssr):
     a = only_annotation(specimen())
     assert a["oa:motivation"] == "oa:commenting"
     assert a["oa:hasTarget"]["oa:hasSelector"] == {"@type": "ods:ClassSelector", "ods:class": LOCATION}
     assert a["oa:hasTarget"]["dcterms:identifier"] == SPECIMEN_ID
-    assert a["oa:hasBody"]["dcterms:references"] == "https://stadnamn.kartverket.no/fakta/900001"
-    assert a["oa:hasBody"]["ods:score"] == 0.9
-    text = text_of(a)
-    assert "https://stadnamn.kartverket.no/fakta/900001 (Northern Sámi, sme, hovednavn; confidence 0.9)" in text
-    assert "copies no names" in text
-    assert "Built without Sámi input" in text
-    assert "© Kartverket" in text
-    assert text.endswith(REVIEW)
+    lines = lines_of(a)
+    assert lines[0] == (
+        "A Sámi community may be connected to this locality. Before Sámi knowledge is added to this "
+        "record, the community needs to be contacted for collaboration and approval."
+    )
+    assert (
+        "Official name register (Kartverket SSR): a place named in the locality text has "
+        "Sámi-language names (sme; 2 within 2000 m). Names are not copied here." in lines
+    )
+    i = lines.index(
+        "The holding institution, Synthetic Herbarium <https://ror.org/000000000>, should contact, "
+        "for collaboration and approval, in this order:"
+    )
+    assert lines[i + 1].startswith("1. Sámi Parliament of Norway <https://sametinget.no/>")
+    assert lines[i + 2].startswith("2. Local Sámi community (to be designated by the Sámi side)")
+    assert lines[-2:] == ["Built without Sámi input.", REVIEW]
     assert_no_made_up_names(a)
 
 
-def test_kven_is_never_annotated(ssr):
-    text = text_of(only_annotation(specimen()))
-    assert "Kven" not in text
-    assert "fkv" not in text
+def test_kven_is_never_counted(ssr):
+    text = " ".join(lines_of(only_annotation(specimen())))
+    assert "Kven" not in text and "fkv" not in text
 
 
-def test_nearby_lists_register_entries_only(ssr):
-    a = only_annotation(specimen(locality="Fjellet ved elva"))
-    text = text_of(a)
-    assert "proximity only" in text
-    assert "https://stadnamn.kartverket.no/fakta/900001 (Northern Sámi, sme, hovednavn; 300 m" in text
-    assert "https://stadnamn.kartverket.no/fakta/900002 (Lule Sámi, smj, hovednavn; 1200 m" in text
-    assert a["oa:hasBody"]["ods:score"] == 0.43
-    assert_no_made_up_names(a)
-
-
-def test_no_match(ssr):
-    ssr.names = [n for n in ssr.names if n["language"] == "norsk"]
-    a = only_annotation(specimen(locality="Fjellet"))
-    assert "No Indigenous-language names in Kartverket SSR within 2000 m" in text_of(a)
-    assert "ods:score" not in a["oa:hasBody"]
-    assert text_of(a).endswith(REVIEW)
-
-
-def test_no_coordinates(ssr):
-    a = only_annotation(specimen(lat=None))
-    assert "No decimal coordinates" in text_of(a)
+def test_area_without_coordinates_needs_no_lookup(ssr):
+    a = only_annotation(specimen(coords=None, municipality="Karasjok"))
+    assert any(line.startswith("Within: Administrative area for Sámi languages, Norway") for line in lines_of(a))
+    assert a["oa:hasBody"]["dcterms:references"].startswith("https://www.regjeringen.no/")
     assert ssr.calls == []
+
+
+def test_no_known_context(ssr):
+    ssr.names = [n for n in ssr.names if n["language"] == "norsk"]
+    lines = lines_of(only_annotation(specimen(locality="Fjellet")))
+    assert lines[0].startswith("No Sámi area and no registered Sámi-language name found.")
+    assert lines[-1] == REVIEW
 
 
 def test_country_not_covered(ssr):
-    a = only_annotation(specimen(country="Sweden"))
-    assert "covered: Norway, Finland" in text_of(a)
+    lines = lines_of(only_annotation(specimen(country="Sweden", coords=(67.85, 20.22))))
+    assert "covered: Norway, Finland" in lines[0]
     assert ssr.calls == []
 
 
-def test_finland_without_key_is_not_configured(ssr):
-    a = only_annotation(specimen(country="Finland"))
-    assert value_service.NOT_CONFIGURED in text_of(a)
+def test_finland_without_key_skips_the_register(ssr):
+    lines = lines_of(only_annotation(specimen(country="Finland", coords=(66.5, 25.7), county="Rovaniemi")))
+    assert lines[0].startswith("Sámi context not assessed")
     assert ssr.calls == []
 
 
@@ -106,25 +106,36 @@ def test_specimen_without_location(ssr):
     spec["ods:hasEvents"] = [{"@type": "ods:Event"}]
     a = only_annotation(spec)
     assert a["oa:hasTarget"]["oa:hasSelector"]["ods:class"] == "$['ods:hasEvents']"
-    assert text_of(a).endswith(REVIEW)
+    assert lines_of(a)[-1] == REVIEW
 
 
-def test_guard_refuses_a_name_and_does_not_repeat_it(ssr):
+def test_names_guard_fails_the_job_without_repeating_the_name(ssr, monkeypatch):
+    monkeypatch.setattr(shared, "mark_job_as_running", lambda job_id: None)
+    monkeypatch.setattr(  # a contact registry row that holds a register name
+        "geographic_locality_mas.community_context.load_contacts",
+        lambda path=None: [
+            {
+                "country": "NO",
+                "people": "Sámi",
+                "level": "national",
+                "contact": "Synth-0001 office",
+                "role": None,
+                "url": None,
+                "status": "test",
+            }
+        ],
+    )
+    channel = FakeChannel()
+    main.process_message(channel, None, None, json.dumps({"jobId": "job-9", "object": specimen()}).encode())
+    [sent] = channel.published
+    assert sent["routing_key"] == "mas-annotation-failed"
+    assert "Synth-0001" not in sent["body"].decode()
+
+
+def test_names_the_record_itself_uses_are_allowed(ssr):
     spec = specimen()
-    response = value_service.enrich(spec)
-    annotations = pa.build_annotations(spec, response, shared.get_agent(), "2026-10-14T12:00:00.000Z")
-    annotations[0]["oa:hasBody"]["oa:value"][0] += " Synth-0001"
-    with pytest.raises(pa.NamesInAnnotationError) as err:
-        pa.assert_no_names(annotations, response)
-    assert "Synth-0001" not in str(err.value)
-
-
-def test_guard_ignores_majority_language_names(ssr):
-    spec = specimen()
-    response = value_service.enrich(spec)
-    annotations = pa.build_annotations(spec, response, shared.get_agent(), "2026-10-14T12:00:00.000Z")
-    annotations[0]["oa:hasBody"]["oa:value"][0] += " Synth-1000"
-    pa.assert_no_names(annotations, response)
+    spec["ods:organisationName"] = "Synth-0001 Museum"  # the record's own text
+    assert "1. Sámi Parliament" in " ".join(lines_of(only_annotation(spec)))
 
 
 def test_process_message_publishes_the_event(ssr, monkeypatch):
@@ -135,16 +146,11 @@ def test_process_message_publishes_the_event(ssr, monkeypatch):
     [sent] = channel.published
     assert (sent["exchange"], sent["routing_key"]) == ("mas-annotation-exchange", "mas-annotation")
     event = json.loads(sent["body"])
-    assert event["jobId"] == "job-7"
-    assert len(event["annotations"]) == 2
-    assert any(
-        "Natural Earth country-boundary validation" in a["oa:hasBody"]["oa:value"][0]
-        for a in event["annotations"]
-    )
+    assert event["jobId"] == "job-7" and len(event["annotations"]) == 2
     assert_no_made_up_names(event)
 
 
-def test_failed_lookup_marks_the_job_failed(ssr, monkeypatch):
+def test_failed_lookup_without_an_area_marks_the_job_failed(ssr, monkeypatch):
     monkeypatch.setattr(shared, "mark_job_as_running", lambda job_id: None)
     ssr.error = "HTTP 503 from https://ws.geonorge.no/stedsnavn/v1/punkt"
     channel = FakeChannel()
@@ -152,6 +158,12 @@ def test_failed_lookup_marks_the_job_failed(ssr, monkeypatch):
     [sent] = channel.published
     assert (sent["exchange"], sent["routing_key"]) == ("mas-annotation-failed-exchange", "mas-annotation-failed")
     assert json.loads(sent["body"])["jobId"] == "job-8"
+
+
+def test_failed_lookup_inside_an_area_still_comments(ssr):
+    ssr.error = "HTTP 503 from https://ws.geonorge.no/stedsnavn/v1/punkt"
+    lines = lines_of(only_annotation(specimen(municipality="Karasjok")))
+    assert lines[0].startswith("A Sámi community may be connected to this locality.")
 
 
 def test_hosted_value_service_is_used_when_configured(ssr, monkeypatch):
@@ -165,15 +177,25 @@ def test_hosted_value_service_is_used_when_configured(ssr, monkeypatch):
             return embedded
 
     def fake_post(url, json, headers, timeout):
-        calls.append((url, headers))
+        calls.append((url, json["enrichments"], headers))
         return Response()
 
     monkeypatch.setenv("VALUE_SERVICE_URL", "https://values.example.org/")
     monkeypatch.setenv("VALUE_SERVICE_API_KEY", "test-key-not-real")
     monkeypatch.setattr(value_service.requests, "post", fake_post)
     a = only_annotation(specimen())
-    assert calls == [("https://values.example.org/v1/enrich", {"Authorization": "Bearer test-key-not-real"})]
-    assert a["oa:hasBody"]["dcterms:references"] == "https://stadnamn.kartverket.no/fakta/900001"
+    assert calls == [
+        ("https://values.example.org/v1/enrich", ["community_context"], {"Authorization": "Bearer test-key-not-real"})
+    ]
+    assert lines_of(a)[-1] == REVIEW
+
+
+def test_vendored_team_code_matches_its_manifest():
+    manifest = (VENDORED / "VENDORED.md").read_text(encoding="utf-8")
+    rows = re.findall(r"^\| `([^`]+)` \| `([0-9a-f]{64})` \|$", manifest, flags=re.MULTILINE)
+    assert len(rows) == 4
+    for name, digest in rows:
+        assert hashlib.sha256((VENDORED / name).read_bytes()).hexdigest() == digest, name
 
 
 @pytest.mark.skipif(not os.environ.get("OPENDS_DIR"), reason="set OPENDS_DIR to a DiSSCo/openDS checkout")
@@ -194,8 +216,8 @@ def test_event_validates_against_opends(ssr):
     event_schema = json.loads(
         (model / "developer-schema/annotation/0.4.0/schema/annotation-processing-event.json").read_text()
     )
-    spec = specimen()
-    for spec_variant in (spec, specimen(locality="Fjellet"), specimen(lat=None)):
+    variants = (specimen(), specimen(locality="Fjellet"), specimen(coords=None, municipality="Karasjok"))
+    for spec_variant in variants:
         event = event_for(spec_variant)
         errors = list(Draft202012Validator(event_schema, registry=registry).iter_errors(event))
         assert errors == [], errors
