@@ -132,7 +132,8 @@ def run_rabbitmq() -> None:
 
 
 def write_json(document: dict, destination: Path) -> None:
-    destination.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    safe_destination = Path(destination).resolve()
+    safe_destination.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def main() -> None:
@@ -167,7 +168,8 @@ def main() -> None:
             if args.save_input:
                 write_json(job, args.save_input)
         else:
-            job = json.loads(args.input.read_text(encoding="utf-8"))
+            safe_input = Path(args.input).resolve()
+            job = json.loads(safe_input.read_text(encoding="utf-8"))
         event = test_bdq_event(job, tests=tests)
         if args.output:
             write_json(event, args.output)

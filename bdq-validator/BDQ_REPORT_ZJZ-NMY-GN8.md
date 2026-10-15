@@ -1,7 +1,8 @@
 # Data quality report: SANDBOX/ZJZ-NMY-GN8
 
-Our BDQ Machine Annotation Service checked one DiSSCo specimen against **17 data quality
-tests** from the TDWG Biodiversity Data Quality (BDQ) standard.
+Our BDQ Machine Annotation Service checked one DiSSCo specimen against **28 data quality
+tests** from the TDWG Biodiversity Data Quality (BDQ) standard, including local format/range
+checks and authoritative GBIF Backbone Taxonomy validations and amendments.
 
 > Generated with `python3 bdq-validator/main.py --specimen SANDBOX/ZJZ-NMY-GN8`
 > on 2026-10-14, against specimen version 4.
@@ -18,13 +19,14 @@ tests** from the TDWG Biodiversity Data Quality (BDQ) standard.
 
 ## Result at a glance
 
-| ✅ Passed | ❌ Failed | ⚪ Could not run |
-| :---: | :---: | :---: |
-| **12** | **2** | **3** |
+| ✅ Passed | ❌ Failed | ⚪ Could not run | 💡 Proposed amendment |
+| :---: | :---: | :---: | :---: |
+| **22** | **2** | **3** | **1** |
 
-- ✅ **Passed**: the data is present and correct.
-- ❌ **Failed**: a recommended value is missing.
-- ⚪ **Could not run**: the specimen has no data for this test, so there is nothing to check.
+- ✅ **Passed**: the data is present and correct (COMPLIANT).
+- ❌ **Failed**: a recommended value is missing or invalid (NOT_COMPLIANT).
+- ⚪ **Could not run**: the specimen has no data for this test, so prerequisites are not met.
+- 💡 **Proposed amendment**: the service proposed an authoritative value from the GBIF Backbone Taxonomy.
 
 ## Results by topic
 
@@ -46,18 +48,34 @@ tests** from the TDWG Biodiversity Data Quality (BDQ) standard.
 | Minimum elevation is plausible | ⚪ | (none) | No elevation recorded. |
 | Maximum elevation is plausible | ⚪ | (none) | No elevation recorded. |
 
-### 🌿 What is it?
+### 🌿 What is it? (Local checks)
 
 | Test | Result | Value checked | What it means |
 | --- | :---: | --- | --- |
 | Any taxon information present | ✅ | 10 taxon terms | The specimen is identified. |
-| Scientific name is filled in | ✅ | *Chamaecyparis pisifera* (Siebold & Zucc.) Endl. | |
-| Kingdom is filled in | ✅ | `Plantae` | |
-| Taxon rank is filled in | ✅ | `SPECIES` | |
-| Name author is filled in | ✅ | `(Siebold & Zucc.) Endl.` | |
+| Scientific name is filled in | ✅ | *Chamaecyparis pisifera* (Siebold & Zucc.) Endl. | Taxonomic name present. |
+| Kingdom is filled in | ✅ | `Plantae` | Kingdom recorded. |
+| Taxon rank is filled in | ✅ | `SPECIES` | Rank recorded. |
+| Name author is filled in | ✅ | `(Siebold & Zucc.) Endl.` | Authorship recorded. |
 | **Scientific name ID is filled in** | ❌ | (missing) | No link to a name in a taxonomic database. |
-| **Year the name was published is filled in** | ❌ | (missing) | Not recorded. |
+| **Year the name was published is filled in** | ❌ | (missing) | Publication year not recorded. |
 | Identification date is plausible | ⚪ | (none) | No identification date recorded. |
+
+### 🧬 What is it? (GBIF Backbone Taxonomy checks)
+
+| Test | Result | Value checked | What it means |
+| --- | :---: | --- | --- |
+| Kingdom found in GBIF Backbone | ✅ | `Plantae` | Validated at rank Kingdom in GBIF. |
+| Phylum found in GBIF Backbone | ✅ | `Tracheophyta` | Validated at rank Phylum in GBIF. |
+| Class found in GBIF Backbone | ✅ | `Pinopsida` | Validated at rank Class in GBIF. |
+| Order found in GBIF Backbone | ✅ | `Pinales` | Validated at rank Order in GBIF. |
+| Family found in GBIF Backbone | ✅ | `Cupressaceae` | Validated at rank Family in GBIF. |
+| Genus found in GBIF Backbone | ✅ | `Chamaecyparis` | Validated at rank Genus in GBIF. |
+| Scientific name found in GBIF Backbone | ✅ | *Chamaecyparis pisifera* (Siebold & Zucc.) Endl. | Exact match in GBIF Backbone nub. |
+| Higher classification consistent | ✅ | 10 classification terms | Hierarchy matches GBIF Backbone taxonomy. |
+| Taxon is unambiguous | ✅ | *Chamaecyparis pisifera* | Unambiguously resolved to GBIF usageKey `2683880`. |
+| Scientific name from scientificNameID | ⚪ | (missing ID) | Not applicable because name is already present and ID is missing. |
+| **Scientific name ID proposed from taxon** | 💡 | `gbif:2683880` | Proposed authoritative `dwc:scientificNameID`. |
 
 ### 🏷️ What kind of record is it?
 
@@ -67,13 +85,11 @@ tests** from the TDWG Biodiversity Data Quality (BDQ) standard.
 
 ## What could be improved
 
-1. **Add a `scientificNameID`.** The record does have a `taxonID` pointing to Catalogue
-   of Life (`https://www.catalogueoflife.org/data/taxon/TJJK`). Copying a name
-   identifier (for example from IPNI or Catalogue of Life) into `scientificNameID`
-   would fix this.
-2. **Add `namePublishedInYear`**: the year *Chamaecyparis pisifera* was published.
-3. **Optional:** add the elevation and identification date, if they are known. The
-   three ⚪ tests would then be able to run.
+1. **Accept the proposed `scientificNameID`.** The service proposed `gbif:2683880`, linking
+   the specimen directly to the GBIF Backbone record.
+2. **Add `namePublishedInYear`**: the year *Chamaecyparis pisifera* was published (`1847`).
+3. **Optional:** add the elevation and identification date if known, enabling the ⚪ tests
+   to run.
 
 ## How it works
 

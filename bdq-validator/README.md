@@ -1,10 +1,12 @@
 # BDQ Validator MAS
 
-A DiSSCo Machine Annotation Service implementing 28 selected BDQ tests, including
-local validations and GBIF-backed taxonomy checks. It produces `oa:assessing`
-annotations for the relevant OpenDS events, locations, identifications and taxa.
-The commands below start with the simple `VALIDATION_EVENTDATE_NOTEMPTY` example.
-Omit `--tests` to run all 28 tests; GBIF-backed tests need network access.
+A DiSSCo Machine Annotation Service implementing **28 selected BDQ tests**, including
+local data format/range validations and authoritative GBIF Backbone Taxonomy checks.
+It produces `oa:assessing` annotations for relevant OpenDS events, locations,
+georeferences, identifications, and taxa.
+
+By default, omitting `--tests` runs all 28 tests (GBIF-backed checks use the live GBIF API).
+You can also run a specific test or comma-separated list of tests via `--tests <LABELS>`.
 
 The same processing function is used for a saved JSON job, a live sandbox specimen,
 and jobs received through RabbitMQ:
@@ -13,24 +15,48 @@ and jobs received through RabbitMQ:
 job JSON → OpenDS fields → BDQ responses → annotation event JSON
 ```
 
-For registration and testing on DiSSCo's own broker, see [Sandbox setup](SANDBOX.md).
+For detailed background and test reports, see:
+- [Specimen Quality Report: SANDBOX/ZJZ-NMY-GN8](BDQ_REPORT_ZJZ-NMY-GN8.md)
+- [New BDQ Tests Guide](BDQ_NEW_TESTS.md)
+- [BDQ Test Candidates](BDQ_TEST_CANDIDATES.md)
 
 ## Run the real sandbox example
 
 Run these commands from the repository root. The local runner uses only the Python
 standard library; Python 3.12 or newer is recommended.
 
+Run all 28 tests against [the sandbox specimen](https://sandbox.dissco.tech/ds/SANDBOX/ZJZ-NMY-GN8):
+
+```sh
+python3 bdq-validator/main.py --specimen SANDBOX/ZJZ-NMY-GN8
+```
+
+This fetches the specimen attributes from the [DiSSCo JSON API](https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/ZJZ-NMY-GN8)
+and evaluates each test against the relevant fields. The specimen page URL can also be passed to `--specimen`.
+
+You can also run a single test, such as `VALIDATION_EVENTDATE_NOTEMPTY`:
+
 ```sh
 python3 bdq-validator/main.py --specimen SANDBOX/ZJZ-NMY-GN8 --tests VALIDATION_EVENTDATE_NOTEMPTY
 ```
 
-This fetches [the sandbox specimen](https://sandbox.dissco.tech/ds/SANDBOX/ZJZ-NMY-GN8)
-from its [JSON API](https://sandbox.dissco.tech/api/digital-specimen/v1/SANDBOX/ZJZ-NMY-GN8),
-extracts `data.attributes`, and wraps it in a local job envelope. The specimen page
-URL can also be passed to `--specimen`.
+### Specimen Evaluation Summary (`SANDBOX/ZJZ-NMY-GN8`)
 
-The saved example was fetched on 2026-10-14 (specimen version 4). It contains one
-collecting event with `dwc:eventDate: "1916-07"`, which returns:
+The saved example (*Chamaecyparis pisifera* preserved specimen from Meise Botanic Garden)
+evaluates against all 28 tests as follows:
+
+| Test Group | Tests | Result on Specimen |
+| --- | --- | --- |
+| **📅 Collecting Event & Dates** | `VALIDATION_EVENTDATE_NOTEMPTY`<br>`VALIDATION_EVENTDATE_STANDARD`<br>`VALIDATION_EVENTDATE_INRANGE`<br>`VALIDATION_YEAR_INRANGE` | ✅ COMPLIANT (`1916-07` / `1916`) |
+| **🌍 Location & Georeference** | `VALIDATION_COUNTRYCODE_STANDARD`<br>`VALIDATION_COORDINATES_NOTZERO`<br>`VALIDATION_MINELEVATION_INRANGE`<br>`VALIDATION_MAXELEVATION_INRANGE` | ✅ COMPLIANT (`BE`, `51.026111, 4.478055`)<br>⚪ INTERNAL_PREREQUISITES_NOT_MET (no elevation) |
+| **🏷️ Identification & Record** | `VALIDATION_DATEIDENTIFIED_INRANGE`<br>`VALIDATION_BASISOFRECORD_STANDARD` | ⚪ INTERNAL_PREREQUISITES_NOT_MET (no dateIdentified)<br>✅ COMPLIANT (`PreservedSpecimen`) |
+| **🌿 Taxon (Local Format Checks)** | `VALIDATION_TAXON_NOTEMPTY`<br>`VALIDATION_SCIENTIFICNAME_NOTEMPTY`<br>`VALIDATION_KINGDOM_NOTEMPTY`<br>`VALIDATION_TAXONRANK_NOTEMPTY`<br>`VALIDATION_SCIENTIFICNAMEAUTHORSHIP_NOTEMPTY`<br>`VALIDATION_SCIENTIFICNAMEID_NOTEMPTY`<br>`VALIDATION_NAMEPUBLISHEDINYEAR_NOTEMPTY` | ✅ COMPLIANT (name, kingdom, rank, authorship)<br>❌ NOT_COMPLIANT (`scientificNameID` missing)<br>❌ NOT_COMPLIANT (`namePublishedInYear` missing) |
+| **🧬 GBIF Backbone Validations** | `VALIDATION_KINGDOM_FOUND`<br>`VALIDATION_PHYLUM_FOUND`<br>`VALIDATION_CLASS_FOUND`<br>`VALIDATION_ORDER_FOUND`<br>`VALIDATION_FAMILY_FOUND`<br>`VALIDATION_GENUS_FOUND`<br>`VALIDATION_SCIENTIFICNAME_FOUND`<br>`VALIDATION_CLASSIFICATION_CONSISTENT`<br>`VALIDATION_TAXON_UNAMBIGUOUS` | ✅ COMPLIANT (all ranks verified in GBIF Backbone; exact match to usageKey `2683880`) |
+| **💡 Taxonomic Amendments** | `AMENDMENT_SCIENTIFICNAME_FROM_SCIENTIFICNAMEID`<br>`AMENDMENT_SCIENTIFICNAMEID_FROM_TAXON` | ⚪ INTERNAL_PREREQUISITES_NOT_MET (name already present)<br>💡 FILLED_IN (proposes `dwc:scientificNameID: "gbif:2683880"`) |
+
+### Example Response
+
+For `dwc:eventDate: "1916-07"`:
 
 ```json
 {
@@ -40,7 +66,19 @@ collecting event with `dwc:eventDate: "1916-07"`, which returns:
 }
 ```
 
-Rerun the saved specimen without network access:
+For `AMENDMENT_SCIENTIFICNAMEID_FROM_TAXON`:
+
+```json
+{
+  "Response.status": "FILLED_IN",
+  "Response.result": {
+    "dwc:scientificNameID": "gbif:2683880"
+  },
+  "Response.comment": "dwc:scientificNameID filled in from GBIF Backbone for 'Chamaecyparis pisifera (Siebold & Zucc.) Endl.'."
+}
+```
+
+Rerun the saved specimen offline (for local tests):
 
 ```sh
 python3 bdq-validator/main.py --input bdq-validator/examples/sandbox-job.json --tests VALIDATION_EVENTDATE_NOTEMPTY
@@ -56,8 +94,7 @@ python3 bdq-validator/main.py --specimen SANDBOX/ZJZ-NMY-GN8 \
   --output bdq-validator/examples/sandbox-annotations.json
 ```
 
-`examples/sandbox-job.json` preserves the real specimen attributes. Its job ID is
-generated locally for this demonstration. `examples/sandbox-annotations.json`
+`examples/sandbox-job.json` preserves the real specimen attributes. `examples/sandbox-annotations.json`
 contains the resulting annotation event. Local runs generate JSON without
 publishing annotations to DiSSCo.
 
@@ -75,11 +112,10 @@ class because the date property does not exist. Its saved output is
 ## How the annotation is built
 
 - The incoming `jobId` is returned unchanged in `{ "jobId": ..., "annotations": [...] }`.
-- Each event gets its own assessment, retaining its array index and date value.
-- An existing date property uses a term selector such as
-  `$['ods:hasEvents'][0]['dwc:eventDate']`.
-- A missing date property uses a class selector for its event. When no events
-  exist, the assessment targets the whole specimen without a selector.
+- Each event, location, identification, or taxon gets its own assessment with specific selectors.
+- An existing property uses a term selector such as `$['ods:hasEvents'][0]['dwc:eventDate']`.
+- A missing property uses a class selector for its parent object. When no class exists,
+  the assessment targets the whole specimen without a selector.
 - The body retains the test label, versioned test IRI, implementation version,
   input value, input path, and BDQ response.
 - DiSSCo's 0.4 body schema requires strings in `oa:value`, so the structured BDQ
@@ -94,8 +130,7 @@ A nonempty value passes this particular test even if it is not a valid date.
 ## Check the service
 
 The checks include BDQ empty-value cases, the real specimen snapshot, multiple
-events, missing properties, and RabbitMQ acknowledgement/error handling. Some
-taxonomy checks currently call live GBIF, so the full suite needs network access:
+events, missing properties, GBIF taxonomy integration, and RabbitMQ acknowledgement/error handling:
 
 ```sh
 python3 -m unittest discover -s bdq-validator -p 'test_*.py' -v
