@@ -96,29 +96,20 @@ def map_to_annotation_event(media_object: Dict, result: Dict[str, str], job_id: 
 
     specimen_object = get_specimen_from_media(media_object)
 
-    selectors: dict[str, Dict[Any, Any]] = {
-        "scientific_name": shared.build_term_selector("dwc:scientificName"),
-        "probability": shared.build_term_selector("ods:score"),
-    }
     
-    annotations = []
-    for key, oa_selector in selectors.items():
-        oa_value = result[key]
-        
-        annotation = shared.map_to_annotation_str_val(
-            ods_agent=ods_agent,
-            timestamp=shared.timestamp_now(),
-            oa_value=oa_value,
-            oa_selector=oa_selector,
-            target_id=specimen_object[shared.ODS_ID],
-            target_type=specimen_object[shared.ODS_TYPE],
-            dcterms_ref=f"{result['api_call']}, api_tag:{result['api_tag']}",
-            motivation=shared.Motivation.ADDING.value,
-        )
-        
-        annotations.append(annotation)
+    annotation = shared.map_to_annotation_str_val(
+        ods_agent=ods_agent,
+        timestamp=shared.timestamp_now(),
+        oa_value=result["scientific_name"],
+        oa_selector=shared.build_term_selector("oa:scientificName"),
+        target_id=specimen_object[shared.ODS_ID],
+        target_type=specimen_object[shared.ODS_TYPE],
+        dcterms_ref=f"{result['api_call']}, api_tag:{result['api_tag']}",
+        motivation=shared.Motivation.ADDING.value,
+        score=float(result['probability'])
+    )
 
-    return {"jobId": job_id, "annotations": annotations}
+    return {"jobId": job_id, "annotations": [annotation]}
 
 
 def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
@@ -158,18 +149,15 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
             "error_message": "Failed to make the match, API path not configured",
         }
 
-    # Check if the image URL is valid
-    image_path = "https://medialib.naturalis.nl/file/id/ZMA.INS.1443716_1/format/small"
-
-    max_dimension = 500  # Max width or height in pixels
-
+    max_dimension = os.environ.get("MAX_RESOLUTION", "500,500")   # Max width or height in pixels
+    max_width, max_height = map(int, max_dimension.split(","))
     # 1. Download image bytes
     with urllib.request.urlopen(image_path) as response:
         raw_bytes = response.read()
 
     # 2. Resize with Pillow
     with Image.open(io.BytesIO(raw_bytes)) as img:
-        img.thumbnail((max_dimension, max_dimension))
+        img.thumbnail((max_width, max_height))
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
 
@@ -183,10 +171,10 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
     }
 
     response = requests.post(url=identify_api_path, files=files)
-    api_call = """
+    api_call = f"""
         curl \
             --location 'https://multi-source.identify.biodiversityanalysis.eu:443/v2/observation/identify' \
-            --form 'image=@\"/home/django/Pictures/apechthis.jpeg\"' \
+            --form 'image=@\"{image_path}\"' \
     """
         
     if response.status_code != 200:
@@ -239,6 +227,8 @@ def run_local(example: str) -> None:
     result = run_api_call(specimen_data)
     annotations = map_to_annotation_event(specimen_data, result, str(uuid.uuid4()))
     logging.info("Created annotations: " + json.dumps(annotations, indent=2))
+    with open("annotations.json", "w") as f:
+        json.dump(annotations, f, indent=2)
 
 
 
