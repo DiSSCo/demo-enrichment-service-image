@@ -1,0 +1,63 @@
+name: Build Geographic Locality
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'geographic-locality/**'
+      - 'shared/**'
+      - '.github/workflows/geographic-locality-pipeline.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'geographic-locality/**'
+      - 'shared/**'
+      - '.github/workflows/geographic-locality-pipeline.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Lint only this MAS: the latest ruff flags existing code elsewhere in the repository.
+      - uses: astral-sh/ruff-action@v3
+        with:
+          src: geographic-locality
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test
+        run: |
+          pip install -r geographic-locality/requirements.txt pytest
+          pytest geographic-locality/tests -q
+      - name: Login to Public ECR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v1
+        with:
+          registry: public.ecr.aws
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: public.ecr.aws/dissco/geographic-locality
+          tags: |
+            type=sha
+            type=raw,value=latest
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: geographic-locality/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: Set outputs
+        id: vars
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      - name: Push tag
+        if: github.event_name != 'pull_request'
+        uses: anothrNick/github-tag-action@1.36.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CUSTOM_TAG: image-sha-${{ steps.vars.outputs.sha_short }}

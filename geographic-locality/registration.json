@@ -1,0 +1,24 @@
+{
+  "schema:name": "Geographic Locality: Indigenous place-name pointers (prototype)",
+  "schema:description": "DiSSCo MAS Hackathon 2026 prototype (Geographic Place Names team). Comments on a specimen location with links to entries in the Norwegian place-name register (Kartverket SSR) that hold Indigenous (Sámi) names. Copies no names. Built without Sámi input; not reviewed by Sámi representatives.",
+  "ods:containerImage": "public.ecr.aws/dissco/geographic-locality",
+  "ods:containerTag": "latest",
+  "ods:batchingPermitted": false,
+  "ods:isIngestionCompatible": false,
+  "ods:maxReplicas": 1,
+  "ods:hasTargetDigitalObjectFilter": {
+    "$['dcterms:identifier']": [
+      "https://doi.org/SANDBOX/X16-9NF-V0S",
+      "https://doi.org/SANDBOX/KZJ-R72-SN2",
+      "https://doi.org/SANDBOX/KSS-ADF-LZD"
+    ]
+  },
+  "schema:creativeWorkStatus": "Alpha",
+  "schema:codeRepository": "https://github.com/DiSSCo/demo-enrichment-service-image/tree/main/geographic-locality",
+  "schema:programmingLanguage": "python",
+  "schema:license": "https://www.apache.org/licenses/LICENSE-2.0",
+  "schema:maintainer": {
+    "@type": "schema:Person",
+    "schema:name": "Lena Thöle"
+  }
+}
