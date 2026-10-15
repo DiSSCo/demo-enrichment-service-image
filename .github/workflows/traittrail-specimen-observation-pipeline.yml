@@ -1,4 +1,4 @@
-name: Check and build TraitTrail specimen observation
+name: Check, build and publish TraitTrail specimen observation
 on:
   push:
     branches: [main, traittrail-mas]
@@ -35,3 +35,36 @@ jobs:
         run: python -m pytest -q traittrail-specimen-observation/test_mas.py
       - name: Build middleware container
         run: docker build -f traittrail-specimen-observation/Dockerfile -t traittrail-specimen-observation .
+  publish:
+    needs: check-and-build
+    if: >-
+      github.repository == 'DiSSCo/demo-enrichment-service-image' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Login to Public ECR
+        uses: docker/login-action@dd4fa0671be5250ee6f50aedf4cb05514abda2c7 # v1
+        env:
+          AWS_REGION: us-east-1
+        with:
+          registry: public.ecr.aws
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Container metadata
+        id: meta
+        uses: docker/metadata-action@818d4b7b91585d195f67373fd9cb0332e31a7175 # v4
+        with:
+          images: public.ecr.aws/m8w1i6p4/traittrail-specimen-observation
+          tags: |
+            type=sha
+            type=raw,value=latest
+      - name: Build and publish middleware container
+        uses: docker/build-push-action@1104d471370f9806843c095c1db02b5a90c5f8b6 # v3
+        with:
+          context: .
+          file: traittrail-specimen-observation/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
