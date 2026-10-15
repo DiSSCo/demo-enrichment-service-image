@@ -1,6 +1,6 @@
 # set base image (host OS)
 FROM python:3.13-slim
-# this is an example copied from gbif-occurrence-linkage
+
 # set the working directory in the container
 WORKDIR /code
 
@@ -8,13 +8,13 @@ WORKDIR /code
 RUN adduser --disabled-password --gecos '' --system --uid 1001 python && chown -R python /code
 
 # copy the dependencies file to the working directory
-COPY gbif-occurrence-linkage/requirements.txt .
+COPY apis-for-species-identification/requirements.txt .
 
 # install dependencies
 RUN pip install -r requirements.txt
 
 # copy the content of the local src directory to the working directory
-COPY gbif-occurrence-linkage/main.py .
+COPY apis-for-species-identification/main.py .
 
 # copy shared directory
 COPY shared/ shared/
