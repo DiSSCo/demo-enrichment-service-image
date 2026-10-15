@@ -11,6 +11,7 @@ import requests
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.amqp_object import Method, Properties
 from PIL import Image
+import urllib.request
 
 import shared
 from shared_ocr.shared_ocr import get_specimen_from_media
@@ -156,8 +157,19 @@ def run_api_call(media_object: dict) -> dict[str, str]:
     max_dimension = os.environ.get("MAX_RESOLUTION", "500,500")  # Max width or height in pixels
     max_width, max_height = map(int, max_dimension.split(","))
 
-    with urllib.request.urlopen(image_path) as response:
-        raw_bytes = response.read()
+    url = image_path  # Ensure this is a valid URL starting with http:// or https://
+
+    req = urllib.request.Request(
+        url,
+        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            raw_bytes = response.read()
+    except urllib.error.URLError as e:
+        print(f"Failed to fetch image: {e}")
+
 
     with Image.open(io.BytesIO(raw_bytes)) as img:
         img.thumbnail((max_width, max_height))
@@ -167,6 +179,7 @@ def run_api_call(media_object: dict) -> dict[str, str]:
         image_file = io.BytesIO()
         img.save(image_file, format="JPEG", quality=85)
         image_file.seek(0)
+        print("Successfully loaded image")
 
     files = {"image": ("image.jpg", image_file, "image/jpeg")}
 
