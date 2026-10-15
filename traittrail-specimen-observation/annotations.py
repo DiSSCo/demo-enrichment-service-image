@@ -11,6 +11,7 @@ from referencing import Registry, Resource
 
 SCHEMAS = Path(__file__).with_name("schemas")
 MEDIA_FDO = "https://doi.org/21.T11148/bbad8c4e101e8af01115"
+JSONLD_TYPE = "@type"
 
 
 def validate_event(event: dict) -> None:
@@ -41,7 +42,7 @@ def map_event(job: dict, response: dict, mas_id: str, mas_name: str) -> dict:
     creator_uri = mas_id if mas_id.startswith("https://") else "https://hdl.handle.net/" + mas_id
     creator = {
         "@id": creator_uri,
-        "@type": "schema:SoftwareApplication",
+        JSONLD_TYPE: "schema:SoftwareApplication",
         "schema:identifier": creator_uri,
         "schema:name": mas_name,
     }
@@ -53,14 +54,14 @@ def map_event(job: dict, response: dict, mas_id: str, mas_name: str) -> dict:
         for region in regions:
             target = {
                 "@id": target_id,
-                "@type": "ods:DigitalMediaObject",
+                JSONLD_TYPE: "ods:DigitalMediaObject",
                 "dcterms:identifier": media.get("dcterms:identifier", target_id),
                 "ods:fdoType": MEDIA_FDO,
             }
             if region:
                 x, y, width, height = region["bbox"]
                 target["oa:hasSelector"] = {
-                    "@type": "oa:FragmentSelector",
+                    JSONLD_TYPE: "oa:FragmentSelector",
                     "dcterms:conformsTo": "https://ac.tdwg.org/termlist/#711-region-of-interest-vocabulary",
                     "ac:hasROI": {"ac:xFrac": x, "ac:yFrac": y, "ac:widthFrac": width, "ac:heightFrac": height},
                 }
@@ -84,14 +85,14 @@ def map_event(job: dict, response: dict, mas_id: str, mas_name: str) -> dict:
             }
             annotations.append(
                 {
-                    "@type": "ods:Annotation",
+                    JSONLD_TYPE: "ods:Annotation",
                     "oa:motivation": "oa:commenting",
                     "oa:motivatedBy": "Visible specimen features predicted from this media; human review required",
                     "dcterms:creator": creator,
                     "dcterms:created": timestamp,
                     "oa:hasTarget": target,
                     "oa:hasBody": {
-                        "@type": "oa:TextualBody",
+                        JSONLD_TYPE: "oa:TextualBody",
                         "oa:value": [json.dumps(value)],
                         "dcterms:references": media["ac:accessURI"],
                     },

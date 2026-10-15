@@ -1,11 +1,13 @@
 import json
+import logging
 import sys
 from types import SimpleNamespace
+from urllib.error import HTTPError
 
 import main as worker
 import pytest
 from annotations import MEDIA_FDO, map_event, validate_event
-from contract import FEATURES
+from contract import FEATURES, validate
 from jsonschema import ValidationError
 
 
@@ -79,6 +81,74 @@ def test_invalid_prediction_is_not_published(job, response):
         map_event(job, response, "https://example.org/mas", "Test")
 
 
+@pytest.mark.parametrize(
+    ("key", "changes", "expected"),
+    [
+        ("wings.present", {"status": "observed", "value": True}, "require image evidence"),
+        ("legs.visible_count", {"status": "observed", "value": 2}, "distinct supported instance IDs"),
+        (
+            "legs.total_count",
+            {"status": "observed", "value": 0, "visibility": "partial"},
+            "requires clear relevant anatomy",
+        ),
+        ("body.pattern", {"status": "observed", "value": "invented"}, "outside vocabulary"),
+        ("body.colours", {"status": "observed", "value": ["red", "red"]}, "unique vocabulary colours"),
+        ("mount.pin_visible", {"value": True}, "must have null value"),
+        ("mount.pin_visible", {"note": " "}, "needs a reason"),
+        ("mount.pin_visible", {"confidence": float("nan")}, "non-finite confidence"),
+    ],
+)
+def test_semantic_observation_rejections(response, key, changes, expected):
+    observation = next(o for o in response["observation"]["observations"] if o["feature_id"] == key)
+    observation.update(changes)
+    assert any(expected in error for error in validate(response["observation"], [response["image_id"]]))
+
+
+@pytest.mark.parametrize(
+    ("bbox", "description", "expected"),
+    [([0.8, 0.1, 0.4, 0.2], "Region", "within the image"), ([0.1, 0.1, 0.2, 0.2], " ", "requires a description")],
+)
+def test_invalid_region_evidence_rejected(response, bbox, description, expected):
+    response["observation"]["observations"][0]["evidence"] = [
+        {"image_id": response["image_id"], "bbox": bbox, "description": description, "instance_id": None}
+    ]
+    assert any(expected in error for error in validate(response["observation"], [response["image_id"]]))
+
+
+def test_count_presence_and_total_relationships(response):
+    by_id = {o["feature_id"]: o for o in response["observation"]["observations"]}
+    evidence = {
+        "image_id": response["image_id"],
+        "bbox": [0.1, 0.2, 0.3, 0.4],
+        "description": "Leg",
+        "instance_id": "leg1",
+    }
+    for key, value in [("legs.present", False), ("legs.visible_count", 1), ("legs.total_count", 0)]:
+        by_id[key].update(status="observed", value=value, visibility="clear", evidence=[evidence])
+    errors = validate(response["observation"], [response["image_id"]])
+    assert any("presence and visible count contradict" in error for error in errors)
+    assert "Total legs cannot be fewer than distinct visible legs" in errors
+
+
+def test_supported_instance_count_accepted(response):
+    observation = next(o for o in response["observation"]["observations"] if o["feature_id"] == "legs.visible_count")
+    observation.update(
+        status="observed",
+        value=2,
+        visibility="partial",
+        evidence=[
+            {
+                "image_id": response["image_id"],
+                "bbox": [x, 0.2, 0.1, 0.2],
+                "description": "Visible leg",
+                "instance_id": name,
+            }
+            for x, name in [(0.1, "leg1"), (0.4, "leg2")]
+        ],
+    )
+    assert validate(response["observation"], [response["image_id"]]) == []
+
+
 def test_full_event_schema_rejects_unknown_fields(job, response):
     event = map_event(job, response, "https://example.org/mas", "Test")
     event["annotations"][0]["api_key"] = "must never appear"
@@ -134,8 +204,10 @@ def test_publish_before_ack_and_failure_route(job, monkeypatch):
     worker.process_message(channel, SimpleNamespace(delivery_tag=1), None, json.dumps(job).encode())
     assert [a[0] for a in channel.actions] == ["publish", "ack"]
     failed = Channel(fail_publish=True)
+    method = SimpleNamespace(delivery_tag=1)
+    body = json.dumps(job).encode()
     with pytest.raises(RuntimeError):
-        worker.process_message(failed, SimpleNamespace(delivery_tag=1), None, json.dumps(job).encode())
+        worker.process_message(failed, method, None, body)
     assert not failed.actions
 
     def raises(job):
@@ -154,3 +226,76 @@ def test_malformed_message_rejected():
     channel = Channel()
     worker.process_message(channel, SimpleNamespace(delivery_tag=1), None, b"not-json")
     assert channel.actions == [("reject", {"delivery_tag": 1, "requeue": False})]
+
+
+def test_job_stage_logs(job, response, monkeypatch, caplog):
+    monkeypatch.setenv("MAS_ID", "https://example.org/mas")
+    caplog.set_level(logging.INFO, logger=worker.LOGGER.name)
+    event = worker.run_job(job, image_fetch=lambda url: b"image", inference=response)
+    assert len(event["annotations"]) == 16
+    records = [json.loads(record.message) for record in caplog.records if record.name == worker.LOGGER.name]
+    assert [record["stage"] for record in records if record["event"] == "stage_completed"] == [
+        "validate_job",
+        "download_media",
+        "map_annotations",
+    ]
+
+
+def test_http_failure_logs_stage_without_secrets(job, response, monkeypatch, caplog):
+    monkeypatch.setitem(sys.modules, "pika", SimpleNamespace(BasicProperties=lambda **kw: kw))
+    monkeypatch.delenv("RUNNING_ENDPOINT", raising=False)
+    monkeypatch.setenv("TRAITTRAIL_API_TOKEN", "private-secret")
+    caplog.set_level(logging.INFO, logger=worker.LOGGER.name)
+    original_run_job = worker.run_job
+
+    def blocked_download(url):
+        raise HTTPError("https://example.org/?key=private-secret", 403, "private-secret", {}, None)
+
+    def run_blocked_job(current_job):
+        return original_run_job(current_job, image_fetch=blocked_download, inference=response)
+
+    monkeypatch.setattr(worker, "run_job", run_blocked_job)
+    channel = Channel()
+    worker.process_message(channel, SimpleNamespace(delivery_tag=1), None, json.dumps(job).encode())
+    records = [json.loads(record.message) for record in caplog.records if record.name == worker.LOGGER.name]
+    failure = next(record for record in records if record["event"] == "stage_failed")
+    assert failure["stage"] == "download_media"
+    assert failure["http_status"] == 403
+    assert failure["frames"]
+    assert "private-secret" not in caplog.text
+    assert "https://example.org/?key=" not in caplog.text
+    assert b"private-secret" not in channel.actions[0][1]["body"]
+    assert [action[0] for action in channel.actions] == ["publish", "ack"]
+
+
+def test_running_callback_failure_is_visible(job, monkeypatch, caplog):
+    monkeypatch.setitem(sys.modules, "pika", SimpleNamespace(BasicProperties=lambda **kw: kw))
+    monkeypatch.setenv("RUNNING_ENDPOINT", "https://example.org/running")
+    monkeypatch.setenv("MAS_ID", "SANDBOX/test-mas")
+    caplog.set_level(logging.INFO, logger=worker.LOGGER.name)
+
+    def denied_running_endpoint(url, **kwargs):
+        raise HTTPError(url, 401, "private-secret", {}, None)
+
+    monkeypatch.setattr(worker, "urlopen", denied_running_endpoint)
+    monkeypatch.setattr(worker, "run_job", lambda job: pytest.fail("Must not infer after progress callback failure"))
+    worker.process_message(Channel(), SimpleNamespace(delivery_tag=1), None, json.dumps(job).encode())
+    records = [json.loads(record.message) for record in caplog.records if record.name == worker.LOGGER.name]
+    failure = next(record for record in records if record["event"] == "stage_failed")
+    assert failure["stage"] == "notify_running"
+    assert failure["http_status"] == 401
+    assert "private-secret" not in caplog.text
+
+
+def test_startup_logs_configuration_presence_without_values(monkeypatch, caplog):
+    monkeypatch.setattr(sys, "argv", ["main.py"])
+    monkeypatch.delenv("MAS_ID", raising=False)
+    monkeypatch.setenv("TRAITTRAIL_API_TOKEN", "private-secret")
+    caplog.set_level(logging.INFO, logger=worker.LOGGER.name)
+    with pytest.raises(SystemExit):
+        worker.main()
+    records = [json.loads(record.message) for record in caplog.records if record.name == worker.LOGGER.name]
+    startup = next(record for record in records if record["event"] == "startup")
+    assert startup["configured"]["TRAITTRAIL_API_TOKEN"] is True
+    assert startup["configured"]["MAS_ID"] is False
+    assert "private-secret" not in caplog.text

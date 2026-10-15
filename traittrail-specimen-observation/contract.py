@@ -9,6 +9,7 @@ import math
 from jsonschema import Draft202012Validator
 
 VERSION = "specimen-features-v1"
+LEGS_TOTAL_COUNT = "legs.total_count"
 
 
 def feature(label, kind, definition, category="morphology", choices=None):
@@ -38,7 +39,7 @@ FEATURES = {
         "count",
         "Count distinguishable legs with evidence for each instance. Hidden legs are not counted.",
     ),
-    "legs.total_count": feature(
+    LEGS_TOTAL_COUNT: feature(
         "Total legs supported by views",
         "count",
         "Total only if the relevant anatomy is fully visible. Otherwise unknown; never infer six.",
@@ -164,6 +165,114 @@ def output_schema(image_ids, next_views=()):
     }
 
 
+def _count_errors(observation):
+    key, value = observation["feature_id"], observation["value"]
+    if type(value) is not int:
+        return [f"{key}: integer count required"]
+    errors = []
+    instances = {e["instance_id"] for e in observation["evidence"] if e["instance_id"]}
+    if len(instances) != value:
+        errors.append(f"{key}: count must equal the number of distinct supported instance IDs")
+    if (key == LEGS_TOTAL_COUNT or value == 0) and observation["visibility"] != "clear":
+        errors.append(f"{key}: total count requires clear relevant anatomy")
+    return errors
+
+
+def _valid_colours(value, choices):
+    if not isinstance(value, list) or not value:
+        return False
+    return all(v in choices for v in value) and len(value) == len(set(value))
+
+
+def _observed_errors(observation):
+    key, value = observation["feature_id"], observation["value"]
+    definition = FEATURES[key]
+    kind = definition["kind"]
+    errors = []
+    if not observation["evidence"]:
+        errors.append(f"{key}: observed claims require image evidence")
+    if kind == "boolean" and type(value) is not bool:
+        errors.append(f"{key}: boolean value required")
+    if kind == "count":
+        errors.extend(_count_errors(observation))
+    if kind == "choice" and value not in definition["choices"]:
+        errors.append(f"{key}: value outside vocabulary")
+    if kind == "colours" and not _valid_colours(value, definition["choices"]):
+        errors.append(f"{key}: nonempty unique vocabulary colours required")
+    if value is False and definition["category"] != "quality" and observation["visibility"] != "clear":
+        errors.append(f"{key}: a negative claim requires clear visibility; otherwise use unknown")
+    return errors
+
+
+def _unresolved_errors(observation):
+    key = observation["feature_id"]
+    errors = []
+    if observation["value"] is not None:
+        errors.append(f"{key}: unknown/not_applicable must have null value")
+    if not observation["note"].strip():
+        errors.append(f"{key}: unresolved observation needs a reason")
+    return errors
+
+
+def _evidence_errors(key, evidence):
+    errors = []
+    if not evidence["description"].strip():
+        errors.append(f"{key}: evidence requires a description")
+    x, y, width, height = evidence["bbox"]
+    if (
+        not all(math.isfinite(v) for v in evidence["bbox"])
+        or width <= 0
+        or height <= 0
+        or x + width > 1.000001
+        or y + height > 1.000001
+    ):
+        errors.append(f"{key}: bbox must be finite [x,y,width,height] within the image")
+    return errors
+
+
+def _observation_errors(observation):
+    errors = []
+    if observation["confidence"] is not None and not math.isfinite(observation["confidence"]):
+        errors.append(f"{observation['feature_id']}: non-finite confidence")
+    if observation["status"] == "observed":
+        errors.extend(_observed_errors(observation))
+    else:
+        errors.extend(_unresolved_errors(observation))
+    for evidence in observation["evidence"]:
+        errors.extend(_evidence_errors(observation["feature_id"], evidence))
+    return errors
+
+
+def _both_observed(first, second):
+    return first and second and first["status"] == second["status"] == "observed"
+
+
+def _presence_count_conflict(presence, count):
+    if not _both_observed(presence, count):
+        return False
+    if presence["value"] is False:
+        return count["value"] != 0
+    return presence["value"] is True and count["value"] == 0
+
+
+def _relationship_errors(observations):
+    errors = []
+    by_id = {o["feature_id"]: o for o in observations}
+    for family in ["wings", "antennae", "legs"]:
+        presence, count = by_id.get(family + ".present"), by_id.get(family + ".visible_count")
+        if _presence_count_conflict(presence, count):
+            errors.append(f"{family}: presence and visible count contradict each other")
+    total, visible = by_id.get(LEGS_TOTAL_COUNT), by_id.get("legs.visible_count")
+    if (
+        _both_observed(total, visible)
+        and type(total["value"]) is int
+        and type(visible["value"]) is int
+        and total["value"] < visible["value"]
+    ):
+        errors.append("Total legs cannot be fewer than distinct visible legs")
+    return errors
+
+
 def validate(payload, image_ids, next_views=()):
     errors = [e.message for e in Draft202012Validator(output_schema(image_ids, next_views)).iter_errors(payload)]
     if errors:
@@ -172,71 +281,9 @@ def validate(payload, image_ids, next_views=()):
     ids = [o["feature_id"] for o in observations]
     if len(ids) != len(set(ids)) or set(ids) != set(FEATURES):
         errors.append("Exactly one observation for every feature is required.")
-    for o in observations:
-        key, value = o["feature_id"], o["value"]
-        f = FEATURES[key]
-        if o["confidence"] is not None and not math.isfinite(o["confidence"]):
-            errors.append(f"{key}: non-finite confidence")
-        if o["status"] != "observed":
-            if value is not None:
-                errors.append(f"{key}: unknown/not_applicable must have null value")
-            if not o["note"].strip():
-                errors.append(f"{key}: unresolved observation needs a reason")
-        else:
-            if not o["evidence"]:
-                errors.append(f"{key}: observed claims require image evidence")
-            kind = f["kind"]
-            if kind == "boolean" and type(value) is not bool:
-                errors.append(f"{key}: boolean value required")
-            if kind == "count":
-                if type(value) is not int:
-                    errors.append(f"{key}: integer count required")
-                else:
-                    instances = {e["instance_id"] for e in o["evidence"] if e["instance_id"]}
-                    if len(instances) != value:
-                        errors.append(f"{key}: count must equal the number of distinct supported instance IDs")
-                    if (key == "legs.total_count" or value == 0) and o["visibility"] != "clear":
-                        errors.append(f"{key}: total count requires clear relevant anatomy")
-            if kind == "choice" and value not in f["choices"]:
-                errors.append(f"{key}: value outside vocabulary")
-            if kind == "colours" and (
-                not isinstance(value, list)
-                or not value
-                or any(v not in f["choices"] for v in value)
-                or len(value) != len(set(value))
-            ):
-                errors.append(f"{key}: nonempty unique vocabulary colours required")
-            if value is False and f["category"] != "quality" and o["visibility"] != "clear":
-                errors.append(f"{key}: a negative claim requires clear visibility; otherwise use unknown")
-        for e in o["evidence"]:
-            if not e["description"].strip():
-                errors.append(f"{key}: evidence requires a description")
-            x, y, w, h = e["bbox"]
-            if not all(math.isfinite(v) for v in e["bbox"]) or w <= 0 or h <= 0 or x + w > 1.000001 or y + h > 1.000001:
-                errors.append(f"{key}: bbox must be finite [x,y,width,height] within the image")
-    by_id = {o["feature_id"]: o for o in observations}
-    for family in ["wings", "antennae", "legs"]:
-        presence, count = by_id.get(family + ".present"), by_id.get(family + ".visible_count")
-        if (
-            presence
-            and count
-            and presence["status"] == count["status"] == "observed"
-            and (
-                presence["value"] is False and count["value"] != 0 or presence["value"] is True and count["value"] == 0
-            )
-        ):
-            errors.append(f"{family}: presence and visible count contradict each other")
-    total, visible = by_id.get("legs.total_count"), by_id.get("legs.visible_count")
-    if (
-        total
-        and visible
-        and total["status"] == visible["status"] == "observed"
-        and type(total["value"]) is int
-        and type(visible["value"]) is int
-        and total["value"] < visible["value"]
-    ):
-        errors.append("Total legs cannot be fewer than distinct visible legs")
-    return errors
+    for observation in observations:
+        errors.extend(_observation_errors(observation))
+    return errors + _relationship_errors(observations)
 
 
 def prompt(images, next_views=()):

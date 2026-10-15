@@ -1,7 +1,7 @@
 name: Check, build and publish TraitTrail specimen observation
 on:
   push:
-    branches: [main, traittrail-mas]
+    branches: [main, traittrail-mas, traittrail-quality-fixes]
     paths:
       - 'traittrail-specimen-observation/**'
       - '.github/workflows/traittrail-specimen-observation-pipeline.yml'
@@ -30,7 +30,9 @@ jobs:
       - name: Check formatting
         run: ruff format --check traittrail-specimen-observation
       - name: Install validation dependencies
-        run: python -m pip install -r traittrail-specimen-observation/requirements.txt pytest
+        run: >-
+          python -m pip install --only-binary=:all: --require-hashes
+          -r traittrail-specimen-observation/requirements-dev.txt
       - name: Test annotations and delivery handling
         run: python -m pytest -q traittrail-specimen-observation/test_mas.py
       - name: Build middleware container
