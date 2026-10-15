@@ -64,8 +64,10 @@ def test_region_and_unknown_mapping(job, response):
     )
     event = map_event(job, response, "https://example.org/mas", "Test")
     assert event["jobId"] == "test/unchanged"
-    assert len(event["annotations"]) == 16
-    region = next(a for a in event["annotations"] if "oa:hasSelector" in a["oa:hasTarget"])
+    assert len(event["annotations"]) == 2
+    region = next(
+        a for a in event["annotations"] if a["oa:hasTarget"]["oa:hasSelector"]["@type"] == "oa:FragmentSelector"
+    )
     assert region["oa:hasTarget"]["@id"] == job["object"]["@id"]
     assert region["oa:hasTarget"]["oa:hasSelector"]["ac:hasROI"]["ac:xFrac"] == 0.1
     value = json.loads(region["oa:hasBody"]["oa:value"][0])
@@ -73,6 +75,57 @@ def test_region_and_unknown_mapping(job, response):
     assert value["evidence"] == observation["evidence"]
     assert "ods:score" not in region["oa:hasBody"]
     assert all(a["oa:motivation"] == "oa:commenting" for a in event["annotations"])
+    whole = next(a for a in event["annotations"] if a is not region)
+    assert whole["oa:hasTarget"]["oa:hasSelector"] == {"@type": "ods:ClassSelector", "ods:class": "$"}
+    unresolved = [json.loads(value) for value in whole["oa:hasBody"]["oa:value"]]
+    assert len(unresolved) == 15
+    assert all(value["status"] == "unknown" and value["selected_evidence"] is None for value in unresolved)
+
+
+def test_all_unknown_features_have_one_explicit_whole_media_selector(job, response):
+    event = map_event(job, response, "SANDBOX/test-mas", "Test")
+    assert len(event["annotations"]) == 1
+    annotation = event["annotations"][0]
+    assert annotation["oa:hasTarget"]["oa:hasSelector"] == {"@type": "ods:ClassSelector", "ods:class": "$"}
+    values = [json.loads(value) for value in annotation["oa:hasBody"]["oa:value"]]
+    assert {value["feature_id"] for value in values} == set(FEATURES)
+    assert all(value["evidence"] == [] and value["selected_evidence"] is None for value in values)
+    assert all(not value["human_reviewed"] for value in values)
+    validate_event(event)
+
+
+def test_shared_regions_group_insights_without_losing_features_or_provenance(job, response):
+    for observation in response["observation"]["observations"]:
+        if observation["feature_id"] in {"eyes.visible", "mount.pin_visible"}:
+            observation.update(
+                status="observed",
+                value=True,
+                visibility="clear",
+                evidence=[
+                    {
+                        "image_id": "image_test",
+                        "bbox": [0, 0, 1, 1],
+                        "instance_id": None,
+                        "description": "Visible detail",
+                    }
+                ],
+            )
+    before = json.dumps(response, sort_keys=True)
+    event = map_event(job, response, "SANDBOX/test-mas", "Test")
+    assert json.dumps(response, sort_keys=True) == before
+    assert len(event["annotations"]) == 2
+    region = next(
+        a for a in event["annotations"] if a["oa:hasTarget"]["oa:hasSelector"]["@type"] == "oa:FragmentSelector"
+    )
+    regional_values = [json.loads(value) for value in region["oa:hasBody"]["oa:value"]]
+    assert {value["feature_id"] for value in regional_values} == {"eyes.visible", "mount.pin_visible"}
+    values = [json.loads(value) for a in event["annotations"] for value in a["oa:hasBody"]["oa:value"]]
+    assert len(values) == 16
+    assert {value["feature_id"] for value in values} == set(FEATURES)
+    assert all(value["model"] == response["model"] and value["run_id"] == response["run_id"] for value in values)
+    selectors = [json.dumps(a["oa:hasTarget"]["oa:hasSelector"], sort_keys=True) for a in event["annotations"]]
+    assert len(selectors) == len(set(selectors))
+    validate_event(event)
 
 
 def test_invalid_prediction_is_not_published(job, response):
@@ -232,7 +285,8 @@ def test_job_stage_logs(job, response, monkeypatch, caplog):
     monkeypatch.setenv("MAS_ID", "https://example.org/mas")
     caplog.set_level(logging.INFO, logger=worker.LOGGER.name)
     event = worker.run_job(job, image_fetch=lambda url: b"image", inference=response)
-    assert len(event["annotations"]) == 16
+    assert len(event["annotations"]) == 1
+    assert len(event["annotations"][0]["oa:hasBody"]["oa:value"]) == 16
     records = [json.loads(record.message) for record in caplog.records if record.name == worker.LOGGER.name]
     assert [record["stage"] for record in records if record["event"] == "stage_completed"] == [
         "validate_job",
@@ -307,7 +361,8 @@ def test_running_callback_failure_warns_and_still_publishes_annotations(job, res
     event = json.loads(published["body"])
     assert published["routing_key"] == "mas-annotation"
     assert event["jobId"] == job["jobId"]
-    assert len(event["annotations"]) == 16
+    assert len(event["annotations"]) == 1
+    assert len(event["annotations"][0]["oa:hasBody"]["oa:value"]) == 16
     validate_event(event)
 
 
