@@ -33,6 +33,7 @@ Restrictions and comments:
     * The prediction is rejected if the probability score is lower than the minimum set probability score.
 """
 
+
 def run_rabbitmq() -> None:
     """
     Start a RabbitMQ consumer and process the messages by unpacking the image.
@@ -74,7 +75,7 @@ def map_to_annotation_event(media_object: Dict, result: Dict[str, str], job_id: 
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
-    :param result: The result which contains either 
+    :param result: The result which contains either
         {
             "api_call": str,
             "scientific_name": str,
@@ -103,7 +104,6 @@ def map_to_annotation_event(media_object: Dict, result: Dict[str, str], job_id: 
 
     specimen_object = get_specimen_from_media(media_object)
 
-    
     annotation = shared.map_to_annotation_str_val(
         ods_agent=ods_agent,
         timestamp=shared.timestamp_now(),
@@ -113,7 +113,7 @@ def map_to_annotation_event(media_object: Dict, result: Dict[str, str], job_id: 
         target_type=specimen_object[shared.ODS_TYPE],
         dcterms_ref=f"{result['api_call']}, api_tag:{result['api_tag']}",
         motivation=shared.Motivation.ADDING.value,
-        score=float(result['probability'])
+        score=float(result["probability"]),
     )
 
     return {"jobId": job_id, "annotations": [annotation]}
@@ -148,7 +148,6 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
             "error_message": "Failed to make the match, no relevant identifiers for GBIF",
         }
     identify_api_path = os.environ.get("IDENTIFY_API_PATH")
-    #identify_api_path = "https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify"
     if not identify_api_path:
         logging.error("IDENTIFY_API_PATH environment variable is not set")
         return {
@@ -156,7 +155,7 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
             "error_message": "Failed to make the match, API path not configured",
         }
 
-    max_dimension = os.environ.get("MAX_RESOLUTION", "500,500")   # Max width or height in pixels
+    max_dimension = os.environ.get("MAX_RESOLUTION", "500,500")  # Max width or height in pixels
     max_width, max_height = map(int, max_dimension.split(","))
 
     with urllib.request.urlopen(image_path) as response:
@@ -171,9 +170,7 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
         img.save(image_file, format="JPEG", quality=85)
         image_file.seek(0)
 
-    files = {
-        "image": ("image.jpg", image_file, "image/jpeg")
-    }
+    files = {"image": ("image.jpg", image_file, "image/jpeg")}
 
     response = requests.post(url=identify_api_path, files=files)
     api_call = f"""
@@ -181,10 +178,10 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
             --location 'https://multi-source.identify.biodiversityanalysis.eu:443/v2/observation/identify' \
             --form 'image=@\"{image_path}\"' \
     """
-        
+
     if response.status_code != 200:
         logging.error(f"API call failed with status code {response.status_code}: {response.text}")
-        
+
         return {
             "api_call": api_call,
             "error_message": f"Failed to make the match, API call failed with status code {response.status_code}",
@@ -193,36 +190,36 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
 
     prediction_items = response_json["predictions"][0]["taxa"]["items"][0]
     generated_by = response_json["generated_by"]
-    
+
     probability_top1 = prediction_items["probability"]
     scientific_name_top1 = prediction_items["scientific_name"]
     date_time = datetime.datetime.now().isoformat()
     api_tag = generated_by["tag"]
 
-    if probability_top1<float(os.environ.get("MINIMUM_PROBABILITY_SCORE")):
+    if probability_top1 < float(os.environ.get("MINIMUM_PROBABILITY_SCORE")):
         return {
             "api_call": api_call,
-            "error_message": f"Failed to make a good match the top probability score is lower than the minimum. The score was "+probability_top1+", the minimum score was "+ os.environ.get("MINIMUM_PROBABILITY_SCORE"),
+            "error_message": f"Failed to make a good match the top probability score is lower than the minimum. The score was {probability_top1}, the minimum score was {os.environ.get('MINIMUM_PROBABILITY_SCORE')}",
         }
-
 
     return {
         "api_call": api_call,
         "scientific_name": scientific_name_top1,
         "probability": probability_top1,
         "datetime": date_time,
-        "api_tag": api_tag
+        "api_tag": api_tag,
     }
 
+
 def get_image_from_object(media_object) -> str:
-    image_url=media_object.get("ac:accessURI")
+    image_url = media_object.get("ac:accessURI")
     return image_url
 
+
 def get_image_type(media_object) -> str:
-    service_access_points=media_object.get("serviceAccessPoints")
-    image_format=service_access_points.get("format")
+    service_access_points = media_object.get("serviceAccessPoints")
+    image_format = service_access_points.get("format")
     return image_format
-    
 
 
 def run_local(example: str) -> None:
@@ -241,9 +238,6 @@ def run_local(example: str) -> None:
     logging.info("Created annotations: " + json.dumps(annotations, indent=2))
     with open("annotations.json", "w") as f:
         json.dump(annotations, f, indent=2)
-
-
-
 
 
 if __name__ == "__main__":
