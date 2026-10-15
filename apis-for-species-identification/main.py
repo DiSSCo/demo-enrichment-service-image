@@ -141,7 +141,7 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
             "error_message": "Failed to make the match, no relevant identifiers for GBIF",
         }
     identify_api_path = os.environ.get("IDENTIFY_API_PATH")
-    identify_api_path = "https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify"
+    #identify_api_path = "https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify"
     if not identify_api_path:
         logging.error("IDENTIFY_API_PATH environment variable is not set")
         return {
@@ -191,6 +191,13 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
     scientific_name_top1 = prediction_items["scientific_name"]
     date_time = datetime.datetime.now().isoformat()
     api_tag = generated_by["tag"]
+
+    if probability_top1<float(os.environ.get("MINIMUM_PROBABILITY_SCORE")):
+        return {
+            "api_call": api_call,
+            "error_message": f"Failed to make a good match the top probability score is lower than the minimum. The score was "+probability_top1+", the minimum score was "+ os.environ.get("MINIMUM_PROBABILITY_SCORE"),
+        }
+
 
     return {
         "api_call": api_call,
