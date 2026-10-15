@@ -18,6 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/ruff-action@v3
+        with:
+          version: '0.17.0'
+          src: './ruler_detection'
       - name: Login to Public ECR
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v1

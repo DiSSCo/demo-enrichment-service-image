@@ -2,16 +2,17 @@ import json
 import logging
 import os
 import uuid
+from typing import Any
 
 import pika
-import requests as requests
-from typing import Dict, Any, List, Tuple
-from pika.amqp_object import Method, Properties
+import requests
 from pika.adapters.blocking_connection import BlockingChannel
+from pika.amqp_object import Method, Properties
 
 import shared
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 SCALE_DETECTION_URL = os.environ.get(
     "SCALE_DETECTION_URL", "https://webapp.senckenberg.de/dissco-ruler-detection-mas-proto/scale_detection"
@@ -46,7 +47,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
     :return:
     """
     json_value = json.loads(body.decode("utf-8"))
-    logging.info(f"Received message: {str(json_value)}")
+    logger.info(f"Received message: {json_value!s}")
     try:
         shared.mark_job_as_running(job_id=json_value.get("jobId"))
         digital_object = json_value.get("object")
@@ -54,25 +55,25 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         annotations = map_result_to_annotation(digital_object, scales, image_height, image_width)
         annotation_event = map_to_annotation_event(annotations, json_value["jobId"])
 
-        logging.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
+        logger.info(f"Publishing annotation event: {json.dumps(annotation_event)}")
         publish_annotation_event(annotation_event, channel)
-    except Exception as e:
-        logging.error(f"Failed to publish annotation event: {e}")
+    except Exception as e:  # noqa: BLE001 any failure must be reported to DiSSCo as a failed job
+        logger.error(f"Failed to publish annotation event: {e}")
         shared.send_failed_message(json_value["jobId"], str(e), channel)
 
 
-def map_to_annotation_event(annotations: List[Dict], job_id: str) -> Dict:
+def map_to_annotation_event(annotations: list[dict], job_id: str) -> dict:
     return {"annotations": annotations, "jobId": job_id}
 
 
-def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
+def publish_annotation_event(annotation_event: dict, channel: BlockingChannel) -> None:
     """
     Send the annotation to the RabbitMQ queue
     :param annotation_event: The formatted annotation event
     :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
     """
-    logging.info("Publishing annotation: " + str(annotation_event))
+    logger.info("Publishing annotation: " + str(annotation_event))
     channel.basic_publish(
         exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
         routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
@@ -80,7 +81,7 @@ def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -
     )
 
 
-def map_to_assertion(scale: Dict[str, Any], timestamp: str, ods_agent: Dict) -> Dict[str, Any]:
+def map_to_assertion(scale: dict[str, Any], timestamp: str, ods_agent: dict) -> dict[str, Any]:
     """
     Map one scale reading to an openDS Assertion (dwc:MeasurementOrFact).
     :param scale: one detected scale from the scale detection service
@@ -107,11 +108,11 @@ def map_to_assertion(scale: Dict[str, Any], timestamp: str, ods_agent: Dict) -> 
 
 
 def map_result_to_annotation(
-    digital_object: Dict,
-    scales: List[Dict[str, Any]],
+    digital_object: dict,
+    scales: list[dict[str, Any]],
     image_height: int,
     image_width: int,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Map each verified scale reading to two annotations:
     - one on the region of the image where the scale is, so the bounding box is shown on the image
@@ -121,7 +122,7 @@ def map_result_to_annotation(
     :param scales: detected scales from the scale detection service
     :param image_height: height of the image in pixels
     :param image_width: width of the image in pixels
-    :return: List of annotations
+    :return: list of annotations
     """
     timestamp = shared.timestamp_now()
     ods_agent = shared.get_agent()
@@ -163,8 +164,8 @@ def map_result_to_annotation(
 
 
 def map_scale_annotation(
-    digital_object: Dict, scale: Dict[str, Any], oa_value: Dict, oa_selector: Dict, timestamp: str
-) -> Dict[str, Any]:
+    digital_object: dict, scale: dict[str, Any], oa_value: dict, oa_selector: dict, timestamp: str
+) -> dict[str, Any]:
     """
     Build an annotation on the media object with the detection score of the scale.
     :param digital_object: the target object of the annotation
@@ -187,11 +188,11 @@ def map_scale_annotation(
     return annotation
 
 
-def run_scale_detection(image_uri: str) -> Tuple[List[Dict[str, Any]], int, int]:
+def run_scale_detection(image_uri: str) -> tuple[list[dict[str, Any]], int, int]:
     """
     Post the image url to the scale detection service.
     :param image_uri: The image url of the herbarium sheet
-    :return: List of detected scales, image height and image width
+    :return: list of detected scales, image height and image width
     """
     response = requests.post(
         SCALE_DETECTION_URL,
@@ -203,7 +204,7 @@ def run_scale_detection(image_uri: str) -> Tuple[List[Dict[str, Any]], int, int]
     response_json = response.json()
     scales = response_json.get("output", [])
     if not scales:
-        logging.info("No scale found on this herbarium sheet: " + image_uri)
+        logger.info("No scale found on this herbarium sheet: " + image_uri)
     return scales, response_json.get("image_height"), response_json.get("image_width")
 
 
@@ -221,7 +222,7 @@ def run_local(example: str) -> None:
     annotations = map_result_to_annotation(digital_object, scales, image_height, image_width)
 
     event = map_to_annotation_event(annotations, str(uuid.uuid4()))
-    logging.info("Created annotations: " + json.dumps(event))
+    logger.info("Created annotations: " + json.dumps(event))
 
 
 if __name__ == "__main__":
