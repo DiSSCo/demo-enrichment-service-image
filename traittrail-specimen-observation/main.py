@@ -4,15 +4,54 @@ import argparse
 import base64
 import ipaddress
 import json
+import logging
 import os
 import socket
+import sys
+import time
+import traceback
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 from annotations import MEDIA_FDO, map_event
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
+LOGGER = logging.getLogger("traittrail.mas")
+
+
+def log_event(level, event, *, job_id=None, **details):
+    """Log stage metadata, never request bodies, headers, URLs or exception text."""
+    record = {"event": event, **details}
+    if isinstance(job_id, str):
+        record["job_id"] = job_id[:200]
+    LOGGER.log(level, "%s", json.dumps(record))
+
+
+def error_details(error):
+    details = {"error_type": type(error).__name__}
+    if isinstance(error, HTTPError):
+        details["http_status"] = error.code
+    if isinstance(error, URLError):
+        details["network_reason_type"] = type(error.reason).__name__
+    details["frames"] = [
+        {"file": Path(frame.filename).name, "line": frame.lineno, "function": frame.name}
+        for frame in traceback.extract_tb(error.__traceback__)[-6:]
+    ]
+    return details
+
+
+def run_stage(stage, job_id, operation, *args):
+    started = time.monotonic()
+    log_event(logging.INFO, "stage_started", job_id=job_id, stage=stage)
+    try:
+        result = operation(*args)
+    except Exception as error:
+        log_event(logging.ERROR, "stage_failed", job_id=job_id, stage=stage, **error_details(error))
+        raise
+    log_event(logging.INFO, "stage_completed", job_id=job_id, stage=stage, seconds=round(time.monotonic() - started, 3))
+    return result
 
 
 def check_media_url(url: str) -> None:
@@ -39,7 +78,7 @@ def fetch_image(url: str) -> bytes:
     return data
 
 
-def run_job(job: dict, *, image_fetch=fetch_image, inference=None) -> dict:
+def checked_media(job):
     if not isinstance(job, dict) or not isinstance(job.get("jobId"), str) or not job["jobId"]:
         raise ValueError("Job needs its unchanged jobId")
     media = job.get("object")
@@ -51,19 +90,43 @@ def run_job(job: dict, *, image_fetch=fetch_image, inference=None) -> dict:
         raise ValueError("Media needs its real HTTPS persistent identifier")
     if job.get("batchingRequested"):
         raise ValueError("Cross-resource batching is not supported for model predictions")
-    data = image_fetch(media["ac:accessURI"])
+    return media
+
+
+def infer_image(data):
+    body = json.dumps({"image_base64": base64.b64encode(data).decode()}).encode()
+    headers = {"Content-Type": "application/json"}
+    token = os.environ.get("TRAITTRAIL_API_TOKEN")
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    endpoint = os.environ.get("TRAITTRAIL_API_URL", "http://127.0.0.1:8766").rstrip("/")
+    with urlopen(Request(endpoint + "/infer", body, headers), timeout=660) as response:
+        return json.load(response)
+
+
+def run_job(job: dict, *, image_fetch=fetch_image, inference=None) -> dict:
+    job_id = job.get("jobId") if isinstance(job, dict) else None
+    media = run_stage("validate_job", job_id, checked_media, job)
+    data = run_stage("download_media", job_id, image_fetch, media["ac:accessURI"])
     if inference is None:
-        body = json.dumps({"image_base64": base64.b64encode(data).decode()}).encode()
-        headers = {"Content-Type": "application/json"}
-        token = os.environ.get("TRAITTRAIL_API_TOKEN")
-        if token:
-            headers["Authorization"] = "Bearer " + token
-        endpoint = os.environ.get("TRAITTRAIL_API_URL", "http://127.0.0.1:8766").rstrip("/")
-        with urlopen(Request(endpoint + "/infer", body, headers), timeout=660) as response:
-            inference = json.load(response)
-    return map_event(
-        job, inference, os.environ["MAS_ID"], os.environ.get("MAS_NAME", "TraitTrail specimen observations")
+        inference = run_stage("inference", job_id, infer_image, data)
+    return run_stage(
+        "map_annotations",
+        job_id,
+        map_event,
+        job,
+        inference,
+        os.environ["MAS_ID"],
+        os.environ.get("MAS_NAME", "TraitTrail specimen observations"),
     )
+
+
+def notify_running(job_id):
+    running = os.environ.get("RUNNING_ENDPOINT")
+    if running:
+        # Matches current demo repository shared.mark_job_as_running.
+        url = f"{running.rstrip('/')}/{os.environ['MAS_ID']}/{job_id}/running"
+        urlopen(url, timeout=15).close()
 
 
 def process_message(channel, method, properties, body):
@@ -72,19 +135,18 @@ def process_message(channel, method, properties, body):
         if not isinstance(job, dict):
             raise ValueError("Invalid job")  # noqa: TRY004 - JSON input boundary.
     except ValueError:
+        log_event(logging.WARNING, "message_rejected", reason="invalid_json_object")
         channel.basic_reject(delivery_tag=method.delivery_tag, requeue=False)
         return
     job_id = job.get("jobId")
+    log_event(logging.INFO, "job_received", job_id=job_id)
     try:
-        running = os.environ.get("RUNNING_ENDPOINT")
-        if running:
-            # Matches current demo repository shared.mark_job_as_running.
-            url = f"{running.rstrip('/')}/{os.environ['MAS_ID']}/{job_id}/running"
-            urlopen(url, timeout=15).close()
+        run_stage("notify_running", job_id, notify_running, job_id)
         event = run_job(job)
         exchange = os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange")
         routing = os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation")
     except Exception as exc:  # noqa: BLE001 - Every failed job must publish a failure before acknowledgement.
+        log_event(logging.ERROR, "job_failed", job_id=job_id, **error_details(exc))
         if not isinstance(job_id, str) or not job_id:
             channel.basic_reject(delivery_tag=method.delivery_tag, requeue=False)
             return
@@ -101,9 +163,24 @@ def process_message(channel, method, properties, body):
         mandatory=True,
     )
     channel.basic_ack(delivery_tag=method.delivery_tag)
+    log_event(
+        logging.INFO, "job_acknowledged", job_id=job_id, outcome="failed" if "errorMessage" in event else "completed"
+    )
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    setting_names = (
+        "MAS_ID",
+        "RABBITMQ_HOST",
+        "RABBITMQ_USER",
+        "RABBITMQ_PASSWORD",
+        "RABBITMQ_QUEUE",
+        "RUNNING_ENDPOINT",
+        "TRAITTRAIL_API_URL",
+        "TRAITTRAIL_API_TOKEN",
+    )
+    log_event(logging.INFO, "startup", configured={name: bool(os.environ.get(name)) for name in setting_names})
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--job", type=Path, help="Run one job locally instead of consuming RabbitMQ")
     parser.add_argument("--output", type=Path)
@@ -132,6 +209,7 @@ def main():
     channel.confirm_delivery()
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(queue=os.environ["RABBITMQ_QUEUE"], on_message_callback=process_message, auto_ack=False)
+    log_event(logging.INFO, "queue_listening")
     try:
         channel.start_consuming()
     finally:
@@ -139,4 +217,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as error:  # noqa: BLE001 - Keep startup diagnostics available without exposing credentials.
+        log_event(logging.ERROR, "startup_failed", **error_details(error))
+        raise SystemExit(1) from None

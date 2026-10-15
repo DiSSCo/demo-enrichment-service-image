@@ -26,7 +26,13 @@ Use Python 3.12. Install the pinned test dependencies with `python -m pip instal
 
 The runtime and test locks pin all transitive dependencies and include SHA-256 hashes from the corresponding PyPI binary-wheel releases. The container and CI require those hashes and prohibit source-package installation. Review versions and regenerate hashes when updating either lock.
 
-Pinned schemas validate offline. The 22 tests cover region and unknown mapping, count/visibility/evidence consistency, failed jobs, invalid input and publish-before-ack. The validator refactor matches the previous implementation on 1,001 varied cases and the retained live result, with vocabulary, output schema and prompt unchanged. Local live inference has passed; sandbox acceptance and live RabbitMQ transport remain to be checked. Input delivery is at least once; durable deduplication is future production work.
+Pinned schemas validate offline. The 26 tests cover region and unknown mapping, count/visibility/evidence consistency, failed jobs, invalid input, publish-before-ack and secret-safe stage diagnostics. The validator refactor matches the previous implementation on 1,001 varied cases and the retained live result, with vocabulary, output schema and prompt unchanged. Local live inference has passed; sandbox acceptance and live RabbitMQ transport remain to be checked. Input delivery is at least once; durable deduplication is future production work.
+
+## Integration diagnostics
+
+The container emits unbuffered startup and job-stage diagnostics to stderr. Startup reports only whether each expected setting exists, never its value. Job logs identify receipt, running notification, validation, media download, inference, annotation mapping and acknowledgement. Failures include the stage, exception type, HTTP status where available and traceback file/function/line locations. Request headers/bodies, URLs and raw exception text are excluded so that access tokens and signed media links stay out of logs.
+
+For a failed sandbox job, provide the job Handle and deployed container tag/digest, then inspect the pod's `traittrail.mas` log entries. A failure at `notify_running` precedes image download/inference. A failure at `download_media` concerns the source image. An `inference` failure concerns the configured value service or its result. `TRAITTRAIL_API_URL` must be the agreed HTTPS base URL without `/infer`; the registered secret name must be `TRAITTRAIL_API_TOKEN`. If the GB10 API sees no request, inspect earlier stages and the deployed endpoint configuration first.
 
 ## Current preparation — 15 October 2026
 
