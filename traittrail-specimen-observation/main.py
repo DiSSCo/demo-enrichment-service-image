@@ -123,10 +123,12 @@ def run_job(job: dict, *, image_fetch=fetch_image, inference=None) -> dict:
 
 def notify_running(job_id):
     running = os.environ.get("RUNNING_ENDPOINT")
+    '''
     if running:
         # Matches current demo repository shared.mark_job_as_running.
         url = f"{running.rstrip('/')}/{os.environ['MAS_ID']}/{job_id}/running"
         urlopen(url, timeout=15).close()
+    '''
 
 
 def process_message(channel, method, properties, body):
