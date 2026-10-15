@@ -1,1 +1,11 @@
+certifi==2026.7.22
+charset-normalizer==3.5.2
+fuzzywuzzy==0.18.0
+idna==3.20
+jsonpath-ng==1.10.1
+packaging==26.3
+pika==1.4.4
 requests==2.34.2
+setuptools==84.0.0
+urllib3==2.8.0
+wheel==0.47.0
