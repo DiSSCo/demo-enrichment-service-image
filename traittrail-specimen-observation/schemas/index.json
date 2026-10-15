@@ -1,0 +1,34 @@
+{
+  "entry": "https://schemas.dissco.tech/schemas/developer-schema/annotation/0.4.0/annotation-processing-event.json",
+  "retrieved": "2026-10-14",
+  "schemas": {
+    "https://schemas.dissco.tech/schemas/developer-schema/annotation/0.4.0/annotation-processing-event.json": {
+      "file": "f4cdc9a09465f03e.json",
+      "sha256": "586b66e1aea73a90b3086b1b8acb0f71ecf238578d14b823cfe9e6e5fc106d38"
+    },
+    "https://schemas.dissco.tech/schemas/developer-schema/annotation/0.4.0/annotation-batch-metadata.json": {
+      "file": "4b290cd8cda736ec.json",
+      "sha256": "9448a0868b443d6fd973abe8694e399bf6714b77657923136769b6164460ed54"
+    },
+    "https://schemas.dissco.tech/schemas/developer-schema/annotation/0.4.0/annotation-processing-request.json": {
+      "file": "3d182ee1edfa9cbd.json",
+      "sha256": "fe5f254f9b9b0ef0c886ea476264bfaa9c50386bb35b9ed4d01371eaf5c89025"
+    },
+    "https://schemas.dissco.tech/schemas/fdo-type/shared-model/0.4.0/agent.json": {
+      "file": "9e9061068537bff4.json",
+      "sha256": "afbeea7b7b1e11168ec2d9035b4aef38b64a664bc1289728fc88bf469b3f1c5c"
+    },
+    "https://schemas.dissco.tech/schemas/fdo-type/shared-model/0.4.0/identifier.json": {
+      "file": "c6cb915d43a5d6dd.json",
+      "sha256": "f69191e50c5164575c0b2e3e90ea45452fb0e4f3cd0b3129c8e93339e0a373b6"
+    },
+    "https://schemas.dissco.tech/schemas/fdo-type/annotation/0.4.0/annotation-body.json": {
+      "file": "a6c5eb1fd49729e8.json",
+      "sha256": "155a7117c38ffd29cb6dfa43c29d0fc49da922777dbb332f034f536e55b093b8"
+    },
+    "https://schemas.dissco.tech/schemas/fdo-type/annotation/0.4.0/annotation-target.json": {
+      "file": "6205205c0d44b5ac.json",
+      "sha256": "1c7ef79cc02f470529283afd77e05a53fc02a82273a327346942fde194e26d5c"
+    }
+  }
+}
