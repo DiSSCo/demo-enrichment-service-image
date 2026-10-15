@@ -18,8 +18,6 @@ COPY geographic-locality/*.py ./
 COPY geographic-locality/geographic_locality_mas/ ./geographic_locality_mas/
 COPY geographic-locality/data/reference/ ./data/reference/
 
-# copy the vendored team modules and their data (community context, name registers)
-COPY geographic-locality/geographic_locality_mas/ geographic_locality_mas/
 
 # copy shared directory
 COPY shared/ shared/
