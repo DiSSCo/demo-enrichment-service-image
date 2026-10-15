@@ -1,4 +1,5 @@
 import datetime
+from requests.auth import HTTPBasicAuth
 import json
 import logging
 import os
@@ -170,10 +171,29 @@ def run_api_call(media_object: Dict) -> Dict[str, str]:
         "image": ("image.jpg", image_file, "image/jpeg")
     }
 
-    response = requests.post(url=identify_api_path, files=files)
+
+    username=os.environ.get("IDENTIFY_API_USER", None)
+    password=os.environ.get("IDENTIFY_API_PASSWORD", None)
+    
+    if username is None or password is None:
+        logging.error("IDENTIFY_API_USER or IDENTIFY_API_PASSWORD environment variable is not set")
+        return {
+            "api_call": "",
+            "error_message": "Failed to make the match, API credentials not configured",
+        }
+    
+    auth = HTTPBasicAuth(username=username, password=password)
+    token = os.environ.get("IDENTIFY_API_TOKEN", None)
+    if token is None:
+        logging.error("IDENTIFY_API_TOKEN environment variable is not set")
+        return {
+            "api_call": "",
+            "error_message": "Failed to make the match, API token not configured",
+        }
+    response = requests.post(url=identify_api_path, files=files, auth=auth)
     api_call = f"""
         curl \
-            --location 'https://multi-source.identify.biodiversityanalysis.eu:443/v2/observation/identify' \
+            --location 'https://multi-source.identify.biodiversityanalysis.eu:443/v2/observation/identify/token/{token}' \
             --form 'image=@\"{image_path}\"' \
     """
         
