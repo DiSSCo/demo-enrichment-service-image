@@ -1,21 +1,18 @@
 import datetime
+import io
 import json
 import logging
 import os
-import io
-import uuid
 import urllib.request
-from PIL import Image
-from jsonpath_ng import annotations
+import uuid
 
 import pika
-import requests as requests
-from typing import Dict, Any
-from pika.amqp_object import Method, Properties
+import requests
 from pika.adapters.blocking_connection import BlockingChannel
+from pika.amqp_object import Method, Properties
+from PIL import Image
 
 import shared
-from shared.shared import Motivation
 from shared_ocr.shared_ocr import get_specimen_from_media
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
@@ -72,7 +69,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         shared.send_failed_message(json_value.get("jobId"), str(e), channel)
 
 
-def map_to_annotation_event(media_object: Dict, result: Dict[str, str], job_id: str) -> dict:
+def map_to_annotation_event(media_object: dict, result: dict[str, str], job_id: str) -> dict:
     """
     Map the result of the API call to an annotation
     :param specimen_data: The JSON value of the Digital Specimen
@@ -120,14 +117,14 @@ def map_to_annotation_event(media_object: Dict, result: Dict[str, str], job_id: 
     return {"jobId": job_id, "annotations": [annotation]}
 
 
-def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -> None:
+def publish_annotation_event(annotation_event: dict, channel: BlockingChannel) -> None:
     """
     Send the annotation to the RabbitMQ queue
     :param annotation_event: The formatted annotation event
     :param channel: A RabbitMQ BlockingChannel to which we will publish the annotation
     :return: Will not return anything
     """
-    logging.info("Publishing annotation: " + str(annotation_event))
+    logger.info("Publishing annotation: " + str(annotation_event))
     channel.basic_publish(
         exchange=os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange"),
         routing_key=os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation"),
@@ -135,7 +132,7 @@ def publish_annotation_event(annotation_event: Dict, channel: BlockingChannel) -
     )
 
 
-def run_api_call(media_object: Dict) -> Dict[str, str]:
+def run_api_call(media_object: dict) -> dict[str, str]:
     """
     Calls GBIF API based on the occurrenceID, catalogNumber and basisOfRecord
     :param media_object: The JSON data of the Media Object
