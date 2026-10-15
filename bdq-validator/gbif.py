@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import urllib.parse
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 LOGGER = logging.getLogger(__name__)
@@ -68,9 +68,9 @@ def _fetch_json(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict | list | Non
             _CACHE[url] = None
             return None
         raise GBIFServiceError(f"GBIF API returned HTTP {error.code}: {error.reason}") from error
-    except (URLError, TimeoutError, OSError) as error:
+    except OSError as error:
         raise GBIFServiceError(f"GBIF API connection error: {error}") from error
-    except (json.JSONDecodeError, ValueError) as error:
+    except ValueError as error:
         raise GBIFServiceError(f"GBIF API invalid JSON response: {error}") from error
 
 
@@ -113,23 +113,17 @@ def match_species(
     timeout: float = DEFAULT_TIMEOUT,
 ) -> dict:
     """Match a taxon name and higher classification against GBIF Backbone (/species/match)."""
-    params = {}
-    if name and str(name).strip():
-        params["name"] = str(name).strip()
-    if kingdom and str(kingdom).strip():
-        params["kingdom"] = str(kingdom).strip()
-    if phylum and str(phylum).strip():
-        params["phylum"] = str(phylum).strip()
-    if class_ and str(class_).strip():
-        params["class"] = str(class_).strip()
-    if order and str(order).strip():
-        params["order"] = str(order).strip()
-    if family and str(family).strip():
-        params["family"] = str(family).strip()
-    if genus and str(genus).strip():
-        params["genus"] = str(genus).strip()
-    if rank and str(rank).strip():
-        params["rank"] = str(rank).strip()
+    supplied = {
+        "name": name,
+        "kingdom": kingdom,
+        "phylum": phylum,
+        "class": class_,
+        "order": order,
+        "family": family,
+        "genus": genus,
+        "rank": rank,
+    }
+    params = {key: str(value).strip() for key, value in supplied.items() if value and str(value).strip()}
     if strict:
         params["strict"] = "true"
 

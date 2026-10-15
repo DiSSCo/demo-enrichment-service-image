@@ -157,6 +157,10 @@ docker build -f bdq-validator/Dockerfile -t bdq-validator .
 docker run --rm --env-file .env bdq-validator
 ```
 
+The container installs runtime dependencies from `requirements.lock`, checking
+the pinned wheel hashes. Keep that lock file in sync with `requirements.txt`
+when updating dependencies.
+
 Configure the environment with values supplied by DiSSCo:
 
 | Variable | Purpose / default |

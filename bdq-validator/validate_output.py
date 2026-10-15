@@ -6,7 +6,6 @@ Install requirements-dev.txt first. Internet access is needed to fetch schemas.
 import argparse
 import json
 from functools import lru_cache
-from pathlib import Path
 from urllib.request import urlopen
 
 from jsonschema import Draft202012Validator
@@ -23,14 +22,15 @@ def retrieve_schema(uri: str) -> Resource:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("events", type=Path, nargs="+")
+    parser.add_argument("events", type=argparse.FileType("r", encoding="utf-8"), nargs="+")
     args = parser.parse_args()
     schema = retrieve_schema(SCHEMA_URL).contents
     validator = Draft202012Validator(schema, registry=Registry(retrieve=retrieve_schema))
-    for filename in args.events:
-        event = json.loads(filename.read_text(encoding="utf-8"))
+    for stream in args.events:
+        with stream:
+            event = json.load(stream)
         validator.validate(event)
-        print(f"Valid DiSSCo annotation event: {filename}")
+        print(f"Valid DiSSCo annotation event: {stream.name}")
 
 
 if __name__ == "__main__":

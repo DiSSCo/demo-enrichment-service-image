@@ -15,6 +15,12 @@ from bdq import (
 
 DIGITAL_SPECIMEN_FDO_TYPE = "https://doi.org/21.T11148/894b1e6cad57e921764e"
 
+# Shared protocol terms and assessment messages.
+EVENT_SCOPE_STEP = "ods:hasEvents[]"
+JSONLD_TYPE = "@type"
+SPECIMEN_FDO_TYPE = "ods:fdoType"
+SPECIMEN_IDENTIFIER = "dcterms:identifier"
+
 
 def build_creator() -> dict:
     """Use the registered MAS identity, or an explicit local demo identity."""
@@ -22,10 +28,10 @@ def build_creator() -> dict:
     identifier = f"https://hdl.handle.net/{mas_id}" if mas_id else "https://example.org/mas/bdq-validator"
     return {
         "@id": identifier,
-        "@type": "schema:SoftwareApplication",
+        JSONLD_TYPE: "schema:SoftwareApplication",
         "schema:identifier": identifier,
         "schema:name": os.environ.get("MAS_NAME", "BDQ Validator"),
-        "ods:hasRoles": [{"@type": "schema:Role", "schema:roleName": "machine-annotation-service"}],
+        "ods:hasRoles": [{JSONLD_TYPE: "schema:Role", "schema:roleName": "machine-annotation-service"}],
     }
 
 
@@ -67,22 +73,22 @@ def build_mas_annotation(
         **response,
     }
     target = {
-        "@id": specimen.get("@id", specimen["dcterms:identifier"]),
-        "@type": "ods:DigitalSpecimen",
-        "dcterms:identifier": specimen["dcterms:identifier"],
-        "ods:fdoType": specimen["ods:fdoType"],
+        "@id": specimen.get("@id", specimen[SPECIMEN_IDENTIFIER]),
+        JSONLD_TYPE: "ods:DigitalSpecimen",
+        SPECIMEN_IDENTIFIER: specimen[SPECIMEN_IDENTIFIER],
+        SPECIMEN_FDO_TYPE: specimen[SPECIMEN_FDO_TYPE],
     }
     if selector is not None:
         target["oa:hasSelector"] = selector
     return {
-        "@type": "ods:Annotation",
+        JSONLD_TYPE: "ods:Annotation",
         "oa:motivation": "oa:assessing",
         "oa:motivatedBy": f"{test_label}: {response['Response.comment']}",
         "dcterms:created": datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "dcterms:creator": build_creator(),
         "oa:hasTarget": target,
         "oa:hasBody": {
-            "@type": "oa:TextualBody",
+            JSONLD_TYPE: "oa:TextualBody",
             # DiSSCo's 0.4 body schema requires an array of strings.
             "oa:value": [json.dumps(bdq_result, ensure_ascii=False)],
             "dcterms:references": test_version_iri,
@@ -90,45 +96,56 @@ def build_mas_annotation(
     }
 
 
-def test_bdq_event(
-    job: dict,
-    tests: Sequence[BDQEvent | type[BDQEvent]] | None = None,
-) -> dict:
-    """Assess each event independently and return the original jobId unchanged."""
-    if not isinstance(job, dict) or not isinstance(job.get("jobId"), str) or not job["jobId"].strip():
+def _nonempty_string(value) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _validate_job(job: dict) -> dict:
+    """Validate the envelope and return its Digital Specimen."""
+    if not isinstance(job, dict) or not _nonempty_string(job.get("jobId")):
         raise ValueError("The job must contain a nonempty string jobId")
     specimen = job.get("object")
     if not isinstance(specimen, dict):
         raise TypeError("The job object must be an OpenDS Digital Specimen")
-    if specimen.get("@type") != "ods:DigitalSpecimen" or specimen.get("ods:fdoType") != DIGITAL_SPECIMEN_FDO_TYPE:
+    if (
+        specimen.get(JSONLD_TYPE) != "ods:DigitalSpecimen"
+        or specimen.get(SPECIMEN_FDO_TYPE) != DIGITAL_SPECIMEN_FDO_TYPE
+    ):
         raise ValueError("This MAS supports Digital Specimens only")
-    identifier = specimen.get("dcterms:identifier")
-    if not isinstance(identifier, str) or not identifier.strip():
+    identifier = specimen.get(SPECIMEN_IDENTIFIER)
+    if not _nonempty_string(identifier):
         raise ValueError("The specimen must contain a nonempty dcterms:identifier")
-    if "@id" in specimen and (not isinstance(specimen["@id"], str) or not specimen["@id"].strip()):
+    if "@id" in specimen and not _nonempty_string(specimen["@id"]):
         raise ValueError("The specimen @id must be a nonempty string")
 
     events = specimen.get("ods:hasEvents", [])
     if not isinstance(events, list):
         raise TypeError("ods:hasEvents must be an array")
+    return specimen
 
-    test_instances: list[BDQEvent] = []
-    if tests is not None:
-        for t in tests:
-            test_instances.append(t() if isinstance(t, type) else t)
-    else:
-        test_instances = [cls() for cls in BDQEvent.get_registered_tests()]
 
-    # Single-term event tests use the per-event loop below; tests in other OpenDS
-    # classes, or reading several terms, are assessed by assess_scope afterwards.
-    scoped_tests = [
-        test for test in test_instances if getattr(test, "scope", "event") != "event" or getattr(test, "terms", None)
-    ]
-    test_instances = [test for test in test_instances if not any(test is scoped for scoped in scoped_tests)]
+def _assess_event(specimen: dict, event: dict, index: int, tests: Sequence[BDQEvent]) -> list[dict]:
+    if not isinstance(event, dict):
+        raise TypeError("Each ods:hasEvents entry must be an object")
+    event_path = f"$['ods:hasEvents'][{index}]"
+    annotations = []
+    for test in tests:
+        term = getattr(test, "term", None) or getattr(test, "TERM", "dwc:eventDate")
+        input_path = f"{event_path}['{term}']"
+        if term in event:
+            selector = {JSONLD_TYPE: "ods:TermSelector", "ods:term": input_path}
+        else:
+            # An assessment cannot select a term absent from the specimen.
+            selector = {JSONLD_TYPE: "ods:ClassSelector", "ods:class": event_path}
+        annotations.append(build_mas_annotation(specimen, event.get(term), input_path, selector, test=test))
+    return annotations
 
+
+def _assess_events(specimen: dict, tests: Sequence[BDQEvent]) -> list[dict]:
+    events = specimen.get("ods:hasEvents", [])
     if not events:
         # No event class exists to select: assess the whole specimen.
-        annotations = [
+        return [
             build_mas_annotation(
                 specimen,
                 None,
@@ -136,23 +153,29 @@ def test_bdq_event(
                 None,
                 test=test,
             )
-            for test in test_instances
+            for test in tests
         ]
-    else:
-        annotations = []
-        for index, event in enumerate(events):
-            if not isinstance(event, dict):
-                raise TypeError("Each ods:hasEvents entry must be an object")
-            event_path = f"$['ods:hasEvents'][{index}]"
-            for test in test_instances:
-                term = getattr(test, "term", None) or getattr(test, "TERM", "dwc:eventDate")
-                input_path = f"{event_path}['{term}']"
-                if term in event:
-                    selector = {"@type": "ods:TermSelector", "ods:term": input_path}
-                else:
-                    # An assessment cannot select a term absent from the specimen.
-                    selector = {"@type": "ods:ClassSelector", "ods:class": event_path}
-                annotations.append(build_mas_annotation(specimen, event.get(term), input_path, selector, test=test))
+    annotations = []
+    for index, event in enumerate(events):
+        annotations.extend(_assess_event(specimen, event, index, tests))
+    return annotations
+
+
+def test_bdq_event(
+    job: dict,
+    tests: Sequence[BDQEvent | type[BDQEvent]] | None = None,
+) -> dict:
+    """Assess each event independently and return the original jobId unchanged."""
+    specimen = _validate_job(job)
+    selected = tests if tests is not None else BDQEvent.get_registered_tests()
+    test_instances = [test() if isinstance(test, type) else test for test in selected]
+    event_tests, scoped_tests = [], []
+    for test in test_instances:
+        if getattr(test, "scope", "event") != "event" or getattr(test, "terms", None):
+            scoped_tests.append(test)
+        else:
+            event_tests.append(test)
+    annotations = _assess_events(specimen, event_tests)
     for test in scoped_tests:
         annotations.extend(assess_scope(specimen, test))
     return {"jobId": job["jobId"], "annotations": annotations}
@@ -161,9 +184,9 @@ def test_bdq_event(
 # Steps from the specimen root to the OpenDS class holding a scope's terms.
 # A step ending in [] is an array: the test runs once per entry.
 SCOPE_PATHS = {
-    "event": ("ods:hasEvents[]",),
-    "location": ("ods:hasEvents[]", "ods:hasLocation"),
-    "georeference": ("ods:hasEvents[]", "ods:hasLocation", "ods:hasGeoreference"),
+    "event": (EVENT_SCOPE_STEP,),
+    "location": (EVENT_SCOPE_STEP, "ods:hasLocation"),
+    "georeference": (EVENT_SCOPE_STEP, "ods:hasLocation", "ods:hasGeoreference"),
     "identification": ("ods:hasIdentifications[]",),
     "taxon": ("ods:hasIdentifications[]", "ods:hasTaxonIdentifications[]"),
 }
@@ -227,7 +250,7 @@ def nearest_class_selector(specimen: dict, keys: Sequence) -> dict | None:
     """Select the deepest existing object on the path, or None for the whole specimen."""
     for end in range(len(keys), 0, -1):
         if isinstance(resolve(specimen, keys[:end]), dict):
-            return {"@type": "ods:ClassSelector", "ods:class": json_path(keys[:end])}
+            return {JSONLD_TYPE: "ods:ClassSelector", "ods:class": json_path(keys[:end])}
     return None
 
 
@@ -249,7 +272,7 @@ def assess_scope(specimen: dict, test: BDQEvent) -> list[dict]:
             value = found.get(test.term)
             input_path = json_path((*keys, test.term))
             if test.term in found:
-                selector = {"@type": "ods:TermSelector", "ods:term": input_path}
+                selector = {JSONLD_TYPE: "ods:TermSelector", "ods:term": input_path}
             else:
                 # An assessment cannot select a term absent from the specimen.
                 selector = nearest_class_selector(specimen, keys)

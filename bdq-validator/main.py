@@ -5,7 +5,6 @@ import json
 import logging
 import os
 from pathlib import Path
-from urllib.error import URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
@@ -50,8 +49,8 @@ def mark_job_as_running(job_id: str) -> None:
         # Same URL construction as shared.mark_job_as_running in the MAS template.
         request = Request(f"{endpoint.rstrip('/')}/{os.environ['MAS_ID']}/{job_id}/running")
         try:
-            with urlopen(request, timeout=15):
-                pass
+            with urlopen(request, timeout=15) as response:
+                LOGGER.debug("Marked job %s as running (HTTP %s)", job_id, response.status)
         except OSError as error:
             # HTTPError, URLError and socket timeouts are OSError subclasses.
             # Reporting progress is optional; still assess and complete the job.
@@ -132,14 +131,21 @@ def run_rabbitmq() -> None:
 
 
 def write_json(document: dict, destination: Path) -> None:
-    safe_destination = Path(destination).resolve()
-    safe_destination.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    """Write to a file explicitly selected by the local CLI operator.
+
+    Open output files after processing succeeds. RabbitMQ messages never supply
+    filenames; the file type handles CLI paths separately from JSON content.
+    """
+    safe_destination = destination.resolve()
+    with argparse.FileType("w", encoding="utf-8")(str(safe_destination)) as stream:
+        json.dump(document, stream, indent=2, ensure_ascii=False)
+        stream.write("\n")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--input", type=Path, help="Read a saved MAS job envelope")
+    source.add_argument("--input", type=argparse.FileType("r", encoding="utf-8"), help="Read a saved MAS job envelope")
     source.add_argument("--specimen", help="Fetch a live specimen from the DiSSCo sandbox")
     source.add_argument("--rabbitmq", action="store_true", help="Consume jobs and publish annotation events")
     parser.add_argument("--job-id", default="local-bdq-validator", help="Job identifier for a sandbox run")
@@ -168,14 +174,14 @@ def main() -> None:
             if args.save_input:
                 write_json(job, args.save_input)
         else:
-            safe_input = Path(args.input).resolve()
-            job = json.loads(safe_input.read_text(encoding="utf-8"))
+            with args.input as stream:
+                job = json.load(stream)
         event = test_bdq_event(job, tests=tests)
         if args.output:
             write_json(event, args.output)
         else:
             print(json.dumps(event, indent=2, ensure_ascii=False))
-    except (OSError, URLError, ValueError, TypeError, ImportError) as error:
+    except (OSError, ValueError, TypeError, ImportError, argparse.ArgumentTypeError) as error:
         parser.exit(status=1, message=f"bdq-validator: {error}\n")
 
 
