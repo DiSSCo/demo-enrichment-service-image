@@ -22,9 +22,11 @@ Restrict this demo to the organisation/dataset agreed with the support team; tom
 
 ## Validation
 
-Run python -m pytest -q traittrail-specimen-observation/test_mas.py. Build from this repository root with docker build -f traittrail-specimen-observation/Dockerfile -t traittrail-specimen-observation .
+Use Python 3.12. Install the pinned test dependencies with `python -m pip install --only-binary=:all: --require-hashes -r traittrail-specimen-observation/requirements-dev.txt`, then run `python -m pytest -q traittrail-specimen-observation/test_mas.py`. Build from this repository root with `docker build -f traittrail-specimen-observation/Dockerfile -t traittrail-specimen-observation .`.
 
-Pinned schemas validate offline. Tests cover region and unknown mapping, failed jobs, invalid input and publish-before-ack. Local live inference has passed; sandbox acceptance and live RabbitMQ transport remain to be checked. Input delivery is at least once; durable deduplication is future production work.
+The runtime and test locks pin all transitive dependencies and include SHA-256 hashes from the corresponding PyPI binary-wheel releases. The container and CI require those hashes and prohibit source-package installation. Review versions and regenerate hashes when updating either lock.
+
+Pinned schemas validate offline. The 22 tests cover region and unknown mapping, count/visibility/evidence consistency, failed jobs, invalid input and publish-before-ack. The validator refactor matches the previous implementation on 1,001 varied cases and the retained live result, with vocabulary, output schema and prompt unchanged. Local live inference has passed; sandbox acceptance and live RabbitMQ transport remain to be checked. Input delivery is at least once; durable deduplication is future production work.
 
 ## Current preparation — 15 October 2026
 

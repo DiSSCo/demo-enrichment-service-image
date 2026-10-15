@@ -71,7 +71,7 @@ def process_message(channel, method, properties, body):
         job = json.loads(body)
         if not isinstance(job, dict):
             raise ValueError("Invalid job")  # noqa: TRY004 - JSON input boundary.
-    except (ValueError, UnicodeError):
+    except ValueError:
         channel.basic_reject(delivery_tag=method.delivery_tag, requeue=False)
         return
     job_id = job.get("jobId")
@@ -80,8 +80,7 @@ def process_message(channel, method, properties, body):
         if running:
             # Matches current demo repository shared.mark_job_as_running.
             url = f"{running.rstrip('/')}/{os.environ['MAS_ID']}/{job_id}/running"
-            with urlopen(url, timeout=15):
-                pass
+            urlopen(url, timeout=15).close()
         event = run_job(job)
         exchange = os.environ.get("RABBITMQ_EXCHANGE", "mas-annotation-exchange")
         routing = os.environ.get("RABBITMQ_ROUTING_KEY", "mas-annotation")
