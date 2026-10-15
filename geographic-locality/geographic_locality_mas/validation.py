@@ -4,9 +4,11 @@ import json
 import math
 from functools import lru_cache
 from pathlib import Path
+
 from pyproj import CRS, Transformer
-from shapely.ops import transform
 from shapely.geometry import Point, shape
+from shapely.ops import transform
+
 from geographic_locality_mas.country_names import normalize_country
 
 COUNTRIES_FILE = (

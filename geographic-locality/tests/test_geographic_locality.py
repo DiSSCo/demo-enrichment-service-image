@@ -52,7 +52,8 @@ def test_match_is_a_pointer_comment_without_names(ssr):
     assert a["oa:hasBody"]["ods:score"] == 0.9
     text = text_of(a)
     assert "https://stadnamn.kartverket.no/fakta/900001 (Northern Sámi, sme, hovednavn; confidence 0.9)" in text
-    assert "copies no names" in text and "Built without Sámi input" in text
+    assert "copies no names" in text
+    assert "Built without Sámi input" in text
     assert "© Kartverket" in text
     assert text.endswith(REVIEW)
     assert_no_made_up_names(a)
@@ -60,7 +61,8 @@ def test_match_is_a_pointer_comment_without_names(ssr):
 
 def test_kven_is_never_annotated(ssr):
     text = text_of(only_annotation(specimen()))
-    assert "Kven" not in text and "fkv" not in text
+    assert "Kven" not in text
+    assert "fkv" not in text
 
 
 def test_nearby_lists_register_entries_only(ssr):

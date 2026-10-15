@@ -17,8 +17,8 @@ import sys
 import uuid
 from typing import Any
 
-import pika
 import coordinate_annotations
+import pika
 import pointer_annotations
 import requests
 import value_service
@@ -55,7 +55,7 @@ def process_message(channel: BlockingChannel, method: Method, properties: Proper
         shared.mark_job_as_running(job_id)
         annotation_event = build_annotation_event(json_value.get("object"), job_id)
         publish_annotation_event(annotation_event, channel)
-    except Exception as e:  # noqa: BLE001 - any error must end the job as FAILED, never leave it RUNNING
+    except Exception as e:  # noqa: BLE001
         shared.send_failed_message(job_id, str(e), channel)
 
 

@@ -17,7 +17,7 @@ annotation: pointer_annotations.py builds the annotations from links and codes o
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import indigenous_names as ina
@@ -79,7 +79,7 @@ def lookup(location: dict[str, Any]) -> dict[str, Any]:
             "nearby": [],
             "summary": None,
             "message": NOT_CONFIGURED,
-            "retrieved": datetime.now(timezone.utc).date().isoformat(),
+            "retrieved": datetime.now(UTC).date().isoformat(),
         }
     return ina.find_indigenous_names(location)
 
@@ -99,7 +99,7 @@ def enrich_embedded(specimen: dict[str, Any]) -> dict[str, Any]:
     return {
         "service": SERVICE,
         "specimen_id": specimen_id,
-        "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+        "created": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
         "review_status": ina.REVIEW_STATUS,
         "results": results,
         "message": None if results else "No location in the specimen record.",

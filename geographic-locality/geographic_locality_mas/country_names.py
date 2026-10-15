@@ -4,12 +4,14 @@ Original specimen values are preserved. Normalization only supplies a
 reference-country name for polygon lookup.
 """
 
+DR_CONGO = "Democratic Republic of the Congo"
+
 COUNTRY_ALIASES = {
     "be": "Belgium",
     "russian federation": "Russia",
-    "congo, democratic republic of the": "Democratic Republic of the Congo",
-    "dr congo": "Democratic Republic of the Congo",
-    "r.d. congo": "Democratic Republic of the Congo",
+    "congo, democratic republic of the": DR_CONGO,
+    "dr congo": DR_CONGO,
+    "r.d. congo": DR_CONGO,
     "españa": "Spain",
     "united states": "United States of America",
     "usa": "United States of America",

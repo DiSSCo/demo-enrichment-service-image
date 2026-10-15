@@ -4,7 +4,6 @@ import json
 
 import coordinate_annotations
 
-
 AGENT = {"@type": "prov:SoftwareAgent", "schema:name": "Geographic Validation MAS"}
 TIMESTAMP = "2026-10-15T10:00:00Z"
 

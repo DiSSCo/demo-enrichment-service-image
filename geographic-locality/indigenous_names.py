@@ -46,7 +46,7 @@ import re
 import threading
 import time
 import unicodedata
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import unquote, urlparse
 
 import requests
@@ -648,7 +648,7 @@ def find_indigenous_names(location, gazetteer=None, max_nearby=MAX_NEARBY, today
     nearby, summary, message, retrieved. status is one of match, nearby,
     no_match, no_coordinates, not_covered, error.
     """
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     out = {"specimen_id": location.get("specimen_id"),
            "event_index": location.get("event_index", 0),
            "status": None, "gazetteer": None, "query": None,

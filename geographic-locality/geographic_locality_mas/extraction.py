@@ -1,3 +1,5 @@
+from math import isclose
+
 """Extract structured geographic context from DiSSCo specimen records."""
 
 
@@ -48,5 +50,5 @@ def test_extracts_bare_opends_specimen():
     assert result[0]["specimen_id"] == "https://doi.org/SANDBOX/TEST-123"
     assert result[0]["country"] == "Greece"
     assert result[0]["locality"] == "Milos"
-    assert result[0]["latitude"] == 36.74
-    assert result[0]["longitude"] == 24.43
+    assert isclose(result[0]["latitude"], 36.74)
+    assert isclose(result[0]["longitude"], 24.43)
