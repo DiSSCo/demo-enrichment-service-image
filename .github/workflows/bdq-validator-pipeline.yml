@@ -1,0 +1,42 @@
+name: Build BDQ Validator MAS
+
+on:
+  push:
+    branches: [main, bdq-validator]
+    paths:
+      - 'bdq-validator/**'
+      - '.github/workflows/bdq-validator-pipeline.yml'
+      - 'ruff.toml'
+  pull_request:
+    paths:
+      - 'bdq-validator/**'
+      - '.github/workflows/bdq-validator-pipeline.yml'
+      - 'ruff.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6 # v3
+        with:
+          version: '0.17.0'
+          args: check
+          src: './bdq-validator'
+      - name: Check formatting
+        run: ruff format --check bdq-validator
+      - name: Run service checks
+        run: python -m unittest discover -s bdq-validator -p 'test_*.py' -v
+      - name: Build container
+        run: docker build -f bdq-validator/Dockerfile -t bdq-validator .
+      - name: Run container example
+        run: >-
+          docker run --rm
+          --mount "type=bind,source=${{ github.workspace }}/bdq-validator/examples,target=/examples,readonly"
+          bdq-validator --input /examples/sandbox-job.json --tests VALIDATION_EVENTDATE_NOTEMPTY
