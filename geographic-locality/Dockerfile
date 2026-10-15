@@ -11,7 +11,7 @@ RUN adduser --disabled-password --gecos '' --system --uid 1001 python && chown -
 COPY geographic-locality/requirements.txt .
 
 # install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --only-binary=:all: -r requirements.txt
 
 # copy the MAS (main.py, value_service.py, pointer_annotations.py, indigenous_names.py)
 COPY geographic-locality/*.py ./
