@@ -21,9 +21,16 @@ from shared_ocr.shared_ocr import get_specimen_from_media
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
 """
-Restrictions:
-- Max 1 event at the time, so no batch processing.
-- Media associated with exactly one specimen. One specimen is allowed to have multiple medias(images).
+Description:
+Use an AI model to set the specimen name. It will fill in a probability score.
+The default model is: "https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify", but models that return the same data structure can also be used.
+
+Restrictions and comments:
+    * Max 1 event at the time, so no batch processing.
+    * Media associated with exactly one specimen.
+    * Image will be cropped based on what the AI can handle. (i.e. 500 x 500pixels)
+    * The default model: https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify is trained on wildlife data instead of museum collection data, so it might not perform well on all specimen.
+    * The prediction is rejected if the probability score is lower than the minimum set probability score.
 """
 
 def run_rabbitmq() -> None:
