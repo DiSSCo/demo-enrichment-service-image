@@ -142,6 +142,7 @@ def map_to_annotation_str_val(
     target_type: str,
     dcterms_ref: str,
     motivation: str,
+    score: float | None = None
 ) -> Dict[str, Any]:
     """
      Map the result of the API call to an annotation. Uses a string value
@@ -155,7 +156,7 @@ def map_to_annotation_str_val(
     :param motivation: motivation of the annotation
     :return: Returns a formatted annotation Record
     """
-    return {
+    annotation_record = {
         AT_TYPE: "ods:Annotation",
         "oa:motivation": motivation,
         "dcterms:creator": ods_agent,
@@ -173,6 +174,11 @@ def map_to_annotation_str_val(
             "dcterms:references": dcterms_ref,
         },
     }
+    
+    if score is not None:
+        annotation_record["oa:hasBody"]["ods:score"] = score
+    
+    return annotation_record
 
 
 def map_to_annotation(
